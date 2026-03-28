@@ -583,6 +583,17 @@ test-stylus-flow:
   cd src/db-backend && cargo nextest run --no-capture --run-ignored all test_stylus_flow_integration
   echo "Stylus flow test passed!"
 
+# Solidity/EVM flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-evm-recorder binary, solc (Solidity compiler), anvil (Foundry)
+# Set CODETRACER_EVM_RECORDER_PATH to override the binary path.
+test-solidity-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Solidity/EVM flow integration test..."
+  echo "NOTE: Requires codetracer-evm-recorder, solc, and anvil"
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all test_solidity_flow
+  echo "Solidity flow test passed!"
+
 # Full Stylus integration test: recording + trace content verification (requires Arbitrum devnode)
 # This runs Tier 1 (recording) and Tier 2 (trace analysis) together.
 # Set STYLUS_FIXTURE_OUTPUT_DIR to export the trace for VS Code extension UI tests.

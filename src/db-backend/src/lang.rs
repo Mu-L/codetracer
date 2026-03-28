@@ -50,6 +50,8 @@ pub enum Lang {
     // expr_loader tree-sitter support.  Ordinals 24+ are internal only.
     Bash,
     Zsh,
+    // EVM/Solidity support (ordinal 26, internal only — not in the Nim frontend enum).
+    Solidity,
 }
 
 pub fn lang_from_context(path: &Path, trace_kind: TraceKind) -> Lang {
@@ -78,6 +80,7 @@ pub fn lang_from_context(path: &Path, trace_kind: TraceKind) -> Lang {
         "js" | "mjs" | "cjs" => Lang::Javascript,
         "lua" => Lang::Lua,
         "s" | "asm" => Lang::Asm,
+        "sol" => Lang::Solidity,
         _ => Lang::Unknown,
     }
 }

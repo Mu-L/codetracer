@@ -74,6 +74,9 @@ pub enum Language {
     Bash,
     Zsh,
     Stylus,
+    /// EVM/Solidity: recorded by the codetracer-evm-recorder binary.
+    /// Traces are DB-based (trace.json + trace_metadata.json).
+    Solidity,
 }
 
 impl Language {
@@ -93,6 +96,7 @@ impl Language {
             Language::Bash => "sh",
             Language::Zsh => "zsh",
             Language::Stylus => "stylus",
+            Language::Solidity => "sol",
         }
     }
 
@@ -108,6 +112,7 @@ impl Language {
                 | Language::Bash
                 | Language::Zsh
                 | Language::Stylus
+                | Language::Solidity
         )
     }
 }
@@ -1538,6 +1543,40 @@ pub fn find_zsh_recorder() -> Option<PathBuf> {
     } else {
         None
     }
+}
+
+/// Find the codetracer-evm-recorder binary.
+///
+/// Search order:
+/// 1. `CODETRACER_EVM_RECORDER_PATH` env var (explicit override)
+/// 2. Sibling repo debug build:
+///    `../../../codetracer-evm-recorder/target/debug/codetracer-evm-recorder`
+///
+/// Returns `None` if the recorder binary is not found.
+///
+/// Note: the EVM recorder records Solidity/EVM execution traces from transactions
+/// against a running local blockchain node (e.g. Anvil/Hardhat). It requires
+/// `solc` (Solidity compiler) and a running node to be available at recording time.
+pub fn find_evm_recorder() -> Option<PathBuf> {
+    if let Ok(path) = env::var("CODETRACER_EVM_RECORDER_PATH") {
+        let p = PathBuf::from(&path);
+        if p.exists() {
+            return Some(p);
+        }
+        eprintln!(
+            "WARNING: CODETRACER_EVM_RECORDER_PATH='{}' but file does not exist; falling back",
+            path
+        );
+    }
+
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    // Sibling repo (workspace layout) — debug build produced by `cargo build`
+    let sibling = manifest_dir.join("../../../codetracer-evm-recorder/target/debug/codetracer-evm-recorder");
+    if sibling.exists() {
+        return Some(safe_canonicalize(&sibling));
+    }
+
+    None
 }
 
 /// Record a Bash trace by running the shell recorder launcher.
