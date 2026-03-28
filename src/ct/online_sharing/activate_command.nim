@@ -21,27 +21,32 @@ const
 proc activateCommand*(remoteConfig: RemoteConfig, cliToken = "",
     cliBaseUrl = "") =
   ## Downloads a signed license from the server and saves it locally.
-  let bearerToken = remoteConfig.getBearerToken(cliToken)
-  let baseUrl = remoteConfig.resolveBaseRemoteUrl(cliBaseUrl)
+  ## Exits with code 1 on any error (missing token, network failure, etc.).
+  try:
+    let bearerToken = remoteConfig.getBearerToken(cliToken)
+    let baseUrl = remoteConfig.resolveBaseRemoteUrl(cliBaseUrl)
 
-  echo "Activating license..."
-  var client = initApiClient(baseUrl)
-  defer: client.close()
+    echo "Activating license..."
+    var client = initApiClient(baseUrl)
+    defer: client.close()
 
-  let licenseBlob = client.issueLicense(bearerToken)
+    let licenseBlob = client.issueLicense(bearerToken)
 
-  if licenseBlob.len < MinLicenseSize:
-    raise newException(ValueError,
-      fmt"Server returned an invalid license file ({licenseBlob.len} bytes, " &
-      fmt"expected at least {MinLicenseSize}).")
+    if licenseBlob.len < MinLicenseSize:
+      raise newException(ValueError,
+        fmt"Server returned an invalid license file ({licenseBlob.len} bytes, " &
+        fmt"expected at least {MinLicenseSize}).")
 
-  # Save to the same directory as the config file.
-  let licensePath = remoteConfig.configDir() / LicenseDatFileName
-  let dir = parentDir(licensePath)
-  if not dirExists(dir):
-    createDir(dir)
+    # Save to the same directory as the config file.
+    let licensePath = remoteConfig.configDir() / LicenseDatFileName
+    let dir = parentDir(licensePath)
+    if not dirExists(dir):
+      createDir(dir)
 
-  writeFile(licensePath, licenseBlob)
-  echo fmt"License activated successfully."
-  echo fmt"  Saved to: {licensePath}"
-  echo fmt"  Size: {licenseBlob.len} bytes"
+    writeFile(licensePath, licenseBlob)
+    echo fmt"License activated successfully."
+    echo fmt"  Saved to: {licensePath}"
+    echo fmt"  Size: {licenseBlob.len} bytes"
+  except CatchableError as e:
+    echo "error: " & e.msg
+    quit(1)
