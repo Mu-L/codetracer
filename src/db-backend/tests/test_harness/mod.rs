@@ -1699,6 +1699,50 @@ fn record_noir_trace(project_dir: &Path, trace_dir: &Path) -> Result<(), String>
     Ok(())
 }
 
+/// Record a Solidity trace by invoking the `codetracer-evm-recorder record` CLI.
+///
+/// Runs:
+///   `<evm-recorder> record <source.sol> --trace-dir <trace_dir>`
+///
+/// The EVM recorder compiles the contract, deploys it to a temporary local
+/// Anvil node, calls the default entry-point function (`run()`), fetches
+/// `debug_traceTransaction` structlogs, and writes `trace.bin`,
+/// `trace_metadata.json`, and `trace_paths.json` into `trace_dir`.
+/// It also copies the source file into `trace_dir`.
+///
+/// Returns an error if the EVM recorder binary is not found, or if recording
+/// fails for any reason.
+fn record_solidity_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String> {
+    let recorder = find_evm_recorder().ok_or_else(|| {
+        "EVM recorder not found. \
+             Set CODETRACER_EVM_RECORDER_PATH or build codetracer-evm-recorder \
+             (run `cargo build` inside the codetracer-evm-recorder repo)."
+            .to_string()
+    })?;
+
+    fs::create_dir_all(trace_dir).map_err(|e| format!("failed to create trace dir: {}", e))?;
+
+    let output = Command::new(&recorder)
+        .args([
+            "record",
+            source_path.to_str().unwrap(),
+            "--trace-dir",
+            trace_dir.to_str().unwrap(),
+        ])
+        .output()
+        .map_err(|e| format!("failed to run EVM recorder: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "EVM recorder failed:\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    Ok(())
+}
+
 impl TestRecording {
     /// Create a new DB-based test recording (Python/Ruby/Noir) without rr or ct-rr-support.
     ///
@@ -1732,6 +1776,7 @@ impl TestRecording {
                 let wasm_binary = build_wasm_test_program(source_path)?;
                 record_wasm_trace(&wasm_binary, &trace_dir)?;
             }
+            Language::Solidity => record_solidity_trace(source_path, &trace_dir)?,
             _ => return Err(format!("{:?} is not a DB-based language", language)),
         }
 
@@ -1796,9 +1841,10 @@ pub fn run_db_flow_test(config: &FlowTestConfig, version_label: &str) -> Result<
     // Determine the breakpoint path. For DB traces, the trace stores relative
     // paths and the DAP server resolves them against the trace's workdir.
     // We use the trace-dir copy of the source file so path lookup succeeds.
-    let breakpoint_source = if config.language == Language::Python {
-        // Python recorder sets workdir = trace_dir, stores just the filename.
-        // The source was copied into trace_dir by record_python_trace().
+    let breakpoint_source = if config.language == Language::Python || config.language == Language::Solidity {
+        // Python and Solidity recorders copy the source into trace_dir and set
+        // workdir = trace_dir, storing just the filename in trace_paths.json.
+        // Use the trace_dir copy so path lookup succeeds.
         let filename = config.source_path.file_name().unwrap();
         recording.trace_dir.join(filename)
     } else if config.language == Language::Noir {

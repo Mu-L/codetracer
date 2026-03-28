@@ -78,33 +78,32 @@ fn create_solidity_flow_config() -> FlowTestConfig {
 
 /// Integration test for the Solidity flow/omniscience pipeline.
 ///
-/// This test is `#[ignore]` because it requires the EVM recorder, `solc`,
-/// and `anvil` — external tools not available in all CI environments.
+/// Records a transaction that calls `FlowTest.run()` and verifies that flow
+/// data contains the expected local variable values at the breakpoint inside
+/// `run()`.
 ///
-/// When all prerequisites are met, this test records a transaction that
-/// calls `FlowTest.run()` and verifies that flow data contains the expected
-/// local variable values at the breakpoint inside `run()`.
+/// Prerequisites: `codetracer-evm-recorder`, `solc`, and `anvil`.
+/// These are provided by the Nix dev shell (`nix develop`).
 #[test]
-#[ignore = "requires codetracer-evm-recorder binary, solc, and anvil"]
+#[ignore = "requires evm-recorder dev shell (solc, anvil); run via: just test-solidity-flow"]
 fn test_solidity_flow_integration() {
     // --- Prerequisite checks ---
-    if find_evm_recorder().is_none() {
-        eprintln!(
-            "SKIPPED: EVM recorder not found \
-             (set CODETRACER_EVM_RECORDER_PATH or build codetracer-evm-recorder)"
-        );
-        return;
-    }
+    assert!(
+        find_evm_recorder().is_some(),
+        "EVM recorder not found. \
+         Set CODETRACER_EVM_RECORDER_PATH or build codetracer-evm-recorder \
+         (run `cargo build` inside the codetracer-evm-recorder repo)."
+    );
 
-    if !is_solc_available() {
-        eprintln!("SKIPPED: solc (Solidity compiler) not found (install solc or set SOLC_PATH)");
-        return;
-    }
+    assert!(
+        is_solc_available(),
+        "solc (Solidity compiler) not found. Install solc or set SOLC_PATH."
+    );
 
-    if !is_anvil_available() {
-        eprintln!("SKIPPED: anvil not found (install Foundry: https://getfoundry.sh)");
-        return;
-    }
+    assert!(
+        is_anvil_available(),
+        "anvil not found. Install Foundry (https://getfoundry.sh) or add it to PATH."
+    );
 
     let source_path = get_solidity_source_path();
     assert!(
@@ -115,23 +114,8 @@ fn test_solidity_flow_integration() {
 
     let config = create_solidity_flow_config();
 
-    // TODO(M5): Wire up `run_db_flow_test` for Solidity once `create_db_trace`
-    // supports Language::Solidity (requires the EVM recorder's `record` CLI to
-    // be stable). The harness already has `Language::Solidity` and
-    // `find_evm_recorder()` in place — only the recording function is pending.
-    //
-    // When ready:
-    //   match run_db_flow_test(&config, "solidity-0.8") {
-    //       Ok(()) => println!("Solidity flow integration test passed!"),
-    //       Err(e) => panic!("Solidity flow integration test failed: {}", e),
-    //   }
-
-    eprintln!(
-        "NOTE: Full recording pipeline not yet implemented (M5). \
-         Prerequisites verified: evm-recorder, solc, anvil all available."
-    );
-
-    // Keep the config and run_db_flow_test import used to avoid dead-code warnings.
-    let _ = config;
-    let _ = run_db_flow_test as fn(&FlowTestConfig, &str) -> _;
+    match run_db_flow_test(&config, "solidity-0.8") {
+        Ok(()) => println!("Solidity flow integration test passed!"),
+        Err(e) => panic!("Solidity flow integration test failed: {}", e),
+    }
 }

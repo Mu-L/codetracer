@@ -590,8 +590,20 @@ test-solidity-flow:
   #!/usr/bin/env bash
   set -e
   echo "Running Solidity/EVM flow integration test..."
-  echo "NOTE: Requires codetracer-evm-recorder, solc, and anvil"
-  cd src/db-backend && cargo nextest run --no-capture --run-ignored all test_solidity_flow
+
+  # Build the evm-recorder if the binary doesn't exist
+  EVM_RECORDER="${CODETRACER_EVM_RECORDER_PATH:-../codetracer-evm-recorder/target/debug/codetracer-evm-recorder}"
+  if [ ! -f "$EVM_RECORDER" ]; then
+    echo "Building codetracer-evm-recorder..."
+    direnv exec ../codetracer-evm-recorder cargo build --manifest-path ../codetracer-evm-recorder/Cargo.toml
+  fi
+  export CODETRACER_EVM_RECORDER_PATH="$(realpath "$EVM_RECORDER")"
+
+  # Use the evm-recorder's dev shell for solc/anvil
+  direnv exec ../codetracer-evm-recorder \
+    cargo nextest run --no-capture --run-ignored all \
+      --manifest-path src/db-backend/Cargo.toml \
+      test_solidity_flow solidity_flow_dap
   echo "Solidity flow test passed!"
 
 # Full Stylus integration test: recording + trace content verification (requires Arbitrum devnode)
