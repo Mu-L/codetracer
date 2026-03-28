@@ -12,6 +12,7 @@ const DB_BASED_EXTENSIONS = new Set([
   "nr",    // Noir
   "small", // Small
   "wasm",  // RustWasm / CppWasm
+  "sol",   // Solidity / EVM recorder
 ]);
 
 /** Folder markers that indicate a DB-based project. */
