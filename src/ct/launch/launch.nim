@@ -3,7 +3,8 @@ import
   ../../common/[ paths, types, intel_fix, install_utils, trace_index ],
   ../utilities/[ git ],
   ../cli/[ logging, list, help, build],
-  ../online_sharing/[ upload, download, delete, remote ],
+  ../online_sharing/[ upload, download, delete, remote,
+                      activate_command, check_license_command, remote_config ],
   ../trace/[ replay, record, run, metadata, host, import_command ],
   ../codetracerconf,
   ../globals,
@@ -209,13 +210,29 @@ proc runInitial*(conf: CodetracerConf) =
         conf.uploadTraceId,
         conf.uploadTraceFolder,
         replayInteractive,
-        conf.uploadOrg)
+        conf.uploadOrg,
+        conf.uploadToken,
+        conf.uploadBaseUrl)
     of StartupCommand.download:
-      downloadTraceCommand(conf.traceDownloadUrl)
+      downloadTraceCommand(conf.traceDownloadUrl,
+        conf.downloadToken,
+        conf.downloadBaseUrl)
     of StartupCommand.login:
-      loginCommand(conf.loginDefaultOrg)
+      loginCommand(conf.loginDefaultOrg, conf.loginBaseUrl)
     of StartupCommand.`set-default-org`:
       setDefaultOrg(conf.setDefaultOrgName)
+    of StartupCommand.`get-default-org`:
+      getDefaultOrg()
+    of StartupCommand.activate:
+      let rc = initRemoteConfig()
+      activateCommand(rc,
+        conf.activateToken.get(""),
+        conf.activateBaseUrl.get(""))
+    of StartupCommand.`check-license`:
+      let rc = initRemoteConfig()
+      checkLicenseCommand(rc,
+        conf.checkLicenseToken.get(""),
+        conf.checkLicenseBaseUrl.get(""))
     # of StartupCommand.cmdDelete:
     #   deleteTraceCommand(conf.traceId, conf.controlId)
     #   # eventually enable?

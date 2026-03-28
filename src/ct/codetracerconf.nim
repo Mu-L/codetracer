@@ -25,6 +25,9 @@ type
     download,
     login,
     `set-default-org`,
+    `get-default-org`,
+    activate,
+    `check-license`,
     # cmdDelete,
     build,
     record,
@@ -468,11 +471,27 @@ type
         name: "org",
         desc: "organization to upload to"
       .}: Option[string]
+      uploadToken* {.
+        name: "token",
+        desc: "bearer token (uses stored token if omitted)"
+      .}: Option[string]
+      uploadBaseUrl* {.
+        name: "base-url",
+        desc: "override the remote server URL"
+      .}: Option[string]
     of download:
       traceDownloadUrl* {.
         argument,
         desc: "an url for an uploaded trace"
       .}: string
+      downloadToken* {.
+        name: "token",
+        desc: "bearer token (uses stored token if omitted)"
+      .}: Option[string]
+      downloadBaseUrl* {.
+        name: "base-url",
+        desc: "override the remote server URL"
+      .}: Option[string]
       # for now not needed: we directly import it and delete the zip as a temp artifact currently
       # traceDownloadOutput* {.
       #   name: "output",
@@ -483,11 +502,35 @@ type
         name: "default-org",
         desc: "set a default organization for uploads",
       .}: Option[string]
+      loginBaseUrl* {.
+        name: "base-url",
+        desc: "override the remote server URL"
+      .}: Option[string]
     of `set-default-org`:
       setDefaultOrgName* {.
         argument,
         desc: "the name of an organization to be updated as default"
       .}: string
+    of `get-default-org`:
+      discard
+    of activate:
+      activateToken* {.
+        name: "token",
+        desc: "bearer token (uses stored token if omitted)"
+      .}: Option[string]
+      activateBaseUrl* {.
+        name: "base-url",
+        desc: "override the remote server URL"
+      .}: Option[string]
+    of `check-license`:
+      checkLicenseToken* {.
+        name: "token",
+        desc: "bearer token (uses stored token if omitted)"
+      .}: Option[string]
+      checkLicenseBaseUrl* {.
+        name: "base-url",
+        desc: "override the remote server URL"
+      .}: Option[string]
     # of cmdDelete:
     #   traceId* {.
     #     name: "trace-id"
