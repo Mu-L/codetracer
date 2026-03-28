@@ -25,8 +25,12 @@ type
 
 proc defaultConfigDir(): string =
   ## Returns the platform-appropriate config directory for CodeTracer.
-  ## Matches the C# ``Environment.SpecialFolder.ApplicationData`` on Windows
-  ## and ``XDG_CONFIG_HOME`` on Unix.
+  ## The ``CODETRACER_REMOTE_CONFIG_DIR`` env var overrides the default,
+  ## which is useful for testing. Otherwise uses ``XDG_CONFIG_HOME`` on Unix
+  ## or ``%APPDATA%`` on Windows, matching the C# implementation.
+  let envDir = getEnv("CODETRACER_REMOTE_CONFIG_DIR", "")
+  if envDir.len > 0:
+    return envDir
   when defined(windows):
     result = getEnv("APPDATA", getHomeDir() / "AppData" / "Roaming") / "codetracer"
   else:
@@ -35,6 +39,7 @@ proc defaultConfigDir(): string =
 proc initRemoteConfig*(configFilePath = ""): RemoteConfig =
   ## Create a RemoteConfig. If ``configFilePath`` is empty, uses the
   ## platform default (``~/.config/codetracer/remote.config``).
+  ## The ``CODETRACER_REMOTE_CONFIG_DIR`` env var can override the directory.
   if configFilePath.len > 0:
     result.configFilePath = configFilePath
   else:
