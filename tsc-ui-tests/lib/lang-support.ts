@@ -13,11 +13,16 @@ const DB_BASED_EXTENSIONS = new Set([
   "small", // Small
   "wasm",  // RustWasm / CppWasm
   "sol",   // Solidity / EVM recorder
+  "masm",  // Miden / MASM recorder
+  "sw",    // Sway / Fuel recorder
+  "move",  // Move recorder
 ]);
 
 /** Folder markers that indicate a DB-based project. */
 const DB_BASED_FOLDER_MARKERS: Record<string, boolean> = {
   "Nargo.toml": true, // Noir
+  "Forc.toml": true,  // Sway / Fuel projects
+  "Move.toml": true,  // Move projects
 };
 
 /**
