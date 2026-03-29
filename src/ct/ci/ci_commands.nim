@@ -7,7 +7,7 @@
 import std/[options, os, osproc, posix, streams,
             strformat, strutils, times]
 import ../online_sharing/[api_client, remote_config]
-import ci_state, ci_api_client
+import ci_state, ci_api_client, bpf_monitor
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -152,7 +152,8 @@ proc ciAttachCommand*(token, baseUrl: string, runId: string) =
 # ---------------------------------------------------------------------------
 
 proc ciExecCommand*(token, baseUrl: string, program: string,
-                    args: seq[string], record: bool): int =
+                    args: seq[string], record: bool,
+                    monitorProcesses: bool = false): int =
   ## Spawns a child process, captures stdout/stderr, and streams log lines
   ## to the CI backend. Returns the child's exit code.
   ##
@@ -160,6 +161,8 @@ proc ciExecCommand*(token, baseUrl: string, program: string,
   ## - Polls for cancellation every 10 seconds.
   ## - On cancellation: SIGTERM, wait 5s, then SIGKILL.
   ## - The ``record`` flag is reserved for future ``ct record`` wrapping.
+  ## - When ``monitorProcesses`` is true, spawns bpftrace to capture the
+  ##   child's process tree and streams events to the backend.
   var state = loadState()
   var client = initApiClient(baseUrl)
   defer: client.close()
@@ -172,6 +175,35 @@ proc ciExecCommand*(token, baseUrl: string, program: string,
                              options = {poUsePath, poStdErrToStdOut})
   let pid = processID(process)
   let startTime = epochTime()
+
+  # -- BPF process monitoring setup ----------------------------------------
+  var bpfMon: BPFMonitor
+  var bpfActive = false
+
+  if monitorProcesses:
+    let cap = detectBPFCapability()
+    case cap
+    of bpfAvailable:
+      let scriptPath = findBPFTraceScript()
+      if scriptPath.len == 0:
+        echo "Warning: bpftrace-collection.bt script not found. Process monitoring disabled."
+      else:
+        try:
+          bpfMon = startMonitor(pid, scriptPath)
+          bpfActive = true
+          echo fmt"BPF process monitor started (root PID: {pid})"
+        except OSError as e:
+          echo fmt"Warning: failed to start bpftrace: {e.msg}. Process monitoring disabled."
+        except CatchableError as e:
+          echo fmt"Warning: failed to start bpftrace: {e.msg}. Process monitoring disabled."
+    of bpfNoBinary:
+      echo "Warning: bpftrace not found in PATH. Process monitoring disabled."
+    of bpfNoPermission:
+      echo "Warning: passwordless sudo for bpftrace unavailable. Process monitoring disabled."
+    of bpfUnsupported:
+      echo "Warning: BPF not supported on this system. Process monitoring disabled."
+
+  var lastBpfPollTime = epochTime()
 
   var buffer: seq[LogLine] = @[]
   var lastFlushTime = epochTime()
@@ -203,6 +235,15 @@ proc ciExecCommand*(token, baseUrl: string, program: string,
       # Ignore poll failures -- we'll retry next interval.
       discard
     lastCancelCheckTime = epochTime()
+
+  proc pollAndFlushBpf() =
+    ## Polls bpftrace for new events and flushes them to the backend.
+    if not bpfActive:
+      return
+    pollEvents(bpfMon)
+    if hasPendingEvents(bpfMon):
+      flushEvents(bpfMon, client, token, state.runId)
+    lastBpfPollTime = epochTime()
 
   # Read child output line by line.
   let outputStream = outputStream(process)
@@ -245,6 +286,10 @@ proc ciExecCommand*(token, baseUrl: string, program: string,
        (now - lastFlushTime) >= (LogFlushIntervalMs.float / 1000.0):
       flushBuffer(isFinal = false)
 
+    # Poll BPF events approximately every second alongside log flushes.
+    if bpfActive and (now - lastBpfPollTime) >= 1.0:
+      pollAndFlushBpf()
+
   # Wait for the child to exit.
   let exitCode = waitForExit(process)
   close(process)
@@ -252,6 +297,15 @@ proc ciExecCommand*(token, baseUrl: string, program: string,
 
   # Final flush with remaining lines.
   flushBuffer(isFinal = true)
+
+  # -- BPF cleanup ---------------------------------------------------------
+  if bpfActive:
+    # Stop bpftrace and drain remaining events.
+    stopMonitor(bpfMon)
+    # Final BPF event flush.
+    if hasPendingEvents(bpfMon):
+      flushEvents(bpfMon, client, token, state.runId)
+    echo "BPF process monitor stopped."
 
   if cancelled:
     echo "Child process terminated due to cancellation."
@@ -304,7 +358,8 @@ proc ciRunCommand*(token, baseUrl: string,
   # Execute the command.
   var exitCode = 1
   try:
-    exitCode = ciExecCommand(token, baseUrl, program, args, record)
+    exitCode = ciExecCommand(token, baseUrl, program, args, record,
+                             monitorProcesses)
   except CatchableError as e:
     echo fmt"Error during exec: {e.msg}"
     exitCode = 1

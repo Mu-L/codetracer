@@ -628,6 +628,11 @@ type
           desc: "Run ID to attach to"
         .}: string
       of CICommand.exec:
+        ciExecMonitorProcesses* {.
+          name: "monitor-processes",
+          desc: "Enable BPF-based process tree monitoring",
+          defaultValue: false
+        .}: bool
         ciExecRecord* {.
           name: "record",
           desc: "Wrap command in ct record and auto-upload trace",

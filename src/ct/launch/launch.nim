@@ -293,7 +293,8 @@ proc runInitial*(conf: CodetracerConf) =
         ciAttachCommand(token, baseUrl, conf.ciAttachRunId)
       of CICommand.exec:
         let exitCode = ciExecCommand(token, baseUrl, conf.ciExecProgram,
-                                     conf.ciExecArgs, conf.ciExecRecord)
+                                     conf.ciExecArgs, conf.ciExecRecord,
+                                     conf.ciExecMonitorProcesses)
         if exitCode != 0:
           quit(exitCode)
       of CICommand.finish:

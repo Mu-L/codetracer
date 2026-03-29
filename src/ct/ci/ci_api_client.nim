@@ -49,6 +49,50 @@ type
     stream*: string
     text*: string
 
+  # -- Process monitoring event types (M9) -----------------------------------
+  # These DTOs mirror the ``CIProcessEventBatch`` and related records in the
+  # Monolith's ``CIRunProcessService.cs``.
+
+  ProcessStartEvent* = object
+    ## A process exec event assembled from BPFTrace EXEC sub-events.
+    pid*: int
+    parentPid*: int
+    binaryPath*: string
+    commandLine*: string
+    workingDirectory*: string
+    environmentId*: string
+    startedAt*: string  # ISO 8601
+
+  ProcessExitEvent* = object
+    ## A process exit event from BPFTrace.
+    pid*: int
+    exitCode*: int
+    exitedAt*: string  # ISO 8601
+    # Cumulative resource totals (carried for informational purposes;
+    # the backend only stores pid, exitCode, exitedAt).
+    maxMemoryBytes*: int64
+    totalNetRecvBytes*: int64
+    totalNetSendBytes*: int64
+    totalDiskReadBytes*: int64
+    totalDiskWriteBytes*: int64
+    cpuTimeNs*: int64
+
+  ProcessMetricsEvent* = object
+    ## A periodic resource usage snapshot from BPFTrace INTV events.
+    pid*: int
+    timestamp*: string  # ISO 8601
+    cpuPercent*: float
+    memoryBytes*: int64
+    diskReadBytes*: int64
+    diskWriteBytes*: int64
+    netSendBytes*: int64
+    netRecvBytes*: int64
+
+  ProcessEnvironment* = object
+    ## Content-addressed snapshot of a process's environment variables.
+    id*: string  # SHA-256 hex digest of sorted env vars
+    variables*: seq[tuple[key: string, value: string]]
+
   CIApiError* = object of CatchableError
     ## Raised when a CI API call fails after all retries.
 
@@ -195,6 +239,71 @@ proc getRunStatus*(client: ApiClient, token: string,
       branchName: j{"branchName"}.getStr(""),
       createdAt: j{"createdAt"}.getStr(""),
     )
+
+proc reportProcessEvents*(client: ApiClient, token: string, runId: string,
+    starts: seq[ProcessStartEvent],
+    exits: seq[ProcessExitEvent],
+    metrics: seq[ProcessMetricsEvent],
+    environments: seq[ProcessEnvironment]) =
+  ## POST /api/v1/ci/runs/{runId}/processes -- report a batch of process events.
+  ##
+  ## Maps the Nim event types to the ``CIProcessEventBatch`` DTO expected by
+  ## the Monolith backend (see ``CIRunProcessService.cs``).
+  withRetry("reportProcessEvents"):
+    let url = client.baseApiUrl & fmt"ci/runs/{runId}/processes"
+
+    var jsonStarts = newJArray()
+    for s in starts:
+      jsonStarts.add(%*{
+        "pid": s.pid,
+        "parentPid": s.parentPid,
+        "binaryPath": s.binaryPath,
+        "commandLine": s.commandLine,
+        "workingDirectory": s.workingDirectory,
+        "environmentId": s.environmentId,
+        "startedAt": s.startedAt,
+      })
+
+    var jsonExits = newJArray()
+    for e in exits:
+      jsonExits.add(%*{
+        "pid": e.pid,
+        "exitCode": e.exitCode,
+        "exitedAt": e.exitedAt,
+      })
+
+    var jsonMetrics = newJArray()
+    for m in metrics:
+      jsonMetrics.add(%*{
+        "pid": m.pid,
+        "timestamp": m.timestamp,
+        "cpuPercent": m.cpuPercent,
+        "memoryBytes": m.memoryBytes,
+        "diskReadBytes": m.diskReadBytes,
+        "diskWriteBytes": m.diskWriteBytes,
+        "netSendBytes": m.netSendBytes,
+        "netRecvBytes": m.netRecvBytes,
+      })
+
+    var jsonEnvs = newJArray()
+    for env in environments:
+      var varsObj = newJObject()
+      for kv in env.variables:
+        varsObj[kv.key] = newJString(kv.value)
+      jsonEnvs.add(%*{
+        "id": env.id,
+        "variables": varsObj,
+      })
+
+    let reqBody = $ %*{
+      "starts": jsonStarts,
+      "exits": jsonExits,
+      "metrics": jsonMetrics,
+      "environments": jsonEnvs,
+    }
+    let response = client.httpClient.request(
+      url, httpMethod = HttpPost, headers = ciHeaders(token), body = reqBody)
+    ensureCISuccess(response, "reportProcessEvents")
 
 proc uploadTraceMetadata*(client: ApiClient, token: string, runId: string,
                           fileName: string, sizeBytes: int64, s3Key: string,
