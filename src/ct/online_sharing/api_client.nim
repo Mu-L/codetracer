@@ -36,8 +36,8 @@ type
     ## Raised when the server returns a non-success HTTP status.
 
   ApiClient* = object
-    baseApiUrl: string   ## e.g. "https://web.codetracer.com/api/v1/"
-    httpClient: HttpClient
+    baseApiUrl*: string   ## e.g. "https://web.codetracer.com/api/v1/"
+    httpClient*: HttpClient
 
 proc initApiClient*(baseRemoteAddress: string): ApiClient =
   ## Creates an API client pointing at ``baseRemoteAddress``.

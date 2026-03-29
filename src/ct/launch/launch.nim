@@ -1,11 +1,12 @@
 import
-  std/[ json, os, osproc, strutils ],
+  std/[ json, options, os, osproc, strutils ],
   ../../common/[ paths, types, intel_fix, install_utils, trace_index ],
   ../utilities/[ git ],
   ../cli/[ logging, list, help, build],
   ../online_sharing/[ upload, download, delete, remote,
                       activate_command, check_license_command, remote_config ],
   ../trace/[ replay, record, run, metadata, host, import_command ],
+  ../ci/[ ci_commands ],
   ../codetracerconf,
   ../globals,
   ../stylus/[deploy, record, arb_node_utils],
@@ -277,6 +278,37 @@ proc runInitial*(conf: CodetracerConf) =
         let transactions = getTrackableTransactions()
         let res = Json.encode(transactions)
         echo res
+    of StartupCommand.ci:
+      let token = resolveToken(conf.ciToken)
+      let baseUrl = resolveBaseUrl(conf.ciBaseUrl)
+      case conf.ciCommand:
+      of CICommand.noCommand:
+        echo "No CI subcommand specified. Use 'ct ci --help' for usage."
+        quit(1)
+      of CICommand.start:
+        ciStartCommand(token, baseUrl, conf.ciStartRepo, conf.ciStartCommit,
+                       conf.ciStartBranch, conf.ciStartBaseCommit,
+                       conf.ciStartLabel, conf.ciStartMonitorProcesses)
+      of CICommand.attach:
+        ciAttachCommand(token, baseUrl, conf.ciAttachRunId)
+      of CICommand.exec:
+        let exitCode = ciExecCommand(token, baseUrl, conf.ciExecProgram,
+                                     conf.ciExecArgs, conf.ciExecRecord)
+        if exitCode != 0:
+          quit(exitCode)
+      of CICommand.finish:
+        ciFinishCommand(token, baseUrl, conf.ciFinishStatus)
+      of CICommand.run:
+        ciRunCommand(token, baseUrl, conf.ciRunRepo, conf.ciRunCommit,
+                     conf.ciRunBranch, conf.ciRunBaseCommit, conf.ciRunLabel,
+                     conf.ciRunMonitorProcesses, conf.ciRunRecord,
+                     conf.ciRunProgram, conf.ciRunArgs)
+      of CICommand.log:
+        ciLogCommand(token, baseUrl, conf.ciLogMessage)
+      of CICommand.status:
+        ciStatusCommand(token, baseUrl)
+      of CICommand.cancel:
+        ciCancelCommand(token, baseUrl)
     of StartupCommand.`index-diff`:
       indexDiff(conf.indexDiffTracePath)
     of StartupCommand.edit:

@@ -15,6 +15,18 @@ type
     deploy,
     listRecentTx
 
+  CICommand* {.pure.} = enum
+    ## Subcommands for ``ct ci``.
+    noCommand,
+    start,      ## Create a new CI run
+    attach,     ## Attach to an existing run
+    exec,       ## Execute a command and stream logs
+    finish,     ## Complete a run
+    run,        ## All-in-one: start + exec + finish
+    log,        ## Append a manual log line
+    status,     ## Print run status
+    cancel      ## Cancel a run
+
   StartupCommand* {.pure.} = enum
     noCommand,
     replay,
@@ -36,6 +48,7 @@ type
     host,
     `import`,
     arb,
+    ci,
     `index-diff`,
     edit,
 
@@ -567,6 +580,121 @@ type
       of deploy:
         discard
       of listRecentTx:
+        discard
+    of ci:
+      ciToken* {.
+        name: "token",
+        desc: "CI API token (uses CODETRACER_TOKEN env var if omitted)"
+      .}: Option[string]
+      ciBaseUrl* {.
+        name: "base-url",
+        desc: "Override the remote server URL"
+      .}: Option[string]
+      case ciCommand* {.
+        command,
+        defaultValue: CICommand.noCommand
+      .}: CICommand
+      of CICommand.noCommand:
+        discard
+      of CICommand.start:
+        ciStartRepo* {.
+          name: "repo",
+          desc: "Repository URL (auto-detected from git remote if omitted)"
+        .}: Option[string]
+        ciStartCommit* {.
+          name: "commit",
+          desc: "Git commit SHA (auto-detected from HEAD if omitted)"
+        .}: Option[string]
+        ciStartBranch* {.
+          name: "branch",
+          desc: "Git branch name (auto-detected if omitted)"
+        .}: Option[string]
+        ciStartBaseCommit* {.
+          name: "base-commit",
+          desc: "Base commit SHA for diffing"
+        .}: Option[string]
+        ciStartLabel* {.
+          name: "label",
+          desc: "Human-readable label for the run"
+        .}: Option[string]
+        ciStartMonitorProcesses* {.
+          name: "monitor-processes",
+          desc: "Enable BPF process tree monitoring",
+          defaultValue: false
+        .}: bool
+      of CICommand.attach:
+        ciAttachRunId* {.
+          argument,
+          desc: "Run ID to attach to"
+        .}: string
+      of CICommand.exec:
+        ciExecRecord* {.
+          name: "record",
+          desc: "Wrap command in ct record and auto-upload trace",
+          defaultValue: false
+        .}: bool
+        ciExecProgram* {.
+          argument,
+          desc: "Command to execute"
+        .}: string
+        ciExecArgs* {.
+          argument,
+          defaultValue: @[],
+          desc: "Arguments for the command"
+        .}: seq[string]
+      of CICommand.finish:
+        ciFinishStatus* {.
+          name: "status",
+          desc: "Override run status (passed/failed/error)"
+        .}: Option[string]
+      of CICommand.run:
+        ciRunRepo* {.
+          name: "repo",
+          desc: "Repository URL (auto-detected from git remote if omitted)"
+        .}: Option[string]
+        ciRunCommit* {.
+          name: "commit",
+          desc: "Git commit SHA (auto-detected from HEAD if omitted)"
+        .}: Option[string]
+        ciRunBranch* {.
+          name: "branch",
+          desc: "Git branch name (auto-detected if omitted)"
+        .}: Option[string]
+        ciRunBaseCommit* {.
+          name: "base-commit",
+          desc: "Base commit SHA for diffing"
+        .}: Option[string]
+        ciRunLabel* {.
+          name: "label",
+          desc: "Human-readable label for the run"
+        .}: Option[string]
+        ciRunMonitorProcesses* {.
+          name: "monitor-processes",
+          desc: "Enable BPF process tree monitoring",
+          defaultValue: false
+        .}: bool
+        ciRunRecord* {.
+          name: "record",
+          desc: "Wrap command in ct record and auto-upload trace",
+          defaultValue: false
+        .}: bool
+        ciRunProgram* {.
+          argument,
+          desc: "Command to execute"
+        .}: string
+        ciRunArgs* {.
+          argument,
+          defaultValue: @[],
+          desc: "Arguments for the command"
+        .}: seq[string]
+      of CICommand.log:
+        ciLogMessage* {.
+          argument,
+          desc: "Log message to append"
+        .}: string
+      of CICommand.status:
+        discard
+      of CICommand.cancel:
         discard
     of `index-diff`:
       indexDiffTracePath* {.
