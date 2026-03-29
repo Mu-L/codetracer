@@ -77,6 +77,14 @@ pub enum Language {
     /// EVM/Solidity: recorded by the codetracer-evm-recorder binary.
     /// Traces are DB-based (trace.json + trace_metadata.json).
     Solidity,
+    /// Miden MASM: recorded by codetracer-miden-recorder
+    Masm,
+    /// Sway/FuelVM: recorded by codetracer-fuel-recorder
+    Sway,
+    /// Move/Sui: recorded by codetracer-move-recorder
+    Move,
+    /// Solana/SBF: recorded by codetracer-solana-recorder
+    Solana,
 }
 
 impl Language {
@@ -97,6 +105,10 @@ impl Language {
             Language::Zsh => "zsh",
             Language::Stylus => "stylus",
             Language::Solidity => "sol",
+            Language::Masm => "masm",
+            Language::Sway => "sw",
+            Language::Move => "move",
+            Language::Solana => "rs",
         }
     }
 
@@ -113,6 +125,10 @@ impl Language {
                 | Language::Zsh
                 | Language::Stylus
                 | Language::Solidity
+                | Language::Masm
+                | Language::Sway
+                | Language::Move
+                | Language::Solana
         )
     }
 }
@@ -1579,6 +1595,122 @@ pub fn find_evm_recorder() -> Option<PathBuf> {
     None
 }
 
+/// Locate the Miden recorder binary (`codetracer-miden-recorder`).
+///
+/// Search order:
+/// 1. `CODETRACER_MIDEN_RECORDER_PATH` env var (explicit override)
+/// 2. Sibling repo debug build:
+///    `../../../codetracer-miden-recorder/target/debug/codetracer-miden-recorder`
+///
+/// Returns `None` if the recorder binary is not found.
+pub fn find_miden_recorder() -> Option<PathBuf> {
+    if let Ok(path) = env::var("CODETRACER_MIDEN_RECORDER_PATH") {
+        let p = PathBuf::from(&path);
+        if p.exists() {
+            return Some(p);
+        }
+        eprintln!(
+            "WARNING: CODETRACER_MIDEN_RECORDER_PATH='{}' but file does not exist; falling back",
+            path
+        );
+    }
+
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let sibling = manifest_dir.join("../../../codetracer-miden-recorder/target/debug/codetracer-miden-recorder");
+    if sibling.exists() {
+        return Some(safe_canonicalize(&sibling));
+    }
+
+    None
+}
+
+/// Locate the Fuel recorder binary (`codetracer-fuel-recorder`).
+///
+/// Search order:
+/// 1. `CODETRACER_FUEL_RECORDER_PATH` env var (explicit override)
+/// 2. Sibling repo debug build:
+///    `../../../codetracer-fuel-recorder/target/debug/codetracer-fuel-recorder`
+///
+/// Returns `None` if the recorder binary is not found.
+pub fn find_fuel_recorder() -> Option<PathBuf> {
+    if let Ok(path) = env::var("CODETRACER_FUEL_RECORDER_PATH") {
+        let p = PathBuf::from(&path);
+        if p.exists() {
+            return Some(p);
+        }
+        eprintln!(
+            "WARNING: CODETRACER_FUEL_RECORDER_PATH='{}' but file does not exist; falling back",
+            path
+        );
+    }
+
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let sibling = manifest_dir.join("../../../codetracer-fuel-recorder/target/debug/codetracer-fuel-recorder");
+    if sibling.exists() {
+        return Some(safe_canonicalize(&sibling));
+    }
+
+    None
+}
+
+/// Locate the Move recorder binary (`codetracer-move-recorder`).
+///
+/// Search order:
+/// 1. `CODETRACER_MOVE_RECORDER_PATH` env var (explicit override)
+/// 2. Sibling repo debug build:
+///    `../../../codetracer-move-recorder/target/debug/codetracer-move-recorder`
+///
+/// Returns `None` if the recorder binary is not found.
+pub fn find_move_recorder() -> Option<PathBuf> {
+    if let Ok(path) = env::var("CODETRACER_MOVE_RECORDER_PATH") {
+        let p = PathBuf::from(&path);
+        if p.exists() {
+            return Some(p);
+        }
+        eprintln!(
+            "WARNING: CODETRACER_MOVE_RECORDER_PATH='{}' but file does not exist; falling back",
+            path
+        );
+    }
+
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let sibling = manifest_dir.join("../../../codetracer-move-recorder/target/debug/codetracer-move-recorder");
+    if sibling.exists() {
+        return Some(safe_canonicalize(&sibling));
+    }
+
+    None
+}
+
+/// Locate the Solana recorder binary (`codetracer-solana-recorder`).
+///
+/// Search order:
+/// 1. `CODETRACER_SOLANA_RECORDER_PATH` env var (explicit override)
+/// 2. Sibling repo debug build:
+///    `../../../codetracer-solana-recorder/target/debug/codetracer-solana-recorder`
+///
+/// Returns `None` if the recorder binary is not found.
+pub fn find_solana_recorder() -> Option<PathBuf> {
+    if let Ok(path) = env::var("CODETRACER_SOLANA_RECORDER_PATH") {
+        let p = PathBuf::from(&path);
+        if p.exists() {
+            return Some(p);
+        }
+        eprintln!(
+            "WARNING: CODETRACER_SOLANA_RECORDER_PATH='{}' but file does not exist; falling back",
+            path
+        );
+    }
+
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let sibling = manifest_dir.join("../../../codetracer-solana-recorder/target/debug/codetracer-solana-recorder");
+    if sibling.exists() {
+        return Some(safe_canonicalize(&sibling));
+    }
+
+    None
+}
+
 /// Record a Bash trace by running the shell recorder launcher.
 ///
 /// Uses `bash <launcher.sh> --out-dir <trace_dir> --format binary <source>`.
@@ -1743,6 +1875,172 @@ fn record_solidity_trace(source_path: &Path, trace_dir: &Path) -> Result<(), Str
     Ok(())
 }
 
+/// Record a Miden/MASM trace by invoking the `codetracer-miden-recorder record` CLI.
+///
+/// Runs:
+///   `<miden-recorder> record <source.masm> --trace-dir <trace_dir>`
+///
+/// The Miden recorder executes the MASM program on the Miden VM, captures
+/// step-by-step execution state (stack, locals, memory), and writes
+/// `trace.bin`, `trace_metadata.json`, and `trace_paths.json` into `trace_dir`.
+///
+/// Returns an error if the recorder binary is not found, or if recording fails.
+fn record_masm_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String> {
+    let recorder = find_miden_recorder().ok_or_else(|| {
+        "Miden recorder not found. \
+             Set CODETRACER_MIDEN_RECORDER_PATH or build codetracer-miden-recorder \
+             (run `cargo build` inside the codetracer-miden-recorder repo)."
+            .to_string()
+    })?;
+
+    fs::create_dir_all(trace_dir).map_err(|e| format!("failed to create trace dir: {}", e))?;
+
+    let output = Command::new(&recorder)
+        .args([
+            "record",
+            source_path.to_str().unwrap(),
+            "--trace-dir",
+            trace_dir.to_str().unwrap(),
+        ])
+        .output()
+        .map_err(|e| format!("failed to run Miden recorder: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "Miden recorder failed:\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    Ok(())
+}
+
+/// Record a Sway/FuelVM trace by invoking the `codetracer-fuel-recorder record` CLI.
+///
+/// Runs:
+///   `<fuel-recorder> record <project_dir> --trace-dir <trace_dir>`
+///
+/// For Sway, `source_path` points to the project directory containing `Forc.toml`.
+/// The Fuel recorder compiles the Sway script, executes it on FuelVM, and writes
+/// `trace.bin`, `trace_metadata.json`, and `trace_paths.json` into `trace_dir`.
+///
+/// Returns an error if the recorder binary is not found, or if recording fails.
+fn record_fuel_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String> {
+    let recorder = find_fuel_recorder().ok_or_else(|| {
+        "Fuel recorder not found. \
+             Set CODETRACER_FUEL_RECORDER_PATH or build codetracer-fuel-recorder \
+             (run `cargo build` inside the codetracer-fuel-recorder repo)."
+            .to_string()
+    })?;
+
+    fs::create_dir_all(trace_dir).map_err(|e| format!("failed to create trace dir: {}", e))?;
+
+    let output = Command::new(&recorder)
+        .args([
+            "record",
+            source_path.to_str().unwrap(),
+            "--trace-dir",
+            trace_dir.to_str().unwrap(),
+        ])
+        .output()
+        .map_err(|e| format!("failed to run Fuel recorder: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "Fuel recorder failed:\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    Ok(())
+}
+
+/// Record a Move/Sui trace by invoking the `codetracer-move-recorder record` CLI.
+///
+/// Runs:
+///   `<move-recorder> record <project_dir> --trace-dir <trace_dir>`
+///
+/// For Move, `source_path` points to the project directory containing `Move.toml`.
+/// The Move recorder compiles and executes the Move module tests, capturing
+/// step-by-step VM state and writing `trace.bin`, `trace_metadata.json`, and
+/// `trace_paths.json` into `trace_dir`.
+///
+/// Returns an error if the recorder binary is not found, or if recording fails.
+fn record_move_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String> {
+    let recorder = find_move_recorder().ok_or_else(|| {
+        "Move recorder not found. \
+             Set CODETRACER_MOVE_RECORDER_PATH or build codetracer-move-recorder \
+             (run `cargo build` inside the codetracer-move-recorder repo)."
+            .to_string()
+    })?;
+
+    fs::create_dir_all(trace_dir).map_err(|e| format!("failed to create trace dir: {}", e))?;
+
+    let output = Command::new(&recorder)
+        .args([
+            "record",
+            source_path.to_str().unwrap(),
+            "--trace-dir",
+            trace_dir.to_str().unwrap(),
+        ])
+        .output()
+        .map_err(|e| format!("failed to run Move recorder: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "Move recorder failed:\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    Ok(())
+}
+
+/// Record a Solana/SBF trace by invoking the `codetracer-solana-recorder record` CLI.
+///
+/// Runs:
+///   `<solana-recorder> record <source.rs> --trace-dir <trace_dir>`
+///
+/// The Solana recorder compiles the Rust source to SBF bytecode, executes it
+/// on the Solana VM simulator, captures register-level execution state, and
+/// writes `trace.bin`, `trace_metadata.json`, and `trace_paths.json` into
+/// `trace_dir`.
+///
+/// Returns an error if the recorder binary is not found, or if recording fails.
+fn record_solana_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String> {
+    let recorder = find_solana_recorder().ok_or_else(|| {
+        "Solana recorder not found. \
+             Set CODETRACER_SOLANA_RECORDER_PATH or build codetracer-solana-recorder \
+             (run `cargo build` inside the codetracer-solana-recorder repo)."
+            .to_string()
+    })?;
+
+    fs::create_dir_all(trace_dir).map_err(|e| format!("failed to create trace dir: {}", e))?;
+
+    let output = Command::new(&recorder)
+        .args([
+            "record",
+            source_path.to_str().unwrap(),
+            "--trace-dir",
+            trace_dir.to_str().unwrap(),
+        ])
+        .output()
+        .map_err(|e| format!("failed to run Solana recorder: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "Solana recorder failed:\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    Ok(())
+}
+
 impl TestRecording {
     /// Create a new DB-based test recording (Python/Ruby/Noir) without rr or ct-rr-support.
     ///
@@ -1777,6 +2075,10 @@ impl TestRecording {
                 record_wasm_trace(&wasm_binary, &trace_dir)?;
             }
             Language::Solidity => record_solidity_trace(source_path, &trace_dir)?,
+            Language::Masm => record_masm_trace(source_path, &trace_dir)?,
+            Language::Sway => record_fuel_trace(source_path, &trace_dir)?,
+            Language::Move => record_move_trace(source_path, &trace_dir)?,
+            Language::Solana => record_solana_trace(source_path, &trace_dir)?,
             _ => return Err(format!("{:?} is not a DB-based language", language)),
         }
 

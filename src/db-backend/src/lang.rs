@@ -52,6 +52,13 @@ pub enum Lang {
     Zsh,
     // EVM/Solidity support (ordinal 26, internal only — not in the Nim frontend enum).
     Solidity,
+    // Blockchain VM languages (ordinals 27+, internal only — not in the Nim frontend enum).
+    /// Miden MASM assembly (Polygon Miden zkVM)
+    Masm,
+    /// FuelVM Sway language
+    Sway,
+    /// Sui/Aptos Move language
+    Move,
 }
 
 pub fn lang_from_context(path: &Path, trace_kind: TraceKind) -> Lang {
@@ -81,6 +88,9 @@ pub fn lang_from_context(path: &Path, trace_kind: TraceKind) -> Lang {
         "lua" => Lang::Lua,
         "s" | "asm" => Lang::Asm,
         "sol" => Lang::Solidity,
+        "masm" => Lang::Masm,
+        "sw" => Lang::Sway,
+        "move" => Lang::Move,
         _ => Lang::Unknown,
     }
 }

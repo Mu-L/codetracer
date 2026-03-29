@@ -606,6 +606,62 @@ test-solidity-flow:
       test_solidity_flow solidity_flow_dap
   echo "Solidity flow test passed!"
 
+# Miden/MASM flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-miden-recorder binary
+# Set CODETRACER_MIDEN_RECORDER_PATH to override the binary path.
+test-masm-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Miden/MASM flow integration test..."
+  MIDEN_RECORDER="${CODETRACER_MIDEN_RECORDER_PATH:-../codetracer-miden-recorder/target/debug/codetracer-miden-recorder}"
+  if [ -f "$MIDEN_RECORDER" ]; then
+    export CODETRACER_MIDEN_RECORDER_PATH="$(realpath "$MIDEN_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all masm_flow_dap
+  echo "MASM flow test passed!"
+
+# Sway/FuelVM flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-fuel-recorder binary, forc (Fuel compiler)
+# Set CODETRACER_FUEL_RECORDER_PATH to override the binary path.
+test-sway-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Sway/FuelVM flow integration test..."
+  FUEL_RECORDER="${CODETRACER_FUEL_RECORDER_PATH:-../codetracer-fuel-recorder/target/debug/codetracer-fuel-recorder}"
+  if [ -f "$FUEL_RECORDER" ]; then
+    export CODETRACER_FUEL_RECORDER_PATH="$(realpath "$FUEL_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all sway_flow_dap
+  echo "Sway flow test passed!"
+
+# Move/Sui flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-move-recorder binary
+# Set CODETRACER_MOVE_RECORDER_PATH to override the binary path.
+test-move-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Move/Sui flow integration test..."
+  MOVE_RECORDER="${CODETRACER_MOVE_RECORDER_PATH:-../codetracer-move-recorder/target/debug/codetracer-move-recorder}"
+  if [ -f "$MOVE_RECORDER" ]; then
+    export CODETRACER_MOVE_RECORDER_PATH="$(realpath "$MOVE_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all move_flow_dap
+  echo "Move flow test passed!"
+
+# Solana/SBF flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-solana-recorder binary
+# Set CODETRACER_SOLANA_RECORDER_PATH to override the binary path.
+test-solana-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Solana/SBF flow integration test..."
+  SOLANA_RECORDER="${CODETRACER_SOLANA_RECORDER_PATH:-../codetracer-solana-recorder/target/debug/codetracer-solana-recorder}"
+  if [ -f "$SOLANA_RECORDER" ]; then
+    export CODETRACER_SOLANA_RECORDER_PATH="$(realpath "$SOLANA_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all solana_flow_dap
+  echo "Solana flow test passed!"
+
 # Full Stylus integration test: recording + trace content verification (requires Arbitrum devnode)
 # This runs Tier 1 (recording) and Tier 2 (trace analysis) together.
 # Set STYLUS_FIXTURE_OUTPUT_DIR to export the trace for VS Code extension UI tests.
