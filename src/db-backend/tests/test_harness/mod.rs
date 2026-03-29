@@ -1714,70 +1714,40 @@ pub fn find_solana_recorder() -> Option<PathBuf> {
 // ---------------------------------------------------------------------------
 // Test program discovery functions
 //
-// These functions locate test programs from the canonical sibling recorder
-// repos, following the Test-Program-Layout.md spec. Each uses a 2-tier
-// fallback: sibling repo (canonical) then local test-programs/ (deprecated).
+// Per Test-Program-Layout.md, test programs live in their canonical recorder
+// repos and are discovered via sibling repo paths. Returns None if the
+// sibling repo is not checked out.
 // ---------------------------------------------------------------------------
 
 /// Locate the MASM flow test program from the sibling Miden recorder repo.
 ///
-/// Search order:
-/// 1. Sibling repo: `../../../codetracer-miden-recorder/test-programs/masm/masm_flow_test.masm`
-///    (canonical location per Test-Program-Layout.md)
-/// 2. Local fallback: `test-programs/masm/masm_flow_test.masm` (deprecated)
+/// Canonical path: `codetracer-miden-recorder/test-programs/masm/masm_flow_test.masm`
 pub fn find_masm_flow_test() -> Option<PathBuf> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-
-    // Tier 1: Sibling recorder repo (canonical location)
-    let sibling = manifest_dir.join("../../../codetracer-miden-recorder/test-programs/masm/masm_flow_test.masm");
-    if sibling.exists() {
-        return Some(safe_canonicalize(&sibling));
+    let path = manifest_dir.join("../../../codetracer-miden-recorder/test-programs/masm/masm_flow_test.masm");
+    if path.exists() {
+        Some(safe_canonicalize(&path))
+    } else {
+        None
     }
-
-    // Tier 2: Local fallback (deprecated -- will be removed after migration)
-    let local = manifest_dir.join("test-programs/masm/masm_flow_test.masm");
-    if local.exists() {
-        eprintln!(
-            "WARNING: Using local test-programs/masm/ fallback. \
-             Canonical source is codetracer-miden-recorder/test-programs/"
-        );
-        return Some(local);
-    }
-
-    None
 }
 
 /// Locate the Sway flow test project directory (containing `Forc.toml`)
 /// from the sibling Fuel recorder repo.
 ///
-/// Search order:
-/// 1. Sibling repo: `../../../codetracer-fuel-recorder/test-programs/flow_test/`
-/// 2. Local fallback: `test-programs/sway/flow_test/`
+/// Canonical path: `codetracer-fuel-recorder/test-programs/flow_test/`
 pub fn find_sway_flow_test() -> Option<PathBuf> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-
-    let sibling = manifest_dir.join("../../../codetracer-fuel-recorder/test-programs/flow_test");
-    if sibling.join("Forc.toml").exists() {
-        return Some(safe_canonicalize(&sibling));
+    let path = manifest_dir.join("../../../codetracer-fuel-recorder/test-programs/flow_test");
+    if path.join("Forc.toml").exists() {
+        Some(safe_canonicalize(&path))
+    } else {
+        None
     }
-
-    let local = manifest_dir.join("test-programs/sway/flow_test");
-    if local.join("Forc.toml").exists() {
-        eprintln!(
-            "WARNING: Using local test-programs/sway/ fallback. \
-             Canonical source is codetracer-fuel-recorder/test-programs/"
-        );
-        return Some(local);
-    }
-
-    None
 }
 
 /// Locate the Sway flow test source file (`main.sw`) from the sibling
 /// Fuel recorder repo.
-///
-/// Search order mirrors `find_sway_flow_test()`, returning the `src/main.sw`
-/// path within the project directory.
 pub fn find_sway_flow_source() -> Option<PathBuf> {
     find_sway_flow_test().map(|project_dir| project_dir.join("src/main.sw"))
 }
@@ -1785,34 +1755,19 @@ pub fn find_sway_flow_source() -> Option<PathBuf> {
 /// Locate the Move flow test project directory (containing `Move.toml`)
 /// from the sibling Move recorder repo.
 ///
-/// Search order:
-/// 1. Sibling repo: `../../../codetracer-move-recorder/test-programs/move/flow_test/`
-/// 2. Local fallback: `test-programs/move/flow_test/`
+/// Canonical path: `codetracer-move-recorder/test-programs/move/flow_test/`
 pub fn find_move_flow_test() -> Option<PathBuf> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-
-    let sibling = manifest_dir.join("../../../codetracer-move-recorder/test-programs/move/flow_test");
-    if sibling.join("Move.toml").exists() {
-        return Some(safe_canonicalize(&sibling));
+    let path = manifest_dir.join("../../../codetracer-move-recorder/test-programs/move/flow_test");
+    if path.join("Move.toml").exists() {
+        Some(safe_canonicalize(&path))
+    } else {
+        None
     }
-
-    let local = manifest_dir.join("test-programs/move/flow_test");
-    if local.join("Move.toml").exists() {
-        eprintln!(
-            "WARNING: Using local test-programs/move/ fallback. \
-             Canonical source is codetracer-move-recorder/test-programs/"
-        );
-        return Some(local);
-    }
-
-    None
 }
 
 /// Locate the Move flow test source file (`flow_test.move`) from the
 /// sibling Move recorder repo.
-///
-/// Search order mirrors `find_move_flow_test()`, returning the
-/// `sources/flow_test.move` path within the project directory.
 pub fn find_move_flow_source() -> Option<PathBuf> {
     find_move_flow_test().map(|project_dir| project_dir.join("sources/flow_test.move"))
 }
@@ -1820,27 +1775,15 @@ pub fn find_move_flow_source() -> Option<PathBuf> {
 /// Locate the Solana flow test source file from the sibling Solana
 /// recorder repo.
 ///
-/// Search order:
-/// 1. Sibling repo: `../../../codetracer-solana-recorder/test-programs/solana/solana_flow_test.rs`
-/// 2. Local fallback: `test-programs/solana/solana_flow_test.rs`
+/// Canonical path: `codetracer-solana-recorder/test-programs/solana/solana_flow_test.rs`
 pub fn find_solana_flow_test() -> Option<PathBuf> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-
-    let sibling = manifest_dir.join("../../../codetracer-solana-recorder/test-programs/solana/solana_flow_test.rs");
-    if sibling.exists() {
-        return Some(safe_canonicalize(&sibling));
+    let path = manifest_dir.join("../../../codetracer-solana-recorder/test-programs/solana/solana_flow_test.rs");
+    if path.exists() {
+        Some(safe_canonicalize(&path))
+    } else {
+        None
     }
-
-    let local = manifest_dir.join("test-programs/solana/solana_flow_test.rs");
-    if local.exists() {
-        eprintln!(
-            "WARNING: Using local test-programs/solana/ fallback. \
-             Canonical source is codetracer-solana-recorder/test-programs/"
-        );
-        return Some(local);
-    }
-
-    None
 }
 
 /// Record a Bash trace by running the shell recorder launcher.
