@@ -34,7 +34,7 @@ use std::path::PathBuf;
 use ct_dap_client::test_support::{FlowTestConfig, FlowTestRunner};
 
 mod test_harness;
-use test_harness::{find_move_recorder, Language, TestRecording};
+use test_harness::{find_move_flow_source, find_move_flow_test, find_move_recorder, Language, TestRecording};
 
 fn find_db_backend() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_db-backend"))
@@ -42,17 +42,30 @@ fn find_db_backend() -> PathBuf {
 
 /// Returns the path to the Move flow test project directory.
 ///
+/// Discovers the test project from the sibling `codetracer-move-recorder` repo
+/// (canonical location per Test-Program-Layout.md), falling back to the local
+/// `test-programs/` directory if the sibling is not available.
+///
 /// For Move, the source_path is the project directory containing `Move.toml`,
 /// not a single source file. The recorder discovers source files from the
 /// project manifest.
 fn get_move_project_path() -> PathBuf {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir.join("test-programs/move/flow_test")
+    find_move_flow_test().expect(
+        "Move flow test project not found. \
+         Check out codetracer-move-recorder as a sibling repo, or ensure \
+         test-programs/move/flow_test/ exists locally.",
+    )
 }
 
 /// Returns the path to the Move source file (for breakpoint setting).
+///
+/// Uses the same sibling-repo discovery as `get_move_project_path()`.
 fn get_move_source_path() -> PathBuf {
-    get_move_project_path().join("sources/flow_test.move")
+    find_move_flow_source().expect(
+        "Move flow test source not found. \
+         Check out codetracer-move-recorder as a sibling repo, or ensure \
+         test-programs/move/flow_test/sources/flow_test.move exists locally.",
+    )
 }
 
 /// Shared setup: verify prerequisites, record a trace, and resolve the

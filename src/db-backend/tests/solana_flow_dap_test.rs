@@ -35,7 +35,7 @@ use std::path::{Path, PathBuf};
 use ct_dap_client::test_support::{FlowTestConfig, FlowTestRunner};
 
 mod test_harness;
-use test_harness::{find_solana_recorder, Language, TestRecording};
+use test_harness::{find_solana_flow_test, find_solana_recorder, Language, TestRecording};
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -47,9 +47,16 @@ fn find_db_backend() -> PathBuf {
 }
 
 /// Returns the path to the Solana flow test source file.
+///
+/// Discovers the test program from the sibling `codetracer-solana-recorder` repo
+/// (canonical location per Test-Program-Layout.md), falling back to the local
+/// `test-programs/` directory if the sibling is not available.
 fn get_solana_source_path() -> PathBuf {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir.join("test-programs/solana/solana_flow_test.rs")
+    find_solana_flow_test().expect(
+        "Solana flow test program not found. \
+         Check out codetracer-solana-recorder as a sibling repo, or ensure \
+         test-programs/solana/solana_flow_test.rs exists locally.",
+    )
 }
 
 /// Shared setup for all Solana DAP tests.

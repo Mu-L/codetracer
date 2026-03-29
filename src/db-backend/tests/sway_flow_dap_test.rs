@@ -30,7 +30,7 @@ use std::path::{Path, PathBuf};
 use ct_dap_client::test_support::{FlowTestConfig, FlowTestRunner};
 
 mod test_harness;
-use test_harness::{find_fuel_recorder, Language, TestRecording};
+use test_harness::{find_fuel_recorder, find_sway_flow_source, find_sway_flow_test, Language, TestRecording};
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -42,17 +42,30 @@ fn find_db_backend() -> PathBuf {
 
 /// Returns the path to the Sway flow test project directory.
 ///
+/// Discovers the test project from the sibling `codetracer-fuel-recorder` repo
+/// (canonical location per Test-Program-Layout.md), falling back to the local
+/// `test-programs/` directory if the sibling is not available.
+///
 /// For Sway, the source_path is the project directory containing `Forc.toml`,
 /// not a single source file. The recorder discovers `src/main.sw` from the
 /// project manifest.
 fn get_sway_project_path() -> PathBuf {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir.join("test-programs/sway/flow_test")
+    find_sway_flow_test().expect(
+        "Sway flow test project not found. \
+         Check out codetracer-fuel-recorder as a sibling repo, or ensure \
+         test-programs/sway/flow_test/ exists locally.",
+    )
 }
 
 /// Returns the path to the Sway source file (for breakpoint setting).
+///
+/// Uses the same sibling-repo discovery as `get_sway_project_path()`.
 fn get_sway_source_path() -> PathBuf {
-    get_sway_project_path().join("src/main.sw")
+    find_sway_flow_source().expect(
+        "Sway flow test source not found. \
+         Check out codetracer-fuel-recorder as a sibling repo, or ensure \
+         test-programs/sway/flow_test/src/main.sw exists locally.",
+    )
 }
 
 /// Common setup for all Sway DAP tests: asserts prerequisites, records a trace,

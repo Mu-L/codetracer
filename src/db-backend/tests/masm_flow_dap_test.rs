@@ -38,16 +38,23 @@ use std::path::PathBuf;
 use ct_dap_client::test_support::{FlowTestConfig, FlowTestRunner};
 
 mod test_harness;
-use test_harness::{find_miden_recorder, Language, TestRecording};
+use test_harness::{find_masm_flow_test, find_miden_recorder, Language, TestRecording};
 
 fn find_db_backend() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_db-backend"))
 }
 
 /// Returns the path to the MASM flow test source file.
+///
+/// Discovers the test program from the sibling `codetracer-miden-recorder` repo
+/// (canonical location per Test-Program-Layout.md), falling back to the local
+/// `test-programs/` directory if the sibling is not available.
 fn get_masm_source_path() -> PathBuf {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir.join("test-programs/masm/masm_flow_test.masm")
+    find_masm_flow_test().expect(
+        "MASM flow test program not found. \
+         Check out codetracer-miden-recorder as a sibling repo, or ensure \
+         test-programs/masm/masm_flow_test.masm exists locally.",
+    )
 }
 
 /// Shared helper that records a MASM trace, launches the DAP server, sets a
