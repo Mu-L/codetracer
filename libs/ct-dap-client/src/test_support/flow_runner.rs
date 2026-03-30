@@ -219,112 +219,7 @@ impl FlowTestRunner {
         config: &FlowTestConfig,
         flow: &FlowData,
     ) -> Result<(), BoxError> {
-        println!("\nVerifying flow data...");
-        println!(
-            "  Total steps: {}, all_variables: {:?}",
-            flow.steps.len(),
-            flow.all_variables
-        );
-
-        // Check excluded identifiers are NOT in the list
-        for excluded in &config.excluded_identifiers {
-            if flow.all_variables.contains(excluded) {
-                return Err(format!(
-                    "'{}' should not be extracted as a variable (it's a function call)",
-                    excluded
-                )
-                .into());
-            }
-        }
-        println!("  Function call filtering PASSED");
-
-        // Check expected variables ARE in the list
-        let found_expected: Vec<&String> = config
-            .expected_variables
-            .iter()
-            .filter(|v| flow.all_variables.contains(v))
-            .collect();
-        println!("  Expected variables found: {:?}", found_expected);
-
-        if found_expected.is_empty() {
-            return Err(format!(
-                "should find at least some of the expected variables: {:?}",
-                config.expected_variables
-            )
-            .into());
-        }
-        println!("  Variable extraction PASSED");
-
-        // Check value loading
-        let mut loaded = 0;
-        let mut not_loaded = 0;
-        for value in flow.values.values() {
-            if FlowData::is_value_loaded(value) {
-                loaded += 1;
-            } else {
-                not_loaded += 1;
-            }
-        }
-        println!("  Loaded: {}, Not loaded: {}", loaded, not_loaded);
-
-        // Verify specific expected values — every entry in expected_values
-        // MUST be present, loaded, parseable, and correct.
-        let mut verified_count = 0;
-        for (var_name, expected_value) in &config.expected_values {
-            if let Some(value) = flow.values.get(var_name) {
-                if FlowData::is_value_loaded(value) {
-                    if let Some(actual) = FlowData::extract_int_value(value) {
-                        if actual != *expected_value {
-                            return Err(format!(
-                                "{} should be {}, got {}",
-                                var_name, expected_value, actual
-                            )
-                            .into());
-                        }
-                        println!("  {} = {} (correct)", var_name, actual);
-                        verified_count += 1;
-                    } else {
-                        return Err(format!(
-                            "variable '{}' has a loaded value but it could not be \
-                             extracted as an integer (raw value: {:?})",
-                            var_name, value
-                        )
-                        .into());
-                    }
-                } else {
-                    println!("  {} = <NONE>", var_name);
-                    return Err(format!(
-                        "variable '{}' is present but its value was not loaded (<NONE>)",
-                        var_name
-                    )
-                    .into());
-                }
-            } else {
-                return Err(format!(
-                    "expected variable '{}' is missing from flow.values (available: {:?})",
-                    var_name,
-                    flow.values.keys().collect::<Vec<_>>()
-                )
-                .into());
-            }
-        }
-
-        if !config.expected_values.is_empty() && verified_count != config.expected_values.len() {
-            return Err(format!(
-                "only {}/{} expected values were verified",
-                verified_count,
-                config.expected_values.len()
-            )
-            .into());
-        }
-
-        if loaded == 0 {
-            return Err("No values were loaded - local variables should be loadable".into());
-        }
-        println!("  Value loading PASSED for {} variables", loaded);
-        println!("\nFlow test completed successfully!");
-
-        Ok(())
+        verify_flow_results(config, flow)
     }
 
     /// Access the underlying client for additional operations.
@@ -336,5 +231,230 @@ impl FlowTestRunner {
     pub fn finish(self) -> Result<(), BoxError> {
         self.client.disconnect()?;
         Ok(())
+    }
+}
+
+/// Verify flow results against the expected configuration.
+///
+/// This is extracted as a free function so it can be unit-tested without
+/// needing a full `FlowTestRunner` (which requires a live DAP subprocess).
+/// The `FlowTestRunner::verify_flow_results` method delegates to this.
+fn verify_flow_results(
+    config: &FlowTestConfig,
+    flow: &FlowData,
+) -> Result<(), BoxError> {
+    println!("\nVerifying flow data...");
+    println!(
+        "  Total steps: {}, all_variables: {:?}",
+        flow.steps.len(),
+        flow.all_variables
+    );
+
+    // Check excluded identifiers are NOT in the list
+    for excluded in &config.excluded_identifiers {
+        if flow.all_variables.contains(excluded) {
+            return Err(format!(
+                "'{}' should not be extracted as a variable (it's a function call)",
+                excluded
+            )
+            .into());
+        }
+    }
+    println!("  Function call filtering PASSED");
+
+    // Check expected variables ARE in the list
+    let found_expected: Vec<&String> = config
+        .expected_variables
+        .iter()
+        .filter(|v| flow.all_variables.contains(v))
+        .collect();
+    println!("  Expected variables found: {:?}", found_expected);
+
+    if found_expected.is_empty() {
+        return Err(format!(
+            "should find at least some of the expected variables: {:?}",
+            config.expected_variables
+        )
+        .into());
+    }
+    println!("  Variable extraction PASSED");
+
+    // Check value loading
+    let mut loaded = 0;
+    let mut not_loaded = 0;
+    for value in flow.values.values() {
+        if FlowData::is_value_loaded(value) {
+            loaded += 1;
+        } else {
+            not_loaded += 1;
+        }
+    }
+    println!("  Loaded: {}, Not loaded: {}", loaded, not_loaded);
+
+    // Verify specific expected values — every entry in expected_values
+    // MUST be present, loaded, parseable, and correct.
+    let mut verified_count = 0;
+    for (var_name, expected_value) in &config.expected_values {
+        if let Some(value) = flow.values.get(var_name) {
+            if FlowData::is_value_loaded(value) {
+                if let Some(actual) = FlowData::extract_int_value(value) {
+                    if actual != *expected_value {
+                        return Err(format!(
+                            "{} should be {}, got {}",
+                            var_name, expected_value, actual
+                        )
+                        .into());
+                    }
+                    println!("  {} = {} (correct)", var_name, actual);
+                    verified_count += 1;
+                } else {
+                    return Err(format!(
+                        "variable '{}' has a loaded value but it could not be \
+                         extracted as an integer (raw value: {:?})",
+                        var_name, value
+                    )
+                    .into());
+                }
+            } else {
+                println!("  {} = <NONE>", var_name);
+                return Err(format!(
+                    "variable '{}' is present but its value was not loaded (<NONE>)",
+                    var_name
+                )
+                .into());
+            }
+        } else {
+            return Err(format!(
+                "expected variable '{}' is missing from flow.values (available: {:?})",
+                var_name,
+                flow.values.keys().collect::<Vec<_>>()
+            )
+            .into());
+        }
+    }
+
+    if !config.expected_values.is_empty() && verified_count != config.expected_values.len() {
+        return Err(format!(
+            "only {}/{} expected values were verified",
+            verified_count,
+            config.expected_values.len()
+        )
+        .into());
+    }
+
+    if loaded == 0 {
+        return Err("No values were loaded - local variables should be loadable".into());
+    }
+    println!("  Value loading PASSED for {} variables", loaded);
+    println!("\nFlow test completed successfully!");
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// Build a minimal `FlowTestConfig` expecting a single variable with a
+    /// specific integer value.
+    fn config_expecting(var_name: &str, value: i64) -> FlowTestConfig {
+        let mut expected_values = HashMap::new();
+        expected_values.insert(var_name.to_string(), value);
+        FlowTestConfig {
+            source_file: "test.c".to_string(),
+            breakpoint_line: 1,
+            expected_variables: vec![var_name.to_string()],
+            excluded_identifiers: vec![],
+            expected_values,
+        }
+    }
+
+    /// Build a `FlowData` containing one step with the given variable names
+    /// and their associated flow values.
+    ///
+    /// Each entry in `vars` is `(name, value_json)` where `value_json` is the
+    /// flow-format value object (e.g. `{"r": "42", "i": "42"}`).
+    fn flow_with_vars(vars: &[(&str, Value)]) -> FlowData {
+        let mut all_variables = Vec::new();
+        let mut values = HashMap::new();
+        let mut step_variables = Vec::new();
+        let mut before_values = HashMap::new();
+
+        for (name, val) in vars {
+            let name = name.to_string();
+            all_variables.push(name.clone());
+            step_variables.push(name.clone());
+            before_values.insert(name.clone(), val.clone());
+            values.insert(name, val.clone());
+        }
+
+        FlowData {
+            steps: vec![FlowStep {
+                line: 1,
+                variables: step_variables,
+                before_values,
+            }],
+            all_variables,
+            values,
+        }
+    }
+
+    /// Helper to build the flow-format value JSON for an integer.
+    /// The format stores both a representation string (`r`) and an integer
+    /// string (`i`), matching what `FlowData::extract_int_value` expects.
+    fn int_flow_value(n: i64) -> Value {
+        json!({"r": n.to_string(), "i": n.to_string()})
+    }
+
+    #[test]
+    fn test_verify_rejects_missing_variable() {
+        let config = config_expecting("x", 42);
+        // FlowData has variable "y" but NOT "x".
+        let flow = flow_with_vars(&[("y", int_flow_value(10))]);
+
+        let result = verify_flow_results(&config, &flow);
+        assert!(
+            result.is_err(),
+            "verify_flow_results should return Err when expected variable is absent"
+        );
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("x"),
+            "error message should mention the missing variable 'x', got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_verify_rejects_wrong_value() {
+        let config = config_expecting("x", 42);
+        // FlowData has "x" but with value 99 instead of 42.
+        let flow = flow_with_vars(&[("x", int_flow_value(99))]);
+
+        let result = verify_flow_results(&config, &flow);
+        assert!(
+            result.is_err(),
+            "verify_flow_results should return Err when variable has wrong value"
+        );
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("42") && err_msg.contains("99"),
+            "error message should mention both expected (42) and actual (99), got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_verify_accepts_correct_values() {
+        let config = config_expecting("x", 42);
+        let flow = flow_with_vars(&[("x", int_flow_value(42))]);
+
+        let result = verify_flow_results(&config, &flow);
+        assert!(
+            result.is_ok(),
+            "verify_flow_results should return Ok when values match, got: {:?}",
+            result.unwrap_err()
+        );
     }
 }
