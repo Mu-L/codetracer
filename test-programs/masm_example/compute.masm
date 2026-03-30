@@ -1,9 +1,26 @@
+# Helper procedure: double a value using locals
+# Expects: value on top of stack
+# Returns: value * 2 on top of stack
+proc.double_val.1
+    loc_store.0
+    loc_load.0 dup add
+end
+
+# Main computation procedure with locals, helper call, and conditional
 proc.compute.5
     push.10 loc_store.0
     push.32 loc_store.1
     loc_load.0 loc_load.1 add loc_store.2
-    loc_load.2 dup add loc_store.3
+    loc_load.2 exec.double_val loc_store.3
     loc_load.3 loc_load.0 add loc_store.4
+    # conditional branch: if final_result > 50, push 1, else push 0
+    loc_load.4 push.50 u32gt
+    if.true
+        push.1
+    else
+        push.0
+    end
+    drop
 end
 
 begin
