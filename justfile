@@ -748,16 +748,21 @@ sync-design-tokens:
       ./libs/codetracer-design-system \
       ./src/frontend/styles/generated
 
-# One-time developer machine setup. Runs ct install (PATH, desktop file, BPF)
-# and ensures bpftrace is available for process monitoring development.
+# One-time developer machine setup. Configures the local environment for
+# iterative development of CodeTracer, including BPF script development.
+#
+# Sets up:
+# - ct on PATH and .desktop file (non-privileged)
+# - BPF capabilities on a local bpftrace copy so you can run and iterate
+#   on BPF collection scripts without sudo
 #
 # On NixOS, BPF capabilities are managed by security.wrappers (see
 # nix/packages/codetracer-appimage/nixos-module.nix). This target detects
 # NixOS and skips the manual setcap step accordingly.
 #
 # Pass --without-bpf to skip BPF setup:
-#   just user-setup --without-bpf
-user-setup *flags:
+#   just developer-setup --without-bpf
+developer-setup *flags:
   #!/usr/bin/env bash
   set -e
 
@@ -821,7 +826,7 @@ user-setup *flags:
       echo "  Install bpftrace using your package manager."
     fi
     echo
-    echo "After installing bpftrace, re-run: just user-setup"
+    echo "After installing bpftrace, re-run: just developer-setup"
     exit 1
   fi
 
