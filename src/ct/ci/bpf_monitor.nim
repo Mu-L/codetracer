@@ -97,7 +97,7 @@ const
   ## a Unix-epoch nanosecond timestamp.
   TaiLeapSecondsNs = 37_000_000_000'i64
 
-proc nsToIso8601(ns: int64): string =
+proc nsToIso8601*(ns: int64): string =
   ## Converts a TAI nanosecond timestamp to an ISO 8601 UTC string.
   ## The conversion subtracts the known TAI-UTC leap second offset.
   let unixNs = ns - TaiLeapSecondsNs
@@ -110,7 +110,7 @@ proc nsToIso8601(ns: int64): string =
 # Environment hashing
 # ---------------------------------------------------------------------------
 
-proc computeEnvId(envVars: seq[tuple[key: string, value: string]]): string =
+proc computeEnvId*(envVars: seq[tuple[key: string, value: string]]): string =
   ## Computes a SHA-256 hex digest of the sorted environment variables.
   ## Matches the content-addressing scheme used by the backend.
   var sorted = envVars
@@ -220,6 +220,23 @@ proc findBPFTraceScript*(): string =
 # ---------------------------------------------------------------------------
 # Monitor lifecycle
 # ---------------------------------------------------------------------------
+
+proc initTestMonitor*(): BPFMonitor =
+  ## Creates a BPFMonitor with initialized accumulators but no subprocess.
+  ## Used by unit tests to exercise the parsing logic without needing bpftrace.
+  result.rootPid = 0
+  result.running = false
+  result.execAccum = initTable[int, ExecAccumulator]()
+  result.intervalAccum = IntervalAccumulator(
+    cpuByPid: initTable[int, int64](),
+    memByPid: initTable[int, int64](),
+    netRecvByPid: initTable[int, int64](),
+    netSendByPid: initTable[int, int64](),
+    diskReadByPid: initTable[int, int64](),
+    diskWriteByPid: initTable[int, int64](),
+    lastEventPids: initTable[int, bool](),
+  )
+  result.knownEnvIds = initTable[string, bool]()
 
 proc startMonitor*(rootPid: int, scriptPath: string): BPFMonitor =
   ## Spawns bpftrace to monitor the process tree rooted at ``rootPid``.
@@ -491,7 +508,7 @@ proc parseIntervalEvent(monitor: var BPFMonitor, splits: seq[string]) =
   else:
     discard
 
-proc parseBpfLine(monitor: var BPFMonitor, line: string) =
+proc parseBpfLine*(monitor: var BPFMonitor, line: string) =
   ## Parses a single JSON line from bpftrace's ``-f json`` output.
   ## Dispatches to the appropriate event parser based on the data prefix.
   ##

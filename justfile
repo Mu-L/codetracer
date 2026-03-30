@@ -342,6 +342,77 @@ test-nimsuggest:
     exit 1
   fi
 
+# BPF monitor unit tests — exercises JSON parsing, timestamp conversion,
+# and event accumulation without needing bpftrace or root access.
+test-bpf-monitor:
+  nim c -r --hints:off --warnings:off -d:ssl -d:useOpenssl3 --mm:refc --nimcache:/tmp/ct-nim-cache/bpf_monitor_test src/ct/ci/bpf_monitor_test.nim
+
+# BPF integration tests — requires a capabilities-aware bpftrace binary
+# and the bpftrace-collection.bt script from the codetracer-ci sibling repo.
+# Skips gracefully if prerequisites are not met.
+# Run `just developer-setup` first to set up bpftrace capabilities.
+#
+# NOTE: bpftrace 0.24.x has a hardcoded geteuid()==0 check, so these tests
+# require either passwordless sudo or a patched bpftrace build. They will
+# skip with a diagnostic message when the prerequisite is not met.
+test-bpf-integration:
+  nim c -r --hints:off --warnings:off -d:ssl -d:useOpenssl3 --mm:refc --nimcache:/tmp/ct-nim-cache/bpf_integration_test src/ct/ci/bpf_integration_test.nim
+
+# Grant BPF capabilities to the ct binary after (re)compilation.
+# Requires the sudoers rule installed by `just developer-setup`.
+# Silently skips if the sudoers rule is not present or if not on Linux.
+setcap-bpf:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  if [ "$(uname)" != "Linux" ]; then
+    exit 0
+  fi
+  CT_BIN="$(pwd)/src/build-debug/bin/ct"
+  if [ ! -f "$CT_BIN" ]; then
+    exit 0
+  fi
+  SETCAP_BIN="$(command -v setcap 2>/dev/null || true)"
+  if [ -z "$SETCAP_BIN" ]; then
+    echo "Warning: setcap not found — BPF capabilities not set on ct binary." >&2
+    exit 0
+  fi
+  # Test if the sudoers rule allows passwordless setcap.
+  # sudo -n = non-interactive (fails immediately if password is needed).
+  if sudo -n "$SETCAP_BIN" 'cap_bpf,cap_perfmon,cap_dac_read_search=eip' "$CT_BIN" 2>/dev/null; then
+    echo "BPF capabilities set on $CT_BIN"
+  else
+    echo "Note: passwordless setcap not available — run 'just developer-setup' to enable." >&2
+  fi
+
+# Build BPF programs from C source to .bpf.o ELF objects.
+# Requires clang and libbpf headers (both available in the Nix dev shell).
+build-bpf-programs:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  LIBBPF_PATH=$(nix build nixpkgs#libbpf --no-link --print-out-paths 2>/dev/null)
+  mkdir -p src/build-debug/share
+  clang -target bpf -D__TARGET_ARCH_x86 \
+    -I src/bpf-monitor -I "$LIBBPF_PATH/include" \
+    -O2 -g \
+    -c src/bpf-monitor/monitor.bpf.c \
+    -o src/build-debug/share/monitor.bpf.o
+  echo "Built src/build-debug/share/monitor.bpf.o"
+
+# Native BPF monitor unit tests — exercises ring buffer event processing,
+# struct layout verification, and environment deduplication without BPF.
+test-bpf-native:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  LIBBPF_PATH=$(nix build nixpkgs#libbpf --no-link --print-out-paths 2>/dev/null)
+  nim c -r --hints:off --warnings:off -d:ssl -d:useOpenssl3 --mm:refc \
+    --passC:"-I$LIBBPF_PATH/include" \
+    --passL:"-L$LIBBPF_PATH/lib" --passL:"-lbpf" --passL:"-lelf" --passL:"-lz" \
+    --nimcache:/tmp/ct-nim-cache/bpf_monitor_native_test \
+    src/ct/ci/bpf_monitor_native_test.nim
+
+# Run all BPF-related tests (unit + native + integration).
+test-bpf: test-bpf-monitor test-bpf-native test-bpf-integration
+
 # ===========================
 # trace folder helpers
 
@@ -763,74 +834,4 @@ sync-design-tokens:
 # Pass --without-bpf to skip BPF setup:
 #   just developer-setup --without-bpf
 developer-setup *flags:
-  #!/usr/bin/env bash
-  set -e
-
-  echo "=== CodeTracer Developer Machine Setup ==="
-  echo
-
-  CT_BIN="src/build-debug/bin/ct"
-  if [ ! -f "$CT_BIN" ]; then
-    echo "ct binary not found at $CT_BIN"
-    echo "Please run 'just build-once' first."
-    exit 1
-  fi
-
-  # Phase 1: Non-privileged setup (PATH, desktop file)
-  echo "--- Phase 1: PATH and desktop file setup ---"
-  "$CT_BIN" install --no-bpf
-  echo
-
-  # Phase 2: BPF setup (requires sudo unless NixOS-managed)
-  SKIP_BPF=false
-  for flag in {{flags}}; do
-    case "$flag" in
-      --without-bpf|--no-bpf) SKIP_BPF=true ;;
-    esac
-  done
-
-  if [ "$(uname)" != "Linux" ]; then
-    echo "--- BPF setup skipped (not Linux) ---"
-    exit 0
-  fi
-
-  if [ "$SKIP_BPF" = "true" ]; then
-    echo "--- BPF setup skipped (--without-bpf) ---"
-    exit 0
-  fi
-
-  # Check if NixOS manages bpftrace via security.wrappers
-  if [ -f /run/wrappers/bin/codetracer-bpftrace ]; then
-    echo "--- BPF support is managed by NixOS (security.wrappers) ---"
-    echo "  Wrapper: /run/wrappers/bin/codetracer-bpftrace"
-    echo "  Make sure your user is in the 'codetracer-bpf' group:"
-    echo "    users.users.$(whoami).extraGroups = [ \"codetracer-bpf\" ];"
-    exit 0
-  fi
-
-  echo "--- Phase 2: BPF process monitoring setup ---"
-
-  # Check if bpftrace is available
-  if ! command -v bpftrace &>/dev/null; then
-    echo "bpftrace is not installed."
-    if command -v apt &>/dev/null; then
-      echo "  Install with: sudo apt install bpftrace"
-    elif command -v dnf &>/dev/null; then
-      echo "  Install with: sudo dnf install bpftrace"
-    elif command -v pacman &>/dev/null; then
-      echo "  Install with: sudo pacman -S bpftrace"
-    elif command -v nix-env &>/dev/null; then
-      echo "  Install with: nix-env -iA nixpkgs.bpftrace"
-      echo "  Or add bpftrace to your NixOS configuration."
-    else
-      echo "  Install bpftrace using your package manager."
-    fi
-    echo
-    echo "After installing bpftrace, re-run: just developer-setup"
-    exit 1
-  fi
-
-  "$CT_BIN" install --no-path --no-desktop --bpf
-  echo
-  echo "=== Setup complete ==="
-  echo "Note: Log out and back in for the codetracer-bpf group membership to take effect."
+  bash scripts/developer-setup.sh {{flags}}

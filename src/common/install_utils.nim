@@ -106,16 +106,23 @@ proc installCodetracerOnPath*(codetracerExe: string): Result[void, string] {.rai
       execPath = getEnv("APPIMAGE")
 
     try:
-      if not fileExists(binDir / "ct"):
-        echo fmt2"Creating symlink to {execPath} in {binDir}"
-        createSymlink(execPath, binDir / "ct")
-
-      elif isSymlinkDangling(binDir / "ct"):
-        # Try and clean up the installation
-        removeFile(binDir / "ct")
-        createSymlink(execPath, binDir / "ct")
+      let ctLink = binDir / "ct"
+      if symlinkExists(ctLink):
+        # A symlink exists — check if it already points to the right target.
+        let currentTarget = expandSymlink(ctLink)
+        if currentTarget == execPath:
+          echo fmt2"{ctLink} already points to {execPath}"
+        else:
+          # Points to a different (or dangling) target — update it.
+          echo fmt2"Updating symlink {ctLink} -> {execPath} (was: {currentTarget})"
+          removeFile(ctLink)
+          createSymlink(execPath, ctLink)
+      elif fileExists(ctLink):
+        # A regular file (not a symlink) exists at this path.
+        echo fmt2"{ctLink} exists and is not a symlink — skipping"
       else:
-        echo fmt2"{binDir}/ct already exists and is not dangling"
+        echo fmt2"Creating symlink {ctLink} -> {execPath}"
+        createSymlink(execPath, ctLink)
     except OSError as e:
       return err "Failed to put CodeTracer on the PATH: " & e.msg
 

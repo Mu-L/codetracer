@@ -143,14 +143,36 @@ js %f |> %o
 js %f |> %B.js | $(NIM_SIDE_OUTPUTS_IGNORE)
 
 # C rules:
+# Traditional linking flags for libraries that Nim would otherwise load via
+# dlopen at runtime. --dynlibOverride tells the Nim compiler to skip its
+# runtime dlopen() and instead emit a standard -l flag for the linker.
+# --passL provides the corresponding linker flag. This approach:
+#   1. Catches missing libraries at build time, not at runtime
+#   2. Works correctly with Nix, where libraries live in /nix/store paths
+#      that Nim's dlopen search heuristics can't find
+#   3. Matches the AppImage build (see appimage-scripts/build_with_nim.sh)
+DYNLIB_OVERRIDE_FLAGS = \
+--dynlibOverride:libcrypto \
+--dynlibOverride:libssl \
+--dynlibOverride:sqlite3 \
+--dynlibOverride:pcre \
+--dynlibOverride:libzip \
+--passL:"-lssl" \
+--passL:"-lcrypto" \
+--passL:"-lsqlite3" \
+--passL:"-lpcre" \
+--passL:"-lzip"
+
 !nim_c = |> ^ %f^ $(NIM_DEBUG)\
 -d:ssl \
 -d:useOpenssl3 \
+$(DYNLIB_OVERRIDE_FLAGS) \
 --nimcache:/tmp/ct-nim-cache/%B_c\
 --out:%o\
 c %f |> %o | $(NIM_SIDE_OUTPUTS_IGNORE)
 
-!codetracer = |> $(NIM_DEBUG)\
+# Shared flags for CodeTracer entrypoint binaries (ct, db-backend-record).
+CODETRACER_FLAGS = \
 -d:testing\
 --boundChecks:on\
 --stacktrace:on\
@@ -161,9 +183,26 @@ c %f |> %o | $(NIM_SIDE_OUTPUTS_IGNORE)
 -d:withTup \
 -d:useOpenssl3 \
 -d:ssl \
+$(DYNLIB_OVERRIDE_FLAGS)
+
+# Standard CodeTracer binary build (e.g. db-backend-record).
+!codetracer = |> $(NIM_DEBUG)\
+$(CODETRACER_FLAGS) \
 --nimcache:/tmp/ct-nim-cache/%B_codetracer_binary\
 --out:%o\
 c %f |> %o | $(NIM_SIDE_OUTPUTS_IGNORE)
+
+# CodeTracer binary with BPF capabilities (ct).
+# After compilation, re-applies cap_bpf+cap_perfmon+cap_dac_read_search
+# via passwordless sudo (requires sudoers rule from `just developer-setup`).
+# Silently skips if the rule is not installed — the build still succeeds.
+!codetracer_bpf = |> $(NIM_DEBUG)\
+$(CODETRACER_FLAGS) \
+--nimcache:/tmp/ct-nim-cache/%B_codetracer_binary\
+--out:%o\
+c %f && \
+sudo -n setcap 'cap_bpf,cap_perfmon,cap_dac_read_search=eip' %o 2>/dev/null || true\
+|> %o | $(NIM_SIDE_OUTPUTS_IGNORE)
 
 !nim_tester = |> ^ %f^ $(NIM_DEBUG) \
 --nimcache:/tmp/ct-nim-cache/tester \
@@ -190,6 +229,14 @@ export INCLUDE
 export CC
 export CXX
 export NIMFLAGS
+
+# LIBRARY_PATH is the standard gcc/ld mechanism for compile-time library
+# search (distinct from LD_LIBRARY_PATH which is runtime). The Nix dev shell
+# sets this to include paths to OpenSSL and other dependencies so that
+# -lssl/-lcrypto resolve during linking. Without this export, tup's
+# environment sanitization strips it and the linker cannot find libraries
+# that live in the Nix store.
+export LIBRARY_PATH
 
 # Keep linker selection in Cargo config/env instead of inline --config args.
 # This avoids shell-quoting differences between Windows environments.
