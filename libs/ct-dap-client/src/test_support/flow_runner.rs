@@ -267,7 +267,9 @@ impl FlowTestRunner {
         }
         println!("  Loaded: {}, Not loaded: {}", loaded, not_loaded);
 
-        // Verify specific expected values
+        // Verify specific expected values — every entry in expected_values
+        // MUST be present, loaded, parseable, and correct.
+        let mut verified_count = 0;
         for (var_name, expected_value) in &config.expected_values {
             if let Some(value) = flow.values.get(var_name) {
                 if FlowData::is_value_loaded(value) {
@@ -280,11 +282,40 @@ impl FlowTestRunner {
                             .into());
                         }
                         println!("  {} = {} (correct)", var_name, actual);
+                        verified_count += 1;
+                    } else {
+                        return Err(format!(
+                            "variable '{}' has a loaded value but it could not be \
+                             extracted as an integer (raw value: {:?})",
+                            var_name, value
+                        )
+                        .into());
                     }
                 } else {
                     println!("  {} = <NONE>", var_name);
+                    return Err(format!(
+                        "variable '{}' is present but its value was not loaded (<NONE>)",
+                        var_name
+                    )
+                    .into());
                 }
+            } else {
+                return Err(format!(
+                    "expected variable '{}' is missing from flow.values (available: {:?})",
+                    var_name,
+                    flow.values.keys().collect::<Vec<_>>()
+                )
+                .into());
             }
+        }
+
+        if !config.expected_values.is_empty() && verified_count != config.expected_values.len() {
+            return Err(format!(
+                "only {}/{} expected values were verified",
+                verified_count,
+                config.expected_values.len()
+            )
+            .into());
         }
 
         if loaded == 0 {
