@@ -203,16 +203,25 @@ impl DapStdioClient {
 
     // === DAP continue ===
 
-    /// Send standard DAP "continue", wait for stopped + ct/complete-move.
+    /// Send standard DAP "continue", wait for stopped + ct/complete-move,
+    /// then consume the trailing response.
+    ///
     /// Returns the MoveState from ct/complete-move.
     ///
-    /// Note: db-backend does not send a response for `continue` — only events
-    /// (stopped + ct/complete-move), so we skip recv_response here.
+    /// db-backend's step handler sends events first (stopped,
+    /// ct/complete-move) and then a response.  We must consume all three
+    /// so later `recv_response` calls don't pick up a stale response
+    /// belonging to this `continue` request.
     pub fn dap_continue(&mut self) -> Result<MoveState, BoxError> {
         self.send_request("continue", json!({"threadId": 1}))?;
         self.wait_for_stopped(Duration::from_secs(60))?;
         let event = self.recv_event("ct/complete-move", Duration::from_secs(10))?;
         let state: MoveState = serde_json::from_value(event.body)?;
+        // Consume the trailing response sent by the step handler
+        // (body is typically `0`).  Ignore errors — the response may
+        // have been consumed by recv_event's skip logic if it arrived
+        // before the events.
+        let _ = self.recv_response(Duration::from_secs(5));
         Ok(state)
     }
 
@@ -258,21 +267,42 @@ impl DapStdioClient {
         Ok(events)
     }
 
+    // === Call stack ===
+
+    /// Request the current call stack (standard DAP stackTrace).
+    ///
+    /// Returns a `StackTraceResult` containing the stack frames and the
+    /// total frame count as reported by the server.
+    pub fn stack_trace(&mut self) -> Result<StackTraceResult, BoxError> {
+        self.send_request(
+            "stackTrace",
+            json!({
+                "threadId": 1,
+            }),
+        )?;
+        let resp = self.recv_response(Duration::from_secs(30))?;
+        if !resp.success {
+            return Err(format!("stackTrace failed: {:?}", resp.message).into());
+        }
+        let result: StackTraceResult = serde_json::from_value(resp.body)?;
+        Ok(result)
+    }
+
     // === Navigation ===
 
-    /// Step in (forward).
+    /// Step in (forward) using the custom ct/step protocol.
     pub fn step_in(&mut self, args: StepArg) -> Result<MoveState, BoxError> {
         self.send_step("ct/step", args)
     }
 
-    /// Step over (forward).
+    /// Step over (forward) using the custom ct/step protocol.
     pub fn step_over(&mut self, args: StepArg) -> Result<MoveState, BoxError> {
         let mut step_args = args;
         step_args.action = Action::Next;
         self.send_step("ct/step", step_args)
     }
 
-    /// Continue forward.
+    /// Continue forward using the custom ct/step protocol.
     pub fn continue_forward(&mut self, args: StepArg) -> Result<MoveState, BoxError> {
         let mut step_args = args;
         step_args.action = Action::Continue;
@@ -283,6 +313,23 @@ impl DapStdioClient {
         self.send_request(command, serde_json::to_value(&args)?)?;
         let event = self.recv_event("ct/complete-move", Duration::from_secs(30))?;
         let state: MoveState = serde_json::from_value(event.body)?;
+        Ok(state)
+    }
+
+    /// Send a standard DAP step command (`next`, `stepIn`, `stepOut`)
+    /// and wait for the stopped + ct/complete-move events, then consume
+    /// the trailing response.
+    ///
+    /// Unlike `step_in`/`step_over` (which use the custom `ct/step`
+    /// protocol for socket-based connections), this method uses the
+    /// standard DAP command names that the stdio-based server expects.
+    pub fn dap_step(&mut self, command: &str) -> Result<MoveState, BoxError> {
+        self.send_request(command, json!({"threadId": 1}))?;
+        self.wait_for_stopped(Duration::from_secs(60))?;
+        let event = self.recv_event("ct/complete-move", Duration::from_secs(10))?;
+        let state: MoveState = serde_json::from_value(event.body)?;
+        // Consume the trailing response sent by the step handler.
+        let _ = self.recv_response(Duration::from_secs(5));
         Ok(state)
     }
 

@@ -7,7 +7,10 @@ use std::path::{Path, PathBuf};
 pub use comparison::{
     assert_tracepoint_results_match, parse_trace_output, terminal_events_to_string, ExpectedTrace,
 };
-pub use flow_runner::{FlowData, FlowTestConfig, FlowTestRunner};
+pub use flow_runner::{
+    BreakpointCheck, CallStackTestConfig, FlowData, FlowTestConfig, FlowTestRunner,
+    MultiBreakpointTestConfig, StepAction, SteppingTestConfig,
+};
 pub use tracepoint_runner::{TracepointSpec, TracepointTestRunner};
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;

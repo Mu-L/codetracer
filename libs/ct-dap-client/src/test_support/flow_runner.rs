@@ -7,6 +7,9 @@ use serde_json::Value;
 use crate::client::DapStdioClient;
 use crate::types::flow::{FlowMode, LoadFlowArguments};
 use crate::types::launch::LaunchRequestArguments;
+// Note: Action and StepArg are used by the ct/step protocol (socket-based).
+// For stdio-based stepping tests we use dap_step() with standard DAP command
+// names instead.
 
 use super::{find_ct_rr_support, prepare_trace_folder};
 
@@ -22,6 +25,64 @@ pub struct FlowTestConfig {
     pub excluded_identifiers: Vec<String>,
     /// Expected values for specific variables (name -> expected int value).
     pub expected_values: HashMap<String, i64>,
+}
+
+/// Configuration for a multi-breakpoint flow test.
+///
+/// Sets breakpoints at multiple lines in the same source file, then continues
+/// to each breakpoint in sequence, loading flow data and verifying expected
+/// variable values at every stop.
+pub struct MultiBreakpointTestConfig {
+    pub source_file: String,
+    /// One entry per breakpoint, in the order they will be hit.
+    /// Each entry is (line, expected_variables, expected_values).
+    pub breakpoints: Vec<BreakpointCheck>,
+}
+
+/// Expected state at a single breakpoint location.
+pub struct BreakpointCheck {
+    pub line: usize,
+    /// Variable names that should appear in the flow data.
+    pub expected_variables: Vec<String>,
+    /// Subset of variables whose integer values must match exactly.
+    pub expected_values: HashMap<String, i64>,
+}
+
+/// Configuration for a stepping test.
+///
+/// Hits a breakpoint, then performs a sequence of step operations (next,
+/// stepIn, stepOut) and verifies the resulting line number after each step.
+pub struct SteppingTestConfig {
+    pub source_file: String,
+    pub breakpoint_line: usize,
+    /// Sequence of (step_action, expected_line_after_step).
+    pub steps: Vec<(StepAction, i64)>,
+}
+
+/// The kind of step to perform in a stepping test.
+#[derive(Debug, Clone, Copy)]
+pub enum StepAction {
+    /// Step over (DAP "next") — advance to the next line in the same scope.
+    Next,
+    /// Step into — descend into a function call.
+    StepIn,
+    /// Step out — run until the current function returns.
+    StepOut,
+}
+
+/// Configuration for a call-stack test.
+///
+/// Hits a breakpoint and then inspects the call stack, verifying that the
+/// expected function names appear in the correct order.
+pub struct CallStackTestConfig {
+    pub source_file: String,
+    pub breakpoint_line: usize,
+    /// Expected function names in the call stack, from innermost (top of
+    /// stack, index 0) to outermost. The test verifies that the actual
+    /// stack starts with these entries.
+    pub expected_frames: Vec<String>,
+    /// If set, require exactly this many total frames.
+    pub expected_frame_count: Option<usize>,
 }
 
 /// Parsed flow data from a ct/updated-flow event.
@@ -220,6 +281,170 @@ impl FlowTestRunner {
         flow: &FlowData,
     ) -> Result<(), BoxError> {
         verify_flow_results(config, flow)
+    }
+
+    /// Run a multi-breakpoint test: set breakpoints at several lines, then
+    /// continue to each one in order, loading flow data and verifying variables
+    /// at every stop.
+    pub fn run_multi_breakpoint(
+        &mut self,
+        config: &MultiBreakpointTestConfig,
+    ) -> Result<(), BoxError> {
+        // Collect all breakpoint lines and set them in one request.
+        let lines: Vec<usize> = config.breakpoints.iter().map(|b| b.line).collect();
+        self.client
+            .set_breakpoints(&config.source_file, &lines)?;
+
+        for (i, bp) in config.breakpoints.iter().enumerate() {
+            println!("\n--- Multi-breakpoint: continuing to breakpoint {} (line {}) ---", i + 1, bp.line);
+
+            let move_state = self.client.dap_continue()?;
+            println!(
+                "  Stopped at {}:{}",
+                move_state.location.path, move_state.location.line
+            );
+
+            // Load flow and verify variables at this breakpoint.
+            let flow_body = self.client.load_flow(LoadFlowArguments {
+                flow_mode: FlowMode::Call,
+                location: move_state.location,
+            })?;
+            let flow = FlowData::from_event_body(&flow_body)?;
+
+            // Build a FlowTestConfig for the verification helper.
+            let check_config = FlowTestConfig {
+                source_file: config.source_file.clone(),
+                breakpoint_line: bp.line,
+                expected_variables: bp.expected_variables.clone(),
+                excluded_identifiers: vec![],
+                expected_values: bp.expected_values.clone(),
+            };
+            verify_flow_results(&check_config, &flow).map_err(|e| {
+                format!("Breakpoint {} (line {}): {}", i + 1, bp.line, e)
+            })?;
+        }
+
+        println!("\nMulti-breakpoint test completed successfully!");
+        Ok(())
+    }
+
+    /// Run a stepping test: hit a breakpoint, then perform a sequence of step
+    /// operations (next / stepIn / stepOut) and verify the debugger lands on
+    /// the expected line after each step.
+    ///
+    /// Uses the standard DAP step commands (`next`, `stepIn`, `stepOut`)
+    /// via `dap_step`, which is compatible with the stdio-based DAP server.
+    pub fn run_stepping_test(
+        &mut self,
+        config: &SteppingTestConfig,
+    ) -> Result<(), BoxError> {
+        // Set breakpoint and continue to it.
+        self.client
+            .set_breakpoints(&config.source_file, &[config.breakpoint_line])?;
+        let move_state = self.client.dap_continue()?;
+        println!(
+            "Stepping test: hit breakpoint at {}:{}",
+            move_state.location.path, move_state.location.line
+        );
+
+        // Clear the breakpoint so subsequent continues don't re-hit it.
+        self.client.set_breakpoints(&config.source_file, &[])?;
+
+        for (i, (action, expected_line)) in config.steps.iter().enumerate() {
+            let dap_command = match action {
+                StepAction::Next => "next",
+                StepAction::StepIn => "stepIn",
+                StepAction::StepOut => "stepOut",
+            };
+
+            let result = self.client.dap_step(dap_command)?;
+
+            let actual_line = result.location.line;
+            println!(
+                "  Step {} ({:?}): expected line {}, got line {}",
+                i + 1,
+                action,
+                expected_line,
+                actual_line
+            );
+
+            if actual_line != *expected_line {
+                return Err(format!(
+                    "Step {} ({:?}): expected line {}, but debugger stopped at line {}",
+                    i + 1,
+                    action,
+                    expected_line,
+                    actual_line
+                )
+                .into());
+            }
+        }
+
+        println!("\nStepping test completed successfully!");
+        Ok(())
+    }
+
+    /// Run a call-stack test: hit a breakpoint, then request the stack trace
+    /// and verify that the expected function names appear in the correct order.
+    pub fn run_call_stack_test(
+        &mut self,
+        config: &CallStackTestConfig,
+    ) -> Result<(), BoxError> {
+        // Set breakpoint and continue to it.
+        self.client
+            .set_breakpoints(&config.source_file, &[config.breakpoint_line])?;
+        let move_state = self.client.dap_continue()?;
+        println!(
+            "Call-stack test: hit breakpoint at {}:{}",
+            move_state.location.path, move_state.location.line
+        );
+
+        // Request the call stack.
+        let stack = self.client.stack_trace()?;
+        let frame_names: Vec<&str> = stack
+            .stack_frames
+            .iter()
+            .map(|f| f.name.as_str())
+            .collect();
+        println!("  Stack frames ({}): {:?}", frame_names.len(), frame_names);
+
+        // Verify expected frame count if specified.
+        if let Some(expected_count) = config.expected_frame_count {
+            if stack.stack_frames.len() != expected_count {
+                return Err(format!(
+                    "Expected {} stack frames, got {} (frames: {:?})",
+                    expected_count,
+                    stack.stack_frames.len(),
+                    frame_names
+                )
+                .into());
+            }
+        }
+
+        // Verify that the actual stack starts with the expected frame names.
+        if stack.stack_frames.len() < config.expected_frames.len() {
+            return Err(format!(
+                "Expected at least {} stack frames, got {} (frames: {:?})",
+                config.expected_frames.len(),
+                stack.stack_frames.len(),
+                frame_names
+            )
+            .into());
+        }
+
+        for (i, expected_name) in config.expected_frames.iter().enumerate() {
+            let actual_name = &stack.stack_frames[i].name;
+            if actual_name != expected_name {
+                return Err(format!(
+                    "Stack frame {}: expected '{}', got '{}' (full stack: {:?})",
+                    i, expected_name, actual_name, frame_names
+                )
+                .into());
+            }
+        }
+
+        println!("\nCall-stack test completed successfully!");
+        Ok(())
     }
 
     /// Access the underlying client for additional operations.
