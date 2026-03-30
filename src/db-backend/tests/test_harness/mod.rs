@@ -1723,6 +1723,17 @@ pub fn find_solana_recorder() -> Option<PathBuf> {
 ///
 /// Canonical path: `codetracer-miden-recorder/test-programs/masm/masm_flow_test.masm`
 pub fn find_masm_flow_test() -> Option<PathBuf> {
+    if let Ok(path) = env::var("CODETRACER_MASM_FLOW_TEST") {
+        let p = PathBuf::from(&path);
+        if p.exists() {
+            return Some(p);
+        }
+        eprintln!(
+            "WARNING: CODETRACER_MASM_FLOW_TEST='{}' but file does not exist; falling back",
+            path
+        );
+    }
+
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let path = manifest_dir.join("../../../codetracer-miden-recorder/test-programs/masm/masm_flow_test.masm");
     if path.exists() {
@@ -1737,6 +1748,17 @@ pub fn find_masm_flow_test() -> Option<PathBuf> {
 ///
 /// Canonical path: `codetracer-fuel-recorder/test-programs/flow_test/`
 pub fn find_sway_flow_test() -> Option<PathBuf> {
+    if let Ok(path) = env::var("CODETRACER_SWAY_FLOW_TEST") {
+        let p = PathBuf::from(&path);
+        if p.exists() {
+            return Some(p);
+        }
+        eprintln!(
+            "WARNING: CODETRACER_SWAY_FLOW_TEST='{}' but path does not exist; falling back",
+            path
+        );
+    }
+
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let path = manifest_dir.join("../../../codetracer-fuel-recorder/test-programs/flow_test");
     if path.join("Forc.toml").exists() {
@@ -1749,6 +1771,17 @@ pub fn find_sway_flow_test() -> Option<PathBuf> {
 /// Locate the Sway flow test source file (`main.sw`) from the sibling
 /// Fuel recorder repo.
 pub fn find_sway_flow_source() -> Option<PathBuf> {
+    if let Ok(path) = env::var("CODETRACER_SWAY_FLOW_SOURCE") {
+        let p = PathBuf::from(&path);
+        if p.exists() {
+            return Some(p);
+        }
+        eprintln!(
+            "WARNING: CODETRACER_SWAY_FLOW_SOURCE='{}' but file does not exist; falling back",
+            path
+        );
+    }
+
     find_sway_flow_test().map(|project_dir| project_dir.join("src/main.sw"))
 }
 
@@ -1757,6 +1790,17 @@ pub fn find_sway_flow_source() -> Option<PathBuf> {
 ///
 /// Canonical path: `codetracer-move-recorder/test-programs/move/flow_test/`
 pub fn find_move_flow_test() -> Option<PathBuf> {
+    if let Ok(path) = env::var("CODETRACER_MOVE_FLOW_TEST") {
+        let p = PathBuf::from(&path);
+        if p.exists() {
+            return Some(p);
+        }
+        eprintln!(
+            "WARNING: CODETRACER_MOVE_FLOW_TEST='{}' but path does not exist; falling back",
+            path
+        );
+    }
+
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let path = manifest_dir.join("../../../codetracer-move-recorder/test-programs/move/flow_test");
     if path.join("Move.toml").exists() {
@@ -1769,6 +1813,17 @@ pub fn find_move_flow_test() -> Option<PathBuf> {
 /// Locate the Move flow test source file (`flow_test.move`) from the
 /// sibling Move recorder repo.
 pub fn find_move_flow_source() -> Option<PathBuf> {
+    if let Ok(path) = env::var("CODETRACER_MOVE_FLOW_SOURCE") {
+        let p = PathBuf::from(&path);
+        if p.exists() {
+            return Some(p);
+        }
+        eprintln!(
+            "WARNING: CODETRACER_MOVE_FLOW_SOURCE='{}' but file does not exist; falling back",
+            path
+        );
+    }
+
     find_move_flow_test().map(|project_dir| project_dir.join("sources/flow_test.move"))
 }
 
@@ -1777,6 +1832,17 @@ pub fn find_move_flow_source() -> Option<PathBuf> {
 ///
 /// Canonical path: `codetracer-solana-recorder/test-programs/solana/solana_flow_test.rs`
 pub fn find_solana_flow_test() -> Option<PathBuf> {
+    if let Ok(path) = env::var("CODETRACER_SOLANA_FLOW_TEST") {
+        let p = PathBuf::from(&path);
+        if p.exists() {
+            return Some(p);
+        }
+        eprintln!(
+            "WARNING: CODETRACER_SOLANA_FLOW_TEST='{}' but file does not exist; falling back",
+            path
+        );
+    }
+
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let path = manifest_dir.join("../../../codetracer-solana-recorder/test-programs/solana/solana_flow_test.rs");
     if path.exists() {
