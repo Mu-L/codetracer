@@ -922,6 +922,20 @@
           text = builtins.toJSON { };
         };
 
+        # AppImage-based package for end-user distribution.
+        # Wraps the pre-built AppImage with desktop integration and bundles
+        # a copy of bpftrace for capabilities-based process monitoring.
+        # Build with: nix build .#codetracer-appimage
+        #
+        # For NixOS systems, use the companion module at
+        # nix/packages/codetracer-appimage/nixos-module.nix to configure
+        # security.wrappers for bpftrace capabilities.
+        codetracer-appimage =
+          let
+            appimageChannelPkgs = inputs.appimage-channel.legacyPackages.${system};
+          in
+          appimageChannelPkgs.callPackage ./codetracer-appimage { };
+
         default = codetracer;
       };
     };

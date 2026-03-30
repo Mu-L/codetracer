@@ -747,3 +747,85 @@ sync-design-tokens:
     bash scripts/tokens-to-styl.sh \
       ./libs/codetracer-design-system \
       ./src/frontend/styles/generated
+
+# One-time developer machine setup. Runs ct install (PATH, desktop file, BPF)
+# and ensures bpftrace is available for process monitoring development.
+#
+# On NixOS, BPF capabilities are managed by security.wrappers (see
+# nix/packages/codetracer-appimage/nixos-module.nix). This target detects
+# NixOS and skips the manual setcap step accordingly.
+#
+# Pass --without-bpf to skip BPF setup:
+#   just user-setup --without-bpf
+user-setup *flags:
+  #!/usr/bin/env bash
+  set -e
+
+  echo "=== CodeTracer Developer Machine Setup ==="
+  echo
+
+  CT_BIN="src/build-debug/bin/ct"
+  if [ ! -f "$CT_BIN" ]; then
+    echo "ct binary not found at $CT_BIN"
+    echo "Please run 'just build-once' first."
+    exit 1
+  fi
+
+  # Phase 1: Non-privileged setup (PATH, desktop file)
+  echo "--- Phase 1: PATH and desktop file setup ---"
+  "$CT_BIN" install --no-bpf
+  echo
+
+  # Phase 2: BPF setup (requires sudo unless NixOS-managed)
+  SKIP_BPF=false
+  for flag in {{flags}}; do
+    case "$flag" in
+      --without-bpf|--no-bpf) SKIP_BPF=true ;;
+    esac
+  done
+
+  if [ "$(uname)" != "Linux" ]; then
+    echo "--- BPF setup skipped (not Linux) ---"
+    exit 0
+  fi
+
+  if [ "$SKIP_BPF" = "true" ]; then
+    echo "--- BPF setup skipped (--without-bpf) ---"
+    exit 0
+  fi
+
+  # Check if NixOS manages bpftrace via security.wrappers
+  if [ -f /run/wrappers/bin/codetracer-bpftrace ]; then
+    echo "--- BPF support is managed by NixOS (security.wrappers) ---"
+    echo "  Wrapper: /run/wrappers/bin/codetracer-bpftrace"
+    echo "  Make sure your user is in the 'codetracer-bpf' group:"
+    echo "    users.users.$(whoami).extraGroups = [ \"codetracer-bpf\" ];"
+    exit 0
+  fi
+
+  echo "--- Phase 2: BPF process monitoring setup ---"
+
+  # Check if bpftrace is available
+  if ! command -v bpftrace &>/dev/null; then
+    echo "bpftrace is not installed."
+    if command -v apt &>/dev/null; then
+      echo "  Install with: sudo apt install bpftrace"
+    elif command -v dnf &>/dev/null; then
+      echo "  Install with: sudo dnf install bpftrace"
+    elif command -v pacman &>/dev/null; then
+      echo "  Install with: sudo pacman -S bpftrace"
+    elif command -v nix-env &>/dev/null; then
+      echo "  Install with: nix-env -iA nixpkgs.bpftrace"
+      echo "  Or add bpftrace to your NixOS configuration."
+    else
+      echo "  Install bpftrace using your package manager."
+    fi
+    echo
+    echo "After installing bpftrace, re-run: just user-setup"
+    exit 1
+  fi
+
+  "$CT_BIN" install --no-path --no-desktop --bpf
+  echo
+  echo "=== Setup complete ==="
+  echo "Note: Log out and back in for the codetracer-bpf group membership to take effect."
