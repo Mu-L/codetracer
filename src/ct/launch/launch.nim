@@ -15,6 +15,9 @@ import
   results,
   json_serialization
 
+when defined(linux):
+  import ../../common/bpf_install
+
 proc unescapeEnvValue(s: string): string =
   ## Unescape common escape sequences in .env file values.
   ## Handles: \n, \r, \t, \\, \", \'
@@ -153,6 +156,16 @@ proc runInitial*(conf: CodetracerConf) =
       when defined(linux):
         if conf.installCtDesktopFile:
           installCodetracerDesktopFile(codetracerPrefix, rootDir, codetracerExe)
+
+        if conf.installBpf:
+          if isNixManagedBpf():
+            echo "BPF support is managed by the Nix package. Skipping."
+          else:
+            echo "Setting up BPF process monitoring..."
+            let bpfResult = installBpfSupport()
+            if bpfResult.isErr:
+              echo "Warning: BPF setup failed: " & bpfResult.error
+              echo "Process monitoring will use sudo fallback at runtime."
 
       quit(0)
 

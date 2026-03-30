@@ -222,6 +222,15 @@ type
         desc: "Install CodeTracer .desktop file"
         defaultValue: true
        .}: bool
+      # BPF process monitoring setup. Enabled by default on Linux.
+      # Pass --no-bpf to skip. Requires sudo for initial setup.
+      # On NixOS, BPF is managed via security.wrappers and this flag
+      # is a no-op (setup is skipped automatically).
+      installBpf* {.
+        name: "bpf",
+        desc: "Set up BPF process monitoring (requires sudo, enabled by default on Linux)"
+        defaultValue: true
+       .}: bool
     of list:
       listFormat* {.
         name: "format",

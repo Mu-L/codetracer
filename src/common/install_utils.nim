@@ -3,6 +3,9 @@ import
   results,
   strings, filepaths
 
+when defined(linux):
+  import bpf_install
+
 proc isSymlinkDangling(symlinkPath: string): bool =
   let target = expandSymlink(symlinkPath)
   return not fileExists(target)
@@ -288,3 +291,11 @@ when defined(linux):
     except OSError as e:
       echo "Failed to install desktop file: ", e.msg
       quit(1)
+
+  proc installBpfSupport*(sudoCommand: string = "sudo"): Result[void, string] =
+    ## Installs BPF process monitoring support by setting up a
+    ## capabilities-aware bpftrace binary. Delegates to ``bpf_install.installBpf``.
+    ##
+    ## This is a thin wrapper that can be called from the install command handler.
+    ## On non-Linux platforms this proc does not exist (guarded by ``when defined(linux)``).
+    bpf_install.installBpf(sudoCommand)

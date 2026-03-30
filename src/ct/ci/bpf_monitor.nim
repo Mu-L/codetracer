@@ -25,6 +25,7 @@ import std/[algorithm, json, os, osproc, posix, streams,
 import nimcrypto/[sha2, hash]
 import ../online_sharing/api_client
 import ci_api_client
+import ../../common/bpf_install
 
 # Re-export the process event types defined in ci_api_client so that
 # callers can import them from either module.
@@ -127,17 +128,48 @@ proc computeEnvId(envVars: seq[tuple[key: string, value: string]]): string =
 # BPF capability detection
 # ---------------------------------------------------------------------------
 
+proc findBpftrace(): string =
+  ## Locate the best bpftrace binary using the priority from bpf_install:
+  ## nix wrapper > local install with capabilities > system (with sudo).
+  ## Returns an empty string if no bpftrace binary is found.
+  let path = getBpftracePath()
+  if path.len > 0:
+    return path
+  return ""
+
 proc detectBPFCapability*(): BPFCapability =
-  ## Checks if bpftrace is available and passwordless sudo works.
-  ## Returns ``bpfAvailable`` only if both conditions are met.
-  let bpftracePath = findExe("bpftrace")
+  ## Checks if bpftrace is available and can be used for process monitoring.
+  ##
+  ## Priority order:
+  ## 1. NixOS wrapper or local capabilities-aware install -- test without sudo
+  ## 2. System bpftrace -- test with passwordless sudo
+  ##
+  ## Returns ``bpfAvailable`` if bpftrace can run, ``bpfNoBinary`` if not
+  ## found, ``bpfNoPermission`` if sudo is required but unavailable, or
+  ## ``bpfUnsupported`` on unexpected failures.
+  let bpftracePath = findBpftrace()
   if bpftracePath.len == 0:
     return bpfNoBinary
 
-  # Test that sudo -n (non-interactive) can run bpftrace.
+  # If using nix wrapper or local install with capabilities, test without sudo.
+  if isNixManagedBpf() or isLocalBpfInstalled():
+    try:
+      let testCmd = startProcess(bpftracePath,
+                                 args = @["-e", "BEGIN { exit(); }"],
+                                 options = {poStdErrToStdOut, poUsePath})
+      let exitCode = waitForExit(testCmd)
+      close(testCmd)
+      if exitCode == 0:
+        return bpfAvailable
+      # Fall through to sudo check if capabilities-based run failed.
+    except CatchableError:
+      discard
+
+  # Try with passwordless sudo as a fallback.
   try:
-    let testCmd = startProcess("sudo", args = @["-n", "bpftrace", "-e",
-                               "BEGIN { exit(); }"],
+    let testCmd = startProcess("sudo",
+                               args = @["-n", bpftracePath, "-e",
+                                        "BEGIN { exit(); }"],
                                options = {poStdErrToStdOut, poUsePath})
     let exitCode = waitForExit(testCmd)
     close(testCmd)
@@ -211,9 +243,19 @@ proc startMonitor*(rootPid: int, scriptPath: string): BPFMonitor =
   )
   result.knownEnvIds = initTable[string, bool]()
 
-  result.process = startProcess("sudo",
-    args = @["bpftrace", "-f", "json", "-B", "none", scriptPath, $rootPid],
-    options = {poUsePath, poStdErrToStdOut})
+  # Use the capabilities-aware bpftrace path when available,
+  # falling back to sudo for the raw system binary.
+  let bpftracePath = findBpftrace()
+  let useSudo = not (isNixManagedBpf() or isLocalBpfInstalled())
+
+  if useSudo:
+    result.process = startProcess("sudo",
+      args = @[bpftracePath, "-f", "json", "-B", "none", scriptPath, $rootPid],
+      options = {poUsePath, poStdErrToStdOut})
+  else:
+    result.process = startProcess(bpftracePath,
+      args = @["-f", "json", "-B", "none", scriptPath, $rootPid],
+      options = {poUsePath, poStdErrToStdOut})
   result.running = true
 
   # Set the stdout pipe to non-blocking mode so that ``pollEvents`` can

@@ -7,6 +7,7 @@ import
 
 when defined(linux):
   var startMenuChecked = true
+  var bpfChecked = true
 
 var pathChecked = true
 var dontAskChecked = false
@@ -29,6 +30,7 @@ proc onInstall() =
   when defined(linux):
     if startMenuChecked:
       options["desktop"] = true
+    options["bpf"] = bpfChecked
 
   if pathChecked:
     options["path"] = true
@@ -75,6 +77,18 @@ proc dialogBox(): VNode =
                 class = "custom-tooltip",
               ):
                 text "This will create a symlink to the current executable in ~/.local/bin"
+          when defined(linux):
+            label:
+              input(`type`="checkbox", checked=toChecked(bpfChecked), onClick=proc() = bpfChecked = not bpfChecked)
+              text "Enable BPF process monitoring (requires admin password)"
+              span(class="info-icon"):
+                text "ⓘ "
+                tdiv(
+                  class = "custom-tooltip",
+                ):
+                  text "Sets up bpftrace with capabilities for process tree monitoring in CI mode."
+                  br()
+                  text "Requires sudo for initial setup. Can be skipped and configured later."
         tdiv(class="dialog-actions"):
           button(class="install-btn", onClick=onInstall): text "Install"
           button(class="dismiss-btn", onClick=onDismiss): text "Dismiss"

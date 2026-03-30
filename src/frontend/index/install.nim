@@ -71,7 +71,9 @@ proc onDismissCtFrontend*(sender: js, dontAskAgain: bool) {.async.} =
     installResponseResolve(InstallResponse(kind: InstallResponseKind.Dismissed))
 
 proc onInstallCtFrontend*(sender: js, response: js) {.async.} =
-  var args = @[cstring"install"]
+  # Step 1: Run the non-privileged install (PATH + desktop file).
+  # BPF is excluded here and handled separately if requested.
+  var args = @[cstring"install", cstring"--no-bpf"]
 
   if response["desktop"].to(bool):
     args.add(cstring"--desktop")
@@ -83,7 +85,24 @@ proc onInstallCtFrontend*(sender: js, response: js) {.async.} =
     codetracerExe.cstring,
     args)
 
-  let isOk = res.isOk
+  var isOk = res.isOk
+
+  # Step 2: If BPF was requested, run a separate privileged install via pkexec
+  # (PolicyKit GUI password dialog) that only sets up BPF capabilities.
+  when defined(linux):
+    if isOk and not response["bpf"].isNil and response["bpf"].to(bool):
+      let bpfArgs = @[
+        codetracerExe.cstring,
+        cstring"install",
+        cstring"--no-path",
+        cstring"--no-desktop",
+        cstring"--bpf",
+      ]
+      let bpfRes = await readProcessOutput(cstring"pkexec", bpfArgs)
+      if not bpfRes.isOk:
+        # BPF setup failure is non-fatal; the main install still succeeded.
+        echo "Warning: BPF setup via pkexec failed. Process monitoring will use sudo fallback."
+
   let status = if isOk:
       (cstring"ok", cstring"Succesfully installated")
     else:
