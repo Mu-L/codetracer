@@ -457,4 +457,116 @@ mod tests {
             result.unwrap_err()
         );
     }
+
+    #[test]
+    fn test_verify_rejects_excluded_identifier() {
+        let config = FlowTestConfig {
+            source_file: "test.c".to_string(),
+            breakpoint_line: 1,
+            expected_variables: vec!["x".to_string()],
+            excluded_identifiers: vec!["printf".to_string()],
+            expected_values: HashMap::new(),
+        };
+        // FlowData contains both "x" and "printf" — printf should be rejected.
+        let flow = flow_with_vars(&[
+            ("x", int_flow_value(10)),
+            ("printf", int_flow_value(0)),
+        ]);
+
+        let result = verify_flow_results(&config, &flow);
+        assert!(
+            result.is_err(),
+            "verify_flow_results should reject flow containing excluded identifier"
+        );
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("printf"),
+            "error should mention the excluded identifier, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_verify_rejects_unloaded_value() {
+        let config = config_expecting("x", 42);
+        // Value is present but marked as unloaded (<NONE>).
+        let flow = flow_with_vars(&[("x", json!({"r": "<NONE>", "i": ""}))]);
+
+        let result = verify_flow_results(&config, &flow);
+        assert!(
+            result.is_err(),
+            "verify_flow_results should reject unloaded values"
+        );
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("not loaded") || err_msg.contains("NONE"),
+            "error should mention value not being loaded, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_verify_rejects_non_integer_value() {
+        let config = config_expecting("x", 42);
+        // Value is loaded but not parseable as integer.
+        let flow = flow_with_vars(&[("x", json!({"r": "hello", "i": ""}))]);
+
+        let result = verify_flow_results(&config, &flow);
+        assert!(
+            result.is_err(),
+            "verify_flow_results should reject non-integer values when integer expected"
+        );
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("integer") || err_msg.contains("extracted"),
+            "error should mention integer extraction failure, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_verify_accepts_multiple_variables() {
+        let mut expected_values = HashMap::new();
+        expected_values.insert("a".to_string(), 10);
+        expected_values.insert("b".to_string(), 20);
+        expected_values.insert("sum".to_string(), 30);
+        let config = FlowTestConfig {
+            source_file: "test.c".to_string(),
+            breakpoint_line: 1,
+            expected_variables: vec!["a".to_string(), "b".to_string(), "sum".to_string()],
+            excluded_identifiers: vec![],
+            expected_values,
+        };
+        let flow = flow_with_vars(&[
+            ("a", int_flow_value(10)),
+            ("b", int_flow_value(20)),
+            ("sum", int_flow_value(30)),
+        ]);
+
+        let result = verify_flow_results(&config, &flow);
+        assert!(
+            result.is_ok(),
+            "verify_flow_results should accept all correct multi-variable values, got: {:?}",
+            result.unwrap_err()
+        );
+    }
+
+    #[test]
+    fn test_verify_rejects_when_no_values_loaded() {
+        // Config with no expected_values but flow has only unloaded values.
+        let config = FlowTestConfig {
+            source_file: "test.c".to_string(),
+            breakpoint_line: 1,
+            expected_variables: vec!["x".to_string()],
+            excluded_identifiers: vec![],
+            expected_values: HashMap::new(),
+        };
+        let flow = flow_with_vars(&[("x", json!({"r": "<NONE>", "i": ""}))]);
+
+        let result = verify_flow_results(&config, &flow);
+        assert!(
+            result.is_err(),
+            "verify_flow_results should reject when zero values are loaded"
+        );
+    }
 }
