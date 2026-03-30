@@ -371,14 +371,14 @@ setcap-bpf:
   if [ ! -f "$CT_BIN" ]; then
     exit 0
   fi
-  SETCAP_BIN="$(command -v setcap 2>/dev/null || true)"
-  if [ -z "$SETCAP_BIN" ]; then
-    echo "Warning: setcap not found — BPF capabilities not set on ct binary." >&2
+  # codetracer-setcap is a single-purpose helper installed by the NixOS
+  # developer-bpf module. It runs setcap with hardcoded caps on the ct binary.
+  if ! command -v codetracer-setcap &>/dev/null; then
+    echo "Note: codetracer-setcap not found — run 'just developer-setup' or import the NixOS module." >&2
     exit 0
   fi
-  # Test if the sudoers rule allows passwordless setcap.
   # sudo -n = non-interactive (fails immediately if password is needed).
-  if sudo -n "$SETCAP_BIN" 'cap_bpf,cap_perfmon,cap_dac_read_search=eip' "$CT_BIN" 2>/dev/null; then
+  if sudo -n codetracer-setcap 2>/dev/null; then
     echo "BPF capabilities set on $CT_BIN"
   else
     echo "Note: passwordless setcap not available — run 'just developer-setup' to enable." >&2

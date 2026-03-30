@@ -237,7 +237,7 @@ if [ -f /etc/NIXOS ]; then
 	echo
 
 	# Check if the sudoers rule is already active (NixOS rebuild done).
-	if sudo -n "$SETCAP_BIN" 'cap_bpf,cap_perfmon,cap_dac_read_search=eip' "$CT_ABS_PATH" 2>/dev/null; then
+	if command -v codetracer-setcap &>/dev/null && sudo -n codetracer-setcap 2>/dev/null; then
 		echo "  Passwordless setcap is active — BPF capabilities set on $CT_ABS_PATH"
 	elif [ -f "$CT_ABS_PATH" ]; then
 		echo "  Passwordless setcap not yet active. Applying manually (requires sudo)..."
