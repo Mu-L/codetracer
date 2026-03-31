@@ -378,7 +378,10 @@ setcap-bpf:
     exit 0
   fi
   # sudo -n = non-interactive (fails immediately if password is needed).
-  if sudo -n codetracer-setcap 2>/dev/null; then
+  # Resolve to the full Nix store path — sudo matches the sudoers rule
+  # against the real path, not the /run/current-system/sw/bin symlink.
+  SETCAP_REAL="$(readlink -f "$(command -v codetracer-setcap)")"
+  if sudo -n "$SETCAP_REAL" 2>/dev/null; then
     echo "BPF capabilities set on $CT_BIN"
   else
     echo "Note: passwordless setcap not available — run 'just developer-setup' to enable." >&2

@@ -201,7 +201,7 @@ $(CODETRACER_FLAGS) \
 --nimcache:/tmp/ct-nim-cache/%B_codetracer_binary\
 --out:%o\
 c %f && \
-sudo -n codetracer-setcap 2>/dev/null || true\
+sudo -n "$(readlink -f "$(command -v codetracer-setcap)")" 2>/dev/null || true\
 |> %o | $(NIM_SIDE_OUTPUTS_IGNORE)
 
 !nim_tester = |> ^ %f^ $(NIM_DEBUG) \
