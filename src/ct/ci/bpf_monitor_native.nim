@@ -161,7 +161,8 @@ proc ktime_nsToIso8601(ns: uint64): string =
   let now = epochTime()
   # CLOCK_MONOTONIC as nanoseconds (approximate — we use the BPF event's
   # own ktime value, which was captured atomically in the kernel).
-  # The conversion to wall clock is: wall_ns = ktime_ns + (realtime - monotonic).
+  # Wall clock conversion:
+  # wall_ns = ktime_ns + (realtime - monotonic).
   # We approximate (realtime - monotonic) as (now - uptime).
   # For simplicity, just use the current wall clock time for events
   # arriving in near-real-time (< 1s latency from kernel to userspace).
@@ -203,7 +204,9 @@ proc charArrayToString(arr: openArray[char]): string =
 proc computeEnvId(envVars: seq[tuple[key: string, value: string]]): string =
   ## SHA-256 hex digest of sorted environment variables.
   var sorted = envVars
-  sorted.sort(proc(a, b: tuple[key: string, value: string]): int = cmp(a.key, b.key))
+  sorted.sort(
+    proc(a, b: tuple[key: string, value: string]): int =
+      cmp(a.key, b.key))
   var ctx: sha256
   ctx.init()
   for kv in sorted:
@@ -557,7 +560,10 @@ proc defaultBpfObjectPath*(): string =
   ## Checks (in order):
   ##   1. CODETRACER_BPF_OBJECT environment variable
   ##   2. $CODETRACER_PREFIX/share/monitor.bpf.o
-  ##   3. <repo-root>/src/build-debug/share/monitor.bpf.o
+  ##   3. <exe-dir>/../share/monitor.bpf.o (relative to the ct binary)
+  ##   4. <repo-root>/src/build-debug/share/monitor.bpf.o
+  ##   5. /usr/local/lib/codetracer/monitor.bpf.o
+  ##      (installed by ct install --bpf)
   result = getEnv("CODETRACER_BPF_OBJECT")
   if result.len > 0 and fileExists(result):
     return result
@@ -568,12 +574,24 @@ proc defaultBpfObjectPath*(): string =
     if fileExists(result):
       return result
 
-  # Fallback: relative to repo root.
+  # Relative to the running binary: <exe-dir>/../share/monitor.bpf.o.
+  # This handles installed layouts (AppImage, /usr/local prefix).
+  let exeDir = getAppDir()
+  result = exeDir.parentDir / "share" / "monitor.bpf.o"
+  if fileExists(result):
+    return result
+
+  # Fallback: relative to repo root (dev builds).
   let repoRoot = getEnv("CODETRACER_REPO_ROOT_PATH")
   if repoRoot.len > 0:
     result = repoRoot / "src" / "build-debug" / "share" / "monitor.bpf.o"
     if fileExists(result):
       return result
+
+  # Last resort: system-wide install path set by `ct install --bpf`.
+  const systemInstallPath = "/usr/local/lib/codetracer/monitor.bpf.o"
+  if fileExists(systemInstallPath):
+    return systemInstallPath
 
   return ""
 
