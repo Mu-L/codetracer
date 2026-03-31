@@ -17,3 +17,9 @@ node_modules/.bin/webpack --progress
 # that tup will discover
 cd src
 "${TUP:-tup}" build-debug
+cd ..
+
+# Re-apply BPF capabilities on the ct binary. Tup's FUSE sandbox prevents
+# sudo from running during the build, so we do this as a post-build step.
+# Silently skips if codetracer-setcap is not installed.
+scripts/post-build-setcap.sh src/build-debug/bin/ct

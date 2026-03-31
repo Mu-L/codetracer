@@ -8,6 +8,8 @@ import std/[options, os, osproc, posix, streams,
             strformat, strutils, times]
 import ../online_sharing/[api_client, remote_config]
 import ci_state, ci_api_client, bpf_monitor
+when defined(linux):
+  import bpf_monitor_native
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -177,31 +179,53 @@ proc ciExecCommand*(token, baseUrl: string, program: string,
   let startTime = epochTime()
 
   # -- BPF process monitoring setup ----------------------------------------
+  # Two backends are available: native libbpf (preferred, no subprocess) and
+  # bpftrace (legacy subprocess fallback). The native backend requires
+  # CAP_BPF capabilities on the ct binary and a compiled monitor.bpf.o file.
   var bpfMon: BPFMonitor
+  when defined(linux):
+    var nativeMon: NativeBPFMonitor
   var bpfActive = false
+  var useNativeBpf = false
 
   if monitorProcesses:
-    let cap = detectBPFCapability()
-    case cap
-    of bpfAvailable:
-      let scriptPath = findBPFTraceScript()
-      if scriptPath.len == 0:
-        echo "Warning: bpftrace-collection.bt script not found. Process monitoring disabled."
-      else:
-        try:
-          bpfMon = startMonitor(pid, scriptPath)
-          bpfActive = true
-          echo fmt"BPF process monitor started (root PID: {pid})"
-        except OSError as e:
-          echo fmt"Warning: failed to start bpftrace: {e.msg}. Process monitoring disabled."
-        except CatchableError as e:
-          echo fmt"Warning: failed to start bpftrace: {e.msg}. Process monitoring disabled."
-    of bpfNoBinary:
-      echo "Warning: bpftrace not found in PATH. Process monitoring disabled."
-    of bpfNoPermission:
-      echo "Warning: passwordless sudo for bpftrace unavailable. Process monitoring disabled."
-    of bpfUnsupported:
-      echo "Warning: BPF not supported on this system. Process monitoring disabled."
+    # Try the native libbpf backend first (Linux only).
+    when defined(linux):
+      let objPath = defaultBpfObjectPath()
+      if objPath.len > 0:
+        let nativeCap = detectNativeBPFCapability(objPath)
+        if nativeCap == nbpfAvailable:
+          try:
+            nativeMon = startNativeMonitor(pid, objPath)
+            useNativeBpf = true
+            bpfActive = true
+            echo fmt"Native BPF process monitor started (root PID: {pid})"
+          except OSError as e:
+            echo fmt"Warning: native BPF failed: {e.msg}. Trying bpftrace fallback..."
+
+    # Fall back to the bpftrace subprocess backend.
+    if not bpfActive:
+      let cap = detectBPFCapability()
+      case cap
+      of bpfAvailable:
+        let scriptPath = findBPFTraceScript()
+        if scriptPath.len == 0:
+          echo "Warning: bpftrace-collection.bt script not found. Process monitoring disabled."
+        else:
+          try:
+            bpfMon = startMonitor(pid, scriptPath)
+            bpfActive = true
+            echo fmt"BPF process monitor started via bpftrace (root PID: {pid})"
+          except OSError as e:
+            echo fmt"Warning: failed to start bpftrace: {e.msg}. Process monitoring disabled."
+          except CatchableError as e:
+            echo fmt"Warning: failed to start bpftrace: {e.msg}. Process monitoring disabled."
+      of bpfNoBinary:
+        echo "Warning: bpftrace not found in PATH. Process monitoring disabled."
+      of bpfNoPermission:
+        echo "Warning: passwordless sudo for bpftrace unavailable. Process monitoring disabled."
+      of bpfUnsupported:
+        echo "Warning: BPF not supported on this system. Process monitoring disabled."
 
   var lastBpfPollTime = epochTime()
 
@@ -237,12 +261,18 @@ proc ciExecCommand*(token, baseUrl: string, program: string,
     lastCancelCheckTime = epochTime()
 
   proc pollAndFlushBpf() =
-    ## Polls bpftrace for new events and flushes them to the backend.
+    ## Polls the active BPF backend for new events and flushes them.
     if not bpfActive:
       return
-    pollEvents(bpfMon)
-    if hasPendingEvents(bpfMon):
-      flushEvents(bpfMon, client, token, state.runId)
+    if useNativeBpf:
+      when defined(linux):
+        pollNativeEvents(nativeMon)
+        if hasPendingEvents(nativeMon):
+          flushEvents(nativeMon, client, token, state.runId)
+    else:
+      pollEvents(bpfMon)
+      if hasPendingEvents(bpfMon):
+        flushEvents(bpfMon, client, token, state.runId)
     lastBpfPollTime = epochTime()
 
   # Read child output line by line.
@@ -300,11 +330,15 @@ proc ciExecCommand*(token, baseUrl: string, program: string,
 
   # -- BPF cleanup ---------------------------------------------------------
   if bpfActive:
-    # Stop bpftrace and drain remaining events.
-    stopMonitor(bpfMon)
-    # Final BPF event flush.
-    if hasPendingEvents(bpfMon):
-      flushEvents(bpfMon, client, token, state.runId)
+    if useNativeBpf:
+      when defined(linux):
+        stopNativeMonitor(nativeMon)
+        if hasPendingEvents(nativeMon):
+          flushEvents(nativeMon, client, token, state.runId)
+    else:
+      stopMonitor(bpfMon)
+      if hasPendingEvents(bpfMon):
+        flushEvents(bpfMon, client, token, state.runId)
     echo "BPF process monitor stopped."
 
   if cancelled:

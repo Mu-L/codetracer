@@ -24,6 +24,7 @@
 
 import std/[algorithm, os, strformat, strutils, tables, times]
 import nimcrypto/[sha2, hash]
+import ../online_sharing/api_client
 import ci_api_client
 import libbpf_wrapper
 
@@ -73,8 +74,7 @@ type
   BpfExecEnvpEvent* {.packed.} = object
     eventType*: uint32
     pid*: uint32
-    key*: array[BPF_MONITOR_ENVKEY_MAX, char]
-    value*: array[BPF_MONITOR_ENVVAL_MAX, char]
+    raw*: array[BPF_MONITOR_ENVKEY_MAX + BPF_MONITOR_ENVVAL_MAX, char]
 
   BpfExecEndEvent* {.packed.} = object
     eventType*: uint32
@@ -261,8 +261,11 @@ proc ringBufferCallback(ctx: pointer, data: pointer,
     let ev = cast[ptr BpfExecEnvpEvent](data)
     let pid = int(ev.pid)
     if pid in monitor.execAccum:
-      let key = charArrayToString(ev.key)
-      let value = charArrayToString(ev.value)
+      # Split raw "KEY=VALUE" string into key and value.
+      let rawStr = charArrayToString(ev.raw)
+      let eqPos = rawStr.find('=')
+      let key = if eqPos >= 0: rawStr[0..<eqPos] else: rawStr
+      let value = if eqPos >= 0: rawStr[eqPos+1..^1] else: ""
       monitor.execAccum[pid].envVars.add((key, value))
 
   of BPF_EVENT_EXEC_END:
@@ -499,6 +502,28 @@ proc clearPendingEvents*(monitor: var NativeBPFMonitor) =
   monitor.pendingExits.setLen(0)
   monitor.pendingMetrics.setLen(0)
   monitor.pendingEnvs.setLen(0)
+
+proc flushEvents*(monitor: var NativeBPFMonitor, client: ApiClient,
+                  token: string, runId: string) =
+  ## POSTs all pending process events to the backend in a single batch,
+  ## then clears the buffers.
+  ##
+  ## Silently ignores API errors to avoid disrupting the main exec loop.
+  if not hasPendingEvents(monitor):
+    return
+
+  try:
+    reportProcessEvents(client, token, runId,
+                        monitor.pendingStarts,
+                        monitor.pendingExits,
+                        monitor.pendingMetrics,
+                        monitor.pendingEnvs)
+  except CIApiError as e:
+    echo fmt"Warning: failed to report process events: {e.msg}"
+  except CatchableError as e:
+    echo fmt"Warning: failed to report process events: {e.msg}"
+
+  clearPendingEvents(monitor)
 
 proc stopNativeMonitor*(monitor: var NativeBPFMonitor) =
   ## Stops BPF monitoring and releases all resources.

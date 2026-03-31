@@ -91,13 +91,14 @@ struct bpf_exec_argv_event {
 
 /*
  * EXEC_ENVP: One environment variable from the execve envp array.
- * The BPF program splits "KEY=VALUE" into separate fields.
+ * Carries the raw "KEY=VALUE" string — splitting into key/value is done
+ * in userspace (Nim) to avoid nested loops in BPF that exceed the verifier's
+ * 8192-jump complexity limit.
  */
 struct bpf_exec_envp_event {
     uint32_t type;          /* BPF_EVENT_EXEC_ENVP */
     uint32_t pid;           /* Process ID (same as EXEC_BEGIN) */
-    char key[BPF_MONITOR_ENVKEY_MAX];   /* Environment variable name */
-    char value[BPF_MONITOR_ENVVAL_MAX]; /* Environment variable value */
+    char raw[BPF_MONITOR_ENVKEY_MAX + BPF_MONITOR_ENVVAL_MAX]; /* "KEY=VALUE" */
 };
 
 /*

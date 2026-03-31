@@ -193,15 +193,14 @@ $(CODETRACER_FLAGS) \
 c %f |> %o | $(NIM_SIDE_OUTPUTS_IGNORE)
 
 # CodeTracer binary with BPF capabilities (ct).
-# After compilation, re-applies cap_bpf+cap_perfmon+cap_dac_read_search
-# via passwordless sudo (requires sudoers rule from `just developer-setup`).
-# Silently skips if the rule is not installed — the build still succeeds.
+# BPF capabilities (cap_bpf+cap_perfmon+cap_dac_read_search) are applied as a
+# post-build step in scripts/build-once.sh, because tup's FUSE sandbox
+# prevents sudo from running during the build.
 !codetracer_bpf = |> $(NIM_DEBUG)\
 $(CODETRACER_FLAGS) \
 --nimcache:/tmp/ct-nim-cache/%B_codetracer_binary\
 --out:%o\
-c %f && \
-sudo -n "$(readlink -f "$(command -v codetracer-setcap)")" 2>/dev/null || true\
+c %f\
 |> %o | $(NIM_SIDE_OUTPUTS_IGNORE)
 
 !nim_tester = |> ^ %f^ $(NIM_DEBUG) \
@@ -237,6 +236,12 @@ export NIMFLAGS
 # environment sanitization strips it and the linker cannot find libraries
 # that live in the Nix store.
 export LIBRARY_PATH
+
+# C_INCLUDE_PATH is the standard gcc/cc header search path. The Nix dev shell
+# sets this to include libbpf headers so that #include <bpf/libbpf.h> resolves
+# during compilation. Without this export, tup's environment sanitization
+# strips it and gcc cannot find libbpf headers from the Nix store.
+export C_INCLUDE_PATH
 
 # Keep linker selection in Cargo config/env instead of inline --config args.
 # This avoids shell-quoting differences between Windows environments.

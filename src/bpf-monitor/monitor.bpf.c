@@ -37,11 +37,16 @@
  * ------------------------------------------------------------------------- */
 
 /* Maximum number of argv elements to capture per execve.
- * Matches bpftrace-collection.bt's LOOP_LIMIT_CNT (256). */
-#define MAX_ARGV_COUNT 128
+ * Keep small to avoid BPF verifier "jump sequence too complex" errors.
+ * The verifier tracks all possible branch paths; large loop bounds
+ * combined with conditional logic inside the loop body can exceed the
+ * 8192-jump complexity limit. 32 covers the vast majority of real
+ * command lines while staying well within verifier limits. */
+#define MAX_ARGV_COUNT 32
 
-/* Maximum number of envp elements to capture per execve. */
-#define MAX_ENVP_COUNT 128
+/* Maximum number of envp elements to capture per execve.
+ * See MAX_ARGV_COUNT comment for verifier complexity rationale. */
+#define MAX_ENVP_COUNT 32
 
 /* Ring buffer size — must be a power of 2.
  * 256 KB should be sufficient for normal process trees. */
@@ -241,7 +246,10 @@ int handle_execve_enter(struct trace_event_raw_sys_enter_execve *ctx)
         }
     }
 
-    /* --- Emit EXEC_ENVP events --- */
+    /* --- Emit EXEC_ENVP events ---
+     * Each event carries the raw "KEY=VALUE" string; splitting into key/value
+     * is done in userspace (Nim) to avoid nested loops that exceed the BPF
+     * verifier's 8192-jump complexity limit. */
     const char *const *envp = ctx->envp;
     if (envp) {
         for (int i = 0; i < MAX_ENVP_COUNT; i++) {
@@ -250,12 +258,6 @@ int handle_execve_enter(struct trace_event_raw_sys_enter_execve *ctx)
             if (ret != 0 || envstr == NULL)
                 break;
 
-            /* Read the full "KEY=VALUE" string into a temporary buffer,
-             * then split it into key and value. */
-            char tmp[BPF_MONITOR_ENVKEY_MAX + BPF_MONITOR_ENVVAL_MAX];
-            __builtin_memset(tmp, 0, sizeof(tmp));
-            bpf_probe_read_user_str(tmp, sizeof(tmp), envstr);
-
             struct bpf_exec_envp_event *envp_ev;
             envp_ev = bpf_ringbuf_reserve(&events, sizeof(*envp_ev), 0);
             if (!envp_ev)
@@ -263,38 +265,8 @@ int handle_execve_enter(struct trace_event_raw_sys_enter_execve *ctx)
 
             envp_ev->type = BPF_EVENT_EXEC_ENVP;
             envp_ev->pid = pid;
-            __builtin_memset(envp_ev->key, 0, sizeof(envp_ev->key));
-            __builtin_memset(envp_ev->value, 0, sizeof(envp_ev->value));
-
-            /* Find '=' separator and split. */
-            bool found_eq = false;
-            #pragma unroll
-            for (int j = 0; j < BPF_MONITOR_ENVKEY_MAX - 1; j++) {
-                if (tmp[j] == '\0')
-                    break;
-                if (tmp[j] == '=') {
-                    /* Copy value part (everything after '='). */
-                    int vlen = 0;
-                    #pragma unroll
-                    for (int k = 0; k < BPF_MONITOR_ENVVAL_MAX - 1; k++) {
-                        char c = tmp[j + 1 + k];
-                        if (c == '\0')
-                            break;
-                        envp_ev->value[k] = c;
-                        vlen++;
-                    }
-                    found_eq = true;
-                    break;
-                }
-                envp_ev->key[j] = tmp[j];
-            }
-
-            if (!found_eq) {
-                /* No '=' found — store the whole string as key. */
-                __builtin_memset(envp_ev->key, 0, sizeof(envp_ev->key));
-                bpf_probe_read_user_str(envp_ev->key, sizeof(envp_ev->key),
-                                        envstr);
-            }
+            bpf_probe_read_user_str(envp_ev->raw, sizeof(envp_ev->raw),
+                                    envstr);
 
             bpf_ringbuf_submit(envp_ev, 0);
         }

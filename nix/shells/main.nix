@@ -265,7 +265,13 @@ mkShell {
     # src/Tuprules.tup DYNLIB_OVERRIDE_FLAGS). This is particularly important
     # for tup builds, which sanitize the environment and strip the Nix
     # wrapper's NIX_LDFLAGS variable.
-    export LIBRARY_PATH="${openssl.out}/lib:${sqlite.out}/lib:${pcre.out}/lib:${libzip.out}/lib:${libbpf.out}/lib''${LIBRARY_PATH:+:$LIBRARY_PATH}";
+    export LIBRARY_PATH="${openssl.out}/lib:${sqlite.out}/lib:${pcre.out}/lib:${libzip.out}/lib:${libbpf.out}/lib:${elfutils.out}/lib:${zlib.out}/lib''${LIBRARY_PATH:+:$LIBRARY_PATH}";
+
+    # C_INCLUDE_PATH is the standard gcc/cc header search path. Nim invokes
+    # gcc directly (not through Nix's cc-wrapper), so NIX_CFLAGS_COMPILE
+    # -isystem flags are invisible. We export libbpf's include path
+    # explicitly so that #include <bpf/libbpf.h> resolves during tup builds.
+    export C_INCLUDE_PATH="${libbpf}/include''${C_INCLUDE_PATH:+:$C_INCLUDE_PATH}";
 
     export RUST_LOG=info
 
