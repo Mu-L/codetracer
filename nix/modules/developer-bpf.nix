@@ -34,11 +34,34 @@ let
   ctBinPath = "${cfg.repoPath}/src/build-debug/bin/ct";
   capabilities = "cap_bpf,cap_perfmon,cap_dac_read_search=eip";
 
-  # Single-purpose helper that applies BPF capabilities to the ct binary.
+  # Helper script that applies BPF capabilities to CodeTracer binaries.
   # Installed on PATH as `codetracer-setcap`. The sudoers rule allows
   # running it via sudo without a password.
+  #
+  # Usage:
+  #   codetracer-setcap           # targets the ct binary (default)
+  #   codetracer-setcap <path>    # targets a specific binary (must be under repoPath)
   setcapHelper = pkgs.writeShellScriptBin "codetracer-setcap" ''
-    exec ${pkgs.libcap}/bin/setcap '${capabilities}' '${ctBinPath}'
+    REPO_ROOT="${cfg.repoPath}"
+    TARGET="''${1:-${ctBinPath}}"
+
+    # Resolve to absolute path and verify it's under the repo root.
+    TARGET="$(realpath -m "$TARGET" 2>/dev/null || echo "$TARGET")"
+    case "$TARGET" in
+      "$REPO_ROOT"/*)
+        ;;
+      *)
+        echo "codetracer-setcap: refusing to setcap outside repo: $TARGET" >&2
+        exit 1
+        ;;
+    esac
+
+    if [ ! -f "$TARGET" ]; then
+      echo "codetracer-setcap: file not found: $TARGET" >&2
+      exit 1
+    fi
+
+    exec ${pkgs.libcap}/bin/setcap '${capabilities}' "$TARGET"
   '';
 in
 {

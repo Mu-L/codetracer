@@ -413,8 +413,34 @@ test-bpf-native:
     --nimcache:/tmp/ct-nim-cache/bpf_monitor_native_test \
     src/ct/ci/bpf_monitor_native_test.nim
 
+# Native BPF E2E integration tests — loads real BPF programs into the kernel,
+# monitors a child process, and verifies EXEC/EXIT/ENV events are captured.
+# Requires: build-bpf-programs + developer-setup (for BPF capabilities).
+# The test binary itself needs BPF capabilities, so we compile first, apply
+# setcap, then run it separately.
+test-bpf-native-integration:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  LIBBPF_PATH=$(nix build nixpkgs#libbpf --no-link --print-out-paths 2>/dev/null)
+  TEST_BIN="src/ct/ci/bpf_native_integration_test"
+  # Compile without running.
+  nim c --hints:off --warnings:off -d:ssl -d:useOpenssl3 --mm:refc \
+    --passC:"-I$LIBBPF_PATH/include" \
+    --passL:"-L$LIBBPF_PATH/lib" --passL:"-lbpf" --passL:"-lelf" --passL:"-lz" \
+    --nimcache:/tmp/ct-nim-cache/bpf_native_integration_test \
+    "$TEST_BIN.nim"
+  # Apply BPF capabilities to the test binary so it can load BPF programs.
+  # Uses codetracer-setcap helper (installed by NixOS developer-bpf module).
+  if command -v codetracer-setcap &>/dev/null; then
+    SETCAP_REAL="$(readlink -f "$(command -v codetracer-setcap)")"
+    sudo -n "$SETCAP_REAL" "$TEST_BIN" 2>/dev/null || \
+      echo "Warning: could not setcap test binary — tests will skip BPF-dependent tests" >&2
+  fi
+  # Run the test.
+  "./$TEST_BIN"
+
 # Run all BPF-related tests (unit + native + integration).
-test-bpf: test-bpf-monitor test-bpf-native test-bpf-integration
+test-bpf: test-bpf-monitor test-bpf-native test-bpf-native-integration test-bpf-integration
 
 # ===========================
 # trace folder helpers
