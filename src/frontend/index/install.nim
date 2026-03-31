@@ -1,5 +1,5 @@
 import
-  std / [ async, jsffi, json, os, sequtils ],
+  std / [ async, jsffi, json, os, sequtils, strutils ],
   results,
   electron_vars,
   ../lib/[ jslib, electron_lib ],
@@ -25,7 +25,7 @@ proc createInstallSubwindow*(): js =
     let win = jsnew electron.BrowserWindow(
       js{
         "width": 700,
-        "height": 422,
+        "height": 500,
         "resizable": false,
         "parent": mainWindow,
         "modal": true,
@@ -66,14 +66,46 @@ proc onDismissCtFrontend*(sender: js, dontAskAgain: bool) {.async.} =
     infoPrint "remembering to not ask again for installation"
     let dir = getHomeDir() / ".config" / "codetracer"
     let configFile = dir / "dont_ask_again.txt"
-    fs.writeFile(configFile.cstring, "dont_ask_again=true".cstring, proc(err: js) = discard)
+    fs.writeFile(
+      configFile.cstring,
+      "dont_ask_again=true".cstring,
+      proc(err: js) = discard)
   if not installResponseResolve.isNil:
     installResponseResolve(InstallResponse(kind: InstallResponseKind.Dismissed))
 
+proc forwardJsonLine(line: cstring) =
+  ## Parses a JSON progress line from ``ct install --json`` and forwards
+  ## it to the install dialog subwindow as an IPC step event.
+  ## Non-JSON lines (from sub-processes) are silently ignored.
+  let lineStr = $line
+  if lineStr.len == 0 or lineStr[0] != '{':
+    return  # Skip non-JSON output from sub-processes.
+
+  try:
+    let parsed = parseJson(lineStr)
+    let stepData = js{
+      "kind": cstring"step",
+      "step": cstring(parsed["step"].getStr),
+      "status": cstring(parsed["status"].getStr),
+      "message": cstring(parsed["message"].getStr),
+    }
+    if not installDialogWindow.isNil:
+      installDialogWindow.webContents.send(
+        "CODETRACER::ct-install-status",
+        stepData)
+  except JsonParsingError:
+    discard  # Ignore malformed JSON.
+
 proc onInstallCtFrontend*(sender: js, response: js) {.async.} =
-  # Step 1: Run the non-privileged install (PATH + desktop file).
-  # BPF is excluded here and handled separately if requested.
-  var args = @[cstring"install", cstring"--no-bpf"]
+  # Step 1: Non-privileged install (PATH + desktop file).
+  # BPF and Agent Harbor are excluded — they require privilege elevation
+  # and are handled in step 2 via pkexec.
+  var args = @[
+    cstring"install",
+    cstring"--no-bpf",
+    cstring"--no-agent-harbor",
+    cstring"--json",
+  ]
 
   if response["desktop"].to(bool):
     args.add(cstring"--desktop")
@@ -81,44 +113,61 @@ proc onInstallCtFrontend*(sender: js, response: js) {.async.} =
   if response["path"].to(bool):
     args.add(cstring"--path")
 
-  let res = await readProcessOutput(
+  let res = await readProcessOutputStreaming(
     codetracerExe.cstring,
-    args)
+    args,
+    forwardJsonLine)
 
   var isOk = res.isOk
 
-  # Step 2: If BPF was requested, run a separate privileged install via pkexec
-  # (PolicyKit GUI password dialog) that only sets up BPF capabilities.
+  # Step 2: Privileged install (BPF + Agent Harbor) via pkexec.
+  # Both require root: BPF for setcap, Agent Harbor for package installation.
+  # A single pkexec invocation covers both, so the user only sees one
+  # password prompt.
   when defined(linux):
-    if isOk and not response["bpf"].isNil and response["bpf"].to(bool):
-      let bpfArgs = @[
+    let needsBpf = not response["bpf"].isNil and response["bpf"].to(bool)
+    let needsAH =
+      not response["agent-harbor"].isNil and
+      response["agent-harbor"].to(bool)
+
+    if isOk and (needsBpf or needsAH):
+      var privArgs = @[
         codetracerExe.cstring,
         cstring"install",
         cstring"--no-path",
         cstring"--no-desktop",
-        cstring"--bpf",
+        cstring"--json",
       ]
-      let bpfRes = await readProcessOutput(cstring"pkexec", bpfArgs)
-      if not bpfRes.isOk:
-        # BPF setup failure is non-fatal; the main install still succeeded.
-        echo "Warning: BPF setup via pkexec failed. Process monitoring will use sudo fallback."
+      if needsBpf:
+        privArgs.add(cstring"--bpf")
+      else:
+        privArgs.add(cstring"--no-bpf")
+      if needsAH:
+        privArgs.add(cstring"--agent-harbor")
+      else:
+        privArgs.add(cstring"--no-agent-harbor")
 
-  let status = if isOk:
-      (cstring"ok", cstring"Succesfully installated")
-    else:
-      # TODO: propagate a more precise message
-      (cstring"problem", cstring"there was a problem during installation")
+      let privRes = await readProcessOutputStreaming(
+        cstring"pkexec", privArgs, forwardJsonLine)
+      if not privRes.isOk:
+        # Privileged setup failure is non-fatal; PATH install still succeeded.
+        echo "Warning: privileged install via pkexec failed."
 
-  # leaving this code in, if we decide to re-enable showing
-  # status in notifications as well:
-  #
-  # if not mainWindow.isNil:
-  #  mainWindow.webContents.send "CODETRACER::ct-install-status", status
+  # Send completion event to the subwindow.
+  let doneData = js{
+    "kind": cstring"done",
+    "status": if isOk: cstring"ok" else: cstring"problem",
+  }
 
   if not installDialogWindow.isNil:
-    installDialogWindow.webContents.send "CODETRACER::ct-install-status", status
+    installDialogWindow.webContents.send(
+      "CODETRACER::ct-install-status",
+      doneData)
   else:
-    echo status[1]
+    if isOk:
+      echo "Installation complete."
+    else:
+      echo "Installation encountered errors."
 
 proc isCtInstalled*(config: Config): bool =
   when defined(server):
@@ -130,14 +179,24 @@ proc isCtInstalled*(config: Config): bool =
         # the binary is already usable from the build directory.
         return true
       elif process.platform == "darwin".toJs:
-        let ctLaunchersPath = cstring($paths.home / ".local" / "share" / "codetracer" / "shell-launchers" / "ct")
+        let ctLaunchersPath = cstring(
+          $paths.home / ".local" / "share" /
+          "codetracer" / "shell-launchers" / "ct")
         return fs.existsSync(ctLaunchersPath)
       else:
-        let dataHome = getEnv("XDG_DATA_HOME", getEnv("HOME") / ".local/share")
-        let dataDirsCstring = getEnv("XDG_DATA_DIRS", "/usr/local/share:/usr/share").split(cstring":")
+        let defaultDataHome =
+          getEnv("HOME") / ".local/share"
+        let dataHome =
+          getEnv("XDG_DATA_HOME", defaultDataHome)
+        let defaultDirs =
+          "/usr/local/share:/usr/share"
+        let dataDirsCstring =
+          getEnv("XDG_DATA_DIRS", defaultDirs)
+            .split(cstring":")
         let dataDirs = dataDirsCstring.mapIt($it)
 
-        # if we find the desktop file then it's installed by the package manager automatically
+        # If we find the desktop file then it's
+        # installed by the package manager.
         for d in @[dataHome] & dataDirs:
           if fs.existsSync(d / "applications/codetracer.desktop"):
             return true

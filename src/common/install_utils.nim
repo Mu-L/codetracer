@@ -1,7 +1,10 @@
 import
   std/[strutils, strformat, os, osproc],
   results,
-  strings, filepaths
+  strings, filepaths,
+  agent_harbor_install
+
+export agent_harbor_install
 
 when defined(linux):
   import bpf_install
@@ -58,12 +61,15 @@ const
 
 template slurpShellIntegrationFile(name: string): string =
   const
-    slurpedFile = currentSourcePath().parentDir & "/../shell-integrations/" & name
+    slurpedFile =
+      currentSourcePath().parentDir &
+      "/../shell-integrations/" & name
     slurpedContent = staticRead(slurpedFile)
   slurpedContent
 
-proc createRcFile(filePath: FilePath, content: string): CreatedFilePath
-                 {.raises: [IOError, OSError].} =
+proc createRcFile(
+    filePath: FilePath, content: string
+): CreatedFilePath {.raises: [IOError, OSError].} =
   createDir(filePath.parentDir)
   writeFile(filePath, content)
   filePath
@@ -86,7 +92,9 @@ func ourFishRcLocation: FilePath =
 proc createOurFishRc: CreatedFilePath =
   createRcFile ourFishRcLocation(), slurpShellIntegrationFile("fishrc")
 
-proc installCodetracerOnPath*(codetracerExe: string): Result[void, string] {.raises: [].} =
+proc installCodetracerOnPath*(
+    codetracerExe: string
+): Result[void, string] {.raises: [].} =
   when defined(linux):
     var execPath = codetracerExe
 
@@ -97,7 +105,9 @@ proc installCodetracerOnPath*(codetracerExe: string): Result[void, string] {.rai
       try:
         createDir(binDir)
       except CatchableError as error:
-        return err "Failed to create the codetracer user local binary directory: " & error.msg
+        return err(
+          "Failed to create the codetracer user " &
+          "local binary directory: " & error.msg)
 
     else:
       echo fmt2"{binDir} already exists"
@@ -114,7 +124,9 @@ proc installCodetracerOnPath*(codetracerExe: string): Result[void, string] {.rai
           echo fmt2"{ctLink} already points to {execPath}"
         else:
           # Points to a different (or dangling) target — update it.
-          echo fmt2"Updating symlink {ctLink} -> {execPath} (was: {currentTarget})"
+          echo fmt2(
+            "Updating symlink {ctLink}" &
+            " -> {execPath} (was: {currentTarget})")
           removeFile(ctLink)
           createSymlink(execPath, ctLink)
       elif fileExists(ctLink):
@@ -153,7 +165,8 @@ proc installCodetracerOnPath*(codetracerExe: string): Result[void, string] {.rai
       if shellPath.contains("fish"):
         let fishrc = createOurFishRc()
         profileFile = homeDir / ".config" / "fish" / "config.fish"
-        integrationLine = fmt2"""if test -s "{fishrc}"; source "{fishrc}"; end"""
+        integrationLine = fmt2(
+          """if test -s "{fishrc}"; source "{fishrc}"; end""")
       elif shellPath.contains("zsh"):
         let zshrc = createOurZshRc()
         profileFile = homeDir / ".zshrc"
@@ -165,7 +178,9 @@ proc installCodetracerOnPath*(codetracerExe: string): Result[void, string] {.rai
       else:
         return err fmt"CodeTracer doesn't support the {shellPath} shell"
     except CatchableError as err:
-      return err "Failed to create the main CodeTracer shell integration file: " & err.msg
+      return err(
+        "Failed to create the main CodeTracer" &
+        " shell integration file: " & err.msg)
 
     # Create the profile file if it doesn't exist.
     if not fileExists(profileFile):
@@ -177,7 +192,9 @@ proc installCodetracerOnPath*(codetracerExe: string): Result[void, string] {.rai
     # Read the current content of the profile file.
     let content = try: readFile(profileFile)
                   except CatchableError as err:
-                    return err "Failed to read the user shell profile: " & err.msg
+                    return err(
+                      "Failed to read the user" &
+                      " shell profile: " & err.msg)
 
     # Check if the integration line is already present.
     if content.contains(integrationLine):
@@ -208,7 +225,10 @@ const
   codetracerIconFilename = codetracerXdgAppName & ".png"
 
 when defined(linux):
-  proc installCodetracerDesktopFile*(prefix: string, rootDir: string, codetracerExe: string) =
+  proc installCodetracerDesktopFile*(
+      prefix: string,
+      rootDir: string,
+      codetracerExe: string) =
 
     let iconsetPath = rootDir / "resources" / "Icon.iconset"
     let desktopFilePath = rootDir / "resources" / "codetracer.desktop"
@@ -263,7 +283,9 @@ when defined(linux):
       # ran the `install` command
 
       echo fmt"Replacing exec field with {execPath}"
-      contents = contents.replace("Exec=ct edit %F", fmt"Exec={execPath} edit %F")
+      contents = contents.replace(
+        "Exec=ct edit %F",
+        fmt"Exec={execPath} edit %F")
 
       let desktopFile = desktopFileDir / "codetracer.desktop"
 
@@ -286,12 +308,18 @@ when defined(linux):
 
       # Update the desktop database to register the new MIME type
       try:
-        let process = startProcess("update-desktop-database", args = @[desktopFileDir], options = {})
+        let process = startProcess(
+          "update-desktop-database",
+          args = @[desktopFileDir],
+          options = {})
         let exitCode = waitForExit(process)
         if exitCode == 0:
           echo "Successfully updated desktop database"
         else:
-          echo "Warning: update-desktop-database returned non-zero exit code: " & $exitCode
+          echo(
+            "Warning: update-desktop-database" &
+            " returned non-zero exit code: " &
+            $exitCode)
       except CatchableError as e:
         echo "Warning: Failed to update desktop database: " & e.msg
 
@@ -300,9 +328,15 @@ when defined(linux):
       quit(1)
 
   proc installBpfSupport*(sudoCommand: string = "sudo"): Result[void, string] =
-    ## Installs BPF process monitoring support by setting up a
-    ## capabilities-aware bpftrace binary. Delegates to ``bpf_install.installBpf``.
+    ## Installs BPF process monitoring support. Delegates to
+    ## ``bpf_install.installBpf`` which performs two tasks:
     ##
-    ## This is a thin wrapper that can be called from the install command handler.
-    ## On non-Linux platforms this proc does not exist (guarded by ``when defined(linux)``).
+    ## 1. **Native backend**: Set
+    ##    ``cap_bpf,cap_perfmon,cap_dac_read_search``
+    ##    on the ``ct`` binary and install
+    ##    ``monitor.bpf.o``.
+    ## 2. **bpftrace fallback**: Create a capabilities-aware bpftrace copy.
+    ##
+    ## On non-Linux platforms this proc does not
+    ## exist (guarded by ``when defined(linux)``).
     bpf_install.installBpf(sudoCommand)
