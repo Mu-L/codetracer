@@ -11,10 +11,11 @@
 # specifically CAP_BPF, CAP_PERFMON, and CAP_DAC_READ_SEARCH capabilities
 # (Linux kernel >= 5.8, see https://lwn.net/Articles/820560/).
 #
-# For END USERS, `ct install` copies bpftrace to /usr/local/lib/codetracer/
-# with these capabilities set via setcap, owned by root:codetracer-bpf with
-# mode 750. This is a locked-down setup: end users can only invoke the
-# specific bpftrace binary that CodeTracer's bpf_monitor module knows about.
+# For END USERS, `ct install` (with all features enabled by default) sets
+# cap_bpf,cap_perfmon,cap_dac_read_search on the ct binary itself for the
+# native libbpf backend, installs monitor.bpf.o to /usr/local/lib/codetracer/,
+# and optionally copies bpftrace as a fallback. Users can pass --no-bpf to
+# skip BPF setup entirely.
 # On NixOS, the equivalent is achieved via security.wrappers in the NixOS
 # module (see nix/packages/codetracer-appimage/nixos-module.nix).
 #

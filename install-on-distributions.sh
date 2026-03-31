@@ -302,19 +302,15 @@ install_appimage() {
 		rm -f CodeTracer-RR-Backend.AppImage
 	fi
 
-	# Run ct install to add to PATH
-	eprint_note "Running ct install to add CodeTracer to PATH..."
+	# Run ct install to set up PATH, desktop file, and BPF process monitoring.
+	# All features are enabled by default. BPF setup requires sudo and will
+	# print a warning if it fails (non-fatal — process monitoring falls back
+	# to sudo at runtime). Pass --no-bpf to skip BPF setup entirely.
+	eprint_note "Running ct install..."
 	if [ -f "$HOME/.local/bin/ct" ]; then
-		"$HOME/.local/bin/ct" install --no-bpf || eprint_warning "Failed to run ct install. You may need to add $HOME/.local/bin to your PATH manually or run: $HOME/.local/bin/ct install"
+		"$HOME/.local/bin/ct" install || eprint_warning "Failed to run ct install. You can retry manually: $HOME/.local/bin/ct install"
 	else
 		eprint_warning "Could not find ct binary. You may need to add $HOME/.local/bin to your PATH manually."
-	fi
-
-	# Set up BPF process monitoring (optional, requires sudo)
-	if [ -f "$HOME/.local/bin/ct" ]; then
-		eprint_note "Setting up BPF process monitoring..."
-		"$HOME/.local/bin/ct" install --no-path --no-desktop --bpf ||
-			eprint_warning "BPF setup failed. Process monitoring will use sudo fallback. You can retry with: ct install --no-path --no-desktop --bpf"
 	fi
 
 	eprint_success
