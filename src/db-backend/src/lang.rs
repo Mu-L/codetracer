@@ -59,6 +59,20 @@ pub enum Lang {
     Sway,
     /// Sui/Aptos Move language
     Move,
+    /// PolkaVM RISC-V (Polkadot smart contracts)
+    PolkaVM,
+    /// Cairo/StarkNet (zero-knowledge smart contracts)
+    Cairo,
+    /// Circom (zero-knowledge circuits)
+    Circom,
+    /// Leo/Aleo (zero-knowledge smart contracts)
+    Leo,
+    /// Tolk/TON (TON smart contracts)
+    Tolk,
+    /// Aiken/Cardano (Cardano validators)
+    Aiken,
+    /// Cadence/Flow (Flow smart contracts)
+    Cadence,
 }
 
 pub fn lang_from_context(path: &Path, trace_kind: TraceKind) -> Lang {
@@ -91,6 +105,13 @@ pub fn lang_from_context(path: &Path, trace_kind: TraceKind) -> Lang {
         "masm" => Lang::Masm,
         "sw" => Lang::Sway,
         "move" => Lang::Move,
+        "polkavm" => Lang::PolkaVM,
+        "cairo" => Lang::Cairo,
+        "circom" => Lang::Circom,
+        "leo" => Lang::Leo,
+        "tolk" => Lang::Tolk,
+        "ak" => Lang::Aiken,
+        "cdc" => Lang::Cadence,
         _ => Lang::Unknown,
     }
 }

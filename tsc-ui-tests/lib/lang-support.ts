@@ -15,14 +15,24 @@ const DB_BASED_EXTENSIONS = new Set([
   "sol",   // Solidity / EVM recorder
   "masm",  // Miden / MASM recorder
   "sw",    // Sway / Fuel recorder
-  "move",  // Move recorder
+  "move",    // Move recorder
+  "pvm",     // PolkaVM recorder
+  "cairo",   // Cairo recorder
+  "circom",  // Circom recorder
+  "leo",     // Leo / Aleo recorder
+  "tolk",    // Tolk / TON recorder
+  "ak",      // Aiken / Cardano recorder
+  "cdc",     // Cadence / Flow recorder
 ]);
 
 /** Folder markers that indicate a DB-based project. */
 const DB_BASED_FOLDER_MARKERS: Record<string, boolean> = {
   "Nargo.toml": true, // Noir
   "Forc.toml": true,  // Sway / Fuel projects
-  "Move.toml": true,  // Move projects
+  "Move.toml": true,    // Move projects
+  "program.json": true, // Leo / Aleo projects
+  "aiken.toml": true,   // Aiken / Cardano projects
+  "flow.json": true,    // Cadence / Flow projects
 };
 
 /**
