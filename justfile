@@ -751,6 +751,104 @@ test-solana-flow:
   cd src/db-backend && cargo nextest run --no-capture --run-ignored all solana_flow_dap
   echo "Solana flow test passed!"
 
+# PolkaVM flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-polkavm-recorder binary
+# Set CODETRACER_POLKAVM_RECORDER_PATH to override the binary path.
+test-polkavm-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running PolkaVM flow integration test..."
+  POLKAVM_RECORDER="${CODETRACER_POLKAVM_RECORDER_PATH:-../codetracer-polkavm-recorder/target/debug/codetracer-polkavm-recorder}"
+  if [ -f "$POLKAVM_RECORDER" ]; then
+    export CODETRACER_POLKAVM_RECORDER_PATH="$(realpath "$POLKAVM_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all polkavm_flow_dap
+  echo "PolkaVM flow test passed!"
+
+# Cairo/StarkNet flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-cairo-recorder binary
+# Set CODETRACER_CAIRO_RECORDER_PATH to override the binary path.
+test-cairo-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Cairo flow integration test..."
+  CAIRO_RECORDER="${CODETRACER_CAIRO_RECORDER_PATH:-../codetracer-cairo-recorder/target/debug/codetracer-cairo-recorder}"
+  if [ -f "$CAIRO_RECORDER" ]; then
+    export CODETRACER_CAIRO_RECORDER_PATH="$(realpath "$CAIRO_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all cairo_flow_dap
+  echo "Cairo flow test passed!"
+
+# Circom flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-circom-recorder binary, circom compiler
+# Set CODETRACER_CIRCOM_RECORDER_PATH to override the binary path.
+test-circom-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Circom flow integration test..."
+  CIRCOM_RECORDER="${CODETRACER_CIRCOM_RECORDER_PATH:-../codetracer-circom-recorder/target/debug/codetracer-circom-recorder}"
+  if [ -f "$CIRCOM_RECORDER" ]; then
+    export CODETRACER_CIRCOM_RECORDER_PATH="$(realpath "$CIRCOM_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all circom_flow_dap
+  echo "Circom flow test passed!"
+
+# Leo/Aleo flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-leo-recorder binary, leo compiler
+# Set CODETRACER_LEO_RECORDER_PATH to override the binary path.
+test-leo-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Leo flow integration test..."
+  LEO_RECORDER="${CODETRACER_LEO_RECORDER_PATH:-../codetracer-leo-recorder/target/debug/codetracer-leo-recorder}"
+  if [ -f "$LEO_RECORDER" ]; then
+    export CODETRACER_LEO_RECORDER_PATH="$(realpath "$LEO_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all leo_flow_dap
+  echo "Leo flow test passed!"
+
+# Tolk/TON flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-ton-recorder binary
+# Set CODETRACER_TON_RECORDER_PATH to override the binary path.
+test-tolk-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Tolk/TON flow integration test..."
+  TOLK_RECORDER="${CODETRACER_TON_RECORDER_PATH:-../codetracer-ton-recorder/target/debug/codetracer-ton-recorder}"
+  if [ -f "$TOLK_RECORDER" ]; then
+    export CODETRACER_TON_RECORDER_PATH="$(realpath "$TOLK_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all tolk_flow_dap
+  echo "Tolk flow test passed!"
+
+# Aiken/Cardano flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-cardano-recorder binary
+# Set CODETRACER_AIKEN_RECORDER_PATH to override the binary path.
+test-aiken-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Aiken/Cardano flow integration test..."
+  AIKEN_RECORDER="${CODETRACER_AIKEN_RECORDER_PATH:-../codetracer-cardano-recorder/target/debug/codetracer-cardano-recorder}"
+  if [ -f "$AIKEN_RECORDER" ]; then
+    export CODETRACER_AIKEN_RECORDER_PATH="$(realpath "$AIKEN_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all aiken_flow_dap
+  echo "Aiken flow test passed!"
+
+# Cadence/Flow flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-flow-recorder binary, cadence-trace-helper Go binary
+# Set CODETRACER_CADENCE_RECORDER_PATH to override the binary path.
+test-cadence-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Cadence/Flow flow integration test..."
+  CADENCE_RECORDER="${CODETRACER_CADENCE_RECORDER_PATH:-../codetracer-flow-recorder/target/debug/codetracer-flow-recorder}"
+  if [ -f "$CADENCE_RECORDER" ]; then
+    export CODETRACER_CADENCE_RECORDER_PATH="$(realpath "$CADENCE_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all cadence_flow_dap
+  echo "Cadence flow test passed!"
+
 # Full Stylus integration test: recording + trace content verification (requires Arbitrum devnode)
 # This runs Tier 1 (recording) and Tier 2 (trace analysis) together.
 # Set STYLUS_FIXTURE_OUTPUT_DIR to export the trace for VS Code extension UI tests.
@@ -791,6 +889,28 @@ test-flow-all:
   just test-noir-flow
   echo ""
   just test-wasm-flow
+  echo ""
+  just test-masm-flow
+  echo ""
+  just test-sway-flow
+  echo ""
+  just test-move-flow
+  echo ""
+  just test-solana-flow
+  echo ""
+  just test-polkavm-flow
+  echo ""
+  just test-cairo-flow
+  echo ""
+  just test-circom-flow
+  echo ""
+  just test-leo-flow
+  echo ""
+  just test-tolk-flow
+  echo ""
+  just test-aiken-flow
+  echo ""
+  just test-cadence-flow
   echo ""
   echo "╔════════════════════════════════════════════════════════════╗"
   echo "║ All flow integration tests passed!                         ║"
