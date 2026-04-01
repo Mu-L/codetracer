@@ -567,7 +567,7 @@ type
           "interactively choosing " &
           "a trace"
       .}: Option[bool]
-    of run:
+    of StartupCommand.run:
       runTracePathOrId* {.
         argument
         desc: "If not a valid trace ID, " &
