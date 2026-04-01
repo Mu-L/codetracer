@@ -31,6 +31,7 @@ import { StatusBar } from "../../page-objects/status_bar";
 import { StatePanel } from "../../page-objects/state";
 import { LayoutPage } from "../../page-objects/layout-page";
 import { retry } from "../../lib/retry-helpers";
+import { resolveRecorderTestProgram } from "../../lib/sibling-test-programs";
 
 // ---------------------------------------------------------------------------
 // Tool-availability guards
@@ -56,7 +57,9 @@ function hasAikenRecorder(): boolean {
 
 // Evaluated at collection time so skip decisions are instant.
 const aikenRecorderAvailable = hasAikenRecorder();
-const aikenPipelineAvailable = aikenRecorderAvailable;
+// Test program lives in the codetracer-aiken-recorder sibling repo.
+const aikenTestProgram = resolveRecorderTestProgram("aiken", "aiken/flow_test.ak");
+const aikenPipelineAvailable = aikenRecorderAvailable && aikenTestProgram !== null;
 
 // ---------------------------------------------------------------------------
 // Test suite: basic layout (title, entry status)
@@ -69,7 +72,7 @@ test.describe("aiken_example — basic layout", () => {
   );
 
   test.setTimeout(90_000);
-  test.use({ sourcePath: "aiken_example/flow_test.ak", launchMode: "trace" });
+  test.use({ sourcePath: aikenTestProgram ?? "", launchMode: "trace" });
 
   test("we can access the browser window, not just dev tools", async ({ ctPage }) => {
     const title = await ctPage.title();
@@ -98,7 +101,7 @@ test.describe("aiken_example — event log", () => {
   );
 
   test.setTimeout(90_000);
-  test.use({ sourcePath: "aiken_example/flow_test.ak", launchMode: "trace" });
+  test.use({ sourcePath: aikenTestProgram ?? "", launchMode: "trace" });
 
   test("event log has at least one event", async ({ ctPage }) => {
     await loadedEventLog(ctPage);
@@ -125,7 +128,7 @@ test.describe("aiken_example — state panel", () => {
   );
 
   test.setTimeout(90_000);
-  test.use({ sourcePath: "aiken_example/flow_test.ak", launchMode: "trace" });
+  test.use({ sourcePath: aikenTestProgram ?? "", launchMode: "trace" });
 
   test("state panel loaded initially", async ({ ctPage }) => {
     await readyOnEntry(ctPage);
@@ -159,7 +162,7 @@ test.describe("aiken_example — call trace", () => {
   );
 
   test.setTimeout(90_000);
-  test.use({ sourcePath: "aiken_example/flow_test.ak", launchMode: "trace" });
+  test.use({ sourcePath: aikenTestProgram ?? "", launchMode: "trace" });
 
   test("call trace shows compute function entry", async ({ ctPage }) => {
     await readyOnEntry(ctPage);

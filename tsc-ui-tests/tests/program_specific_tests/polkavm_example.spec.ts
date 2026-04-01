@@ -3,7 +3,7 @@
  *
  * These tests verify that the CodeTracer UI renders a PolkaVM trace
  * correctly, covering:
- *   - Editor pane loading the .pvm source file
+ *   - Editor pane loading the .rs source file (Rust compiled to PolkaVM)
  *   - Status bar showing the correct source location after trace load
  *   - Event log populated with at least one event
  *   - Call trace pane showing the PolkaVM call tree
@@ -17,7 +17,7 @@
  *
  * Because this pipeline is not yet wired into `ct record`, all tests that
  * require a live trace are guarded by `test.skip(!polkavmPipelineAvailable, ...)`.
- * They will run automatically once `ct record <path>.pvm` is integrated.
+ * They will run automatically once `ct record <path>.rs` (PolkaVM) is integrated.
  *
  * The structural tests at the bottom run unconditionally and verify the
  * language-detection logic without launching Electron.
@@ -31,6 +31,7 @@ import { StatusBar } from "../../page-objects/status_bar";
 import { StatePanel } from "../../page-objects/state";
 import { LayoutPage } from "../../page-objects/layout-page";
 import { retry } from "../../lib/retry-helpers";
+import { resolveRecorderTestProgram } from "../../lib/sibling-test-programs";
 
 // ---------------------------------------------------------------------------
 // Tool-availability guards
@@ -56,7 +57,9 @@ function hasPolkavmRecorder(): boolean {
 
 // Evaluated at collection time so skip decisions are instant.
 const polkavmRecorderAvailable = hasPolkavmRecorder();
-const polkavmPipelineAvailable = polkavmRecorderAvailable;
+// Test program lives in the codetracer-polkavm-recorder sibling repo.
+const polkavmTestProgram = resolveRecorderTestProgram("polkavm", "rust/flow_test.rs");
+const polkavmPipelineAvailable = polkavmRecorderAvailable && polkavmTestProgram !== null;
 
 // ---------------------------------------------------------------------------
 // Test suite: basic layout (title, entry status)
@@ -69,7 +72,7 @@ test.describe("polkavm_example — basic layout", () => {
   );
 
   test.setTimeout(90_000);
-  test.use({ sourcePath: "polkavm_example/flow_test.pvm", launchMode: "trace" });
+  test.use({ sourcePath: polkavmTestProgram ?? "", launchMode: "trace" });
 
   test("we can access the browser window, not just dev tools", async ({ ctPage }) => {
     const title = await ctPage.title();
@@ -82,7 +85,7 @@ test.describe("polkavm_example — basic layout", () => {
 
     const statusBar = new StatusBar(ctPage, ctPage.locator("#status-base"));
     const location = await statusBar.location();
-    expect(location.path.endsWith("flow_test.pvm")).toBeTruthy();
+    expect(location.path.endsWith("flow_test.rs")).toBeTruthy();
     expect(location.line).toBeGreaterThanOrEqual(1);
   });
 });
@@ -98,7 +101,7 @@ test.describe("polkavm_example — event log", () => {
   );
 
   test.setTimeout(90_000);
-  test.use({ sourcePath: "polkavm_example/flow_test.pvm", launchMode: "trace" });
+  test.use({ sourcePath: polkavmTestProgram ?? "", launchMode: "trace" });
 
   test("event log has at least one event", async ({ ctPage }) => {
     await loadedEventLog(ctPage);
@@ -125,7 +128,7 @@ test.describe("polkavm_example — state panel", () => {
   );
 
   test.setTimeout(90_000);
-  test.use({ sourcePath: "polkavm_example/flow_test.pvm", launchMode: "trace" });
+  test.use({ sourcePath: polkavmTestProgram ?? "", launchMode: "trace" });
 
   test("state panel loaded initially", async ({ ctPage }) => {
     await readyOnEntry(ctPage);
@@ -159,7 +162,7 @@ test.describe("polkavm_example — call trace", () => {
   );
 
   test.setTimeout(90_000);
-  test.use({ sourcePath: "polkavm_example/flow_test.pvm", launchMode: "trace" });
+  test.use({ sourcePath: polkavmTestProgram ?? "", launchMode: "trace" });
 
   test("call trace shows compute function entry", async ({ ctPage }) => {
     await readyOnEntry(ctPage);
@@ -217,15 +220,16 @@ test.describe("polkavm_example — call trace", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("polkavm_example — environment detection", () => {
-  test("pvm extension is classified as DB-based (no RR required)", () => {
+  test("pvm extension is classified as DB-based; rs is NOT (PolkaVM uses pipeline detection)", () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { isDbBased } = require("../../lib/lang-support");
+    // .pvm (compiled PolkaVM bytecode) is DB-based.
     expect(isDbBased("flow_test.pvm")).toBe(true);
     expect(isDbBased("some/path/program.pvm")).toBe(true);
+    // .rs files are RR-based (native Rust); PolkaVM detection is via the recorder pipeline.
+    expect(isDbBased("flow_test.rs")).toBe(false);
     // Sanity-check: other DB-based languages must remain unaffected.
     expect(isDbBased("main.py")).toBe(true);
-    // Sanity-check: RR-based languages must remain unaffected.
-    expect(isDbBased("main.rs")).toBe(false);
   });
 
   test("tool availability detection does not throw", () => {

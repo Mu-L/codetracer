@@ -1,26 +1,26 @@
 /**
- * Playwright UI tests for the Circom example.
+ * Playwright UI tests for the Stylus (Arbitrum) example.
  *
- * These tests verify that the CodeTracer UI renders a Circom trace
+ * These tests verify that the CodeTracer UI renders a Stylus/WASM trace
  * correctly, covering:
- *   - Editor pane loading the .circom source file
+ *   - Editor pane loading the .rs source file (Rust compiled to WASM for Arbitrum)
  *   - Status bar showing the correct source location after trace load
- *   - Event log populated with at least one event
- *   - Call trace pane showing the Circom call tree
- *   - Variable state pane available after navigating to a call frame
+ *   - Event log populated with transaction events
+ *   - Call trace pane showing the Stylus call tree
  *
  * ## Prerequisites
  *
- * Recording a Circom trace requires the Circom recorder pipeline:
- *   1. `codetracer-circom-recorder` binary available via
- *      `CODETRACER_CIRCOM_RECORDER_PATH` or on PATH.
+ * Stylus tracing has a unique workflow that differs from other languages:
+ *   1. A local Arbitrum devnode must be running (`run-nitro-devnode`)
+ *   2. The contract must be deployed via `ct arb deploy`
+ *   3. Transactions must be sent via `cast send`
+ *   4. Traces are viewed via `ct arb explorer`
  *
- * Because this pipeline is not yet wired into `ct record`, all tests that
- * require a live trace are guarded by `test.skip(!circomPipelineAvailable, ...)`.
- * They will run automatically once `ct record <path>.circom` is integrated.
+ * Because this workflow requires running infrastructure (devnode + deployment),
+ * all tests are skipped unless the full Stylus pipeline is available.
  *
  * The structural tests at the bottom run unconditionally and verify the
- * language-detection logic without launching Electron.
+ * tool-detection logic without launching Electron.
  */
 
 import * as childProcess from "node:child_process";
@@ -31,48 +31,53 @@ import { StatusBar } from "../../page-objects/status_bar";
 import { StatePanel } from "../../page-objects/state";
 import { LayoutPage } from "../../page-objects/layout-page";
 import { retry } from "../../lib/retry-helpers";
-import { resolveRecorderTestProgram } from "../../lib/sibling-test-programs";
 
 // ---------------------------------------------------------------------------
 // Tool-availability guards
 // ---------------------------------------------------------------------------
 
 /**
- * Returns true when the `codetracer-circom-recorder` binary is reachable.
- * Checks `CODETRACER_CIRCOM_RECORDER_PATH` env var first, then falls back to PATH.
+ * Returns true when the Stylus pipeline tools are available.
+ * Requires both `ct` (with `arb` subcommand) and `cast` (Foundry).
  */
-function hasCircomRecorder(): boolean {
-  const fromEnv = process.env.CODETRACER_CIRCOM_RECORDER_PATH ?? "";
-  const binary = fromEnv.length > 0 ? fromEnv : "codetracer-circom-recorder";
+function hasStylusPipeline(): boolean {
   try {
-    const result = childProcess.spawnSync(binary, ["--version"], {
+    // Check for `cast` (Foundry tool for sending transactions).
+    const castResult = childProcess.spawnSync("cast", ["--version"], {
       encoding: "utf-8",
       timeout: 5_000,
     });
-    return result.status === 0;
+    if (castResult.status !== 0) return false;
+
+    // Check for `cargo-stylus` (Stylus CLI for building/deploying).
+    const stylusResult = childProcess.spawnSync("cargo", ["stylus", "--version"], {
+      encoding: "utf-8",
+      timeout: 5_000,
+    });
+    return stylusResult.status === 0;
   } catch {
     return false;
   }
 }
 
 // Evaluated at collection time so skip decisions are instant.
-const circomRecorderAvailable = hasCircomRecorder();
-// Test program lives in the codetracer-circom-recorder sibling repo.
-const circomTestProgram = resolveRecorderTestProgram("circom", "circom/flow_test.circom");
-const circomPipelineAvailable = circomRecorderAvailable && circomTestProgram !== null;
+const stylusPipelineAvailable = hasStylusPipeline();
 
 // ---------------------------------------------------------------------------
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
-test.describe("circom_example — basic layout", () => {
+test.describe("stylus_example — basic layout", () => {
+  // Stylus tests require a running devnode, deployed contract, and recorded
+  // transactions. Skip unless the full pipeline is available and a trace
+  // has been pre-recorded.
   test.skip(
-    !circomPipelineAvailable,
-    "Circom recorder pipeline not available (need codetracer-circom-recorder)",
+    !stylusPipelineAvailable,
+    "Stylus pipeline not available (need cast + cargo-stylus + running devnode)",
   );
 
   test.setTimeout(90_000);
-  test.use({ sourcePath: circomTestProgram ?? "", launchMode: "trace" });
+  test.use({ sourcePath: "stylus_fund_tracker/", launchMode: "trace" });
 
   test("we can access the browser window, not just dev tools", async ({ ctPage }) => {
     const title = await ctPage.title();
@@ -85,7 +90,8 @@ test.describe("circom_example — basic layout", () => {
 
     const statusBar = new StatusBar(ctPage, ctPage.locator("#status-base"));
     const location = await statusBar.location();
-    expect(location.path.endsWith("flow_test.circom")).toBeTruthy();
+    // Stylus contracts are Rust source files.
+    expect(location.path.endsWith(".rs")).toBeTruthy();
     expect(location.line).toBeGreaterThanOrEqual(1);
   });
 });
@@ -94,14 +100,14 @@ test.describe("circom_example — basic layout", () => {
 // Test suite: event log
 // ---------------------------------------------------------------------------
 
-test.describe("circom_example — event log", () => {
+test.describe("stylus_example — event log", () => {
   test.skip(
-    !circomPipelineAvailable,
-    "Circom recorder pipeline not available (need codetracer-circom-recorder)",
+    !stylusPipelineAvailable,
+    "Stylus pipeline not available (need cast + cargo-stylus + running devnode)",
   );
 
   test.setTimeout(90_000);
-  test.use({ sourcePath: circomTestProgram ?? "", launchMode: "trace" });
+  test.use({ sourcePath: "stylus_fund_tracker/", launchMode: "trace" });
 
   test("event log has at least one event", async ({ ctPage }) => {
     await loadedEventLog(ctPage);
@@ -121,14 +127,14 @@ test.describe("circom_example — event log", () => {
 // Test suite: state panel
 // ---------------------------------------------------------------------------
 
-test.describe("circom_example — state panel", () => {
+test.describe("stylus_example — state panel", () => {
   test.skip(
-    !circomPipelineAvailable,
-    "Circom recorder pipeline not available (need codetracer-circom-recorder)",
+    !stylusPipelineAvailable,
+    "Stylus pipeline not available (need cast + cargo-stylus + running devnode)",
   );
 
   test.setTimeout(90_000);
-  test.use({ sourcePath: circomTestProgram ?? "", launchMode: "trace" });
+  test.use({ sourcePath: "stylus_fund_tracker/", launchMode: "trace" });
 
   test("state panel loaded initially", async ({ ctPage }) => {
     await readyOnEntry(ctPage);
@@ -137,17 +143,12 @@ test.describe("circom_example — state panel", () => {
     await expect(statePanel.codeStateLine()).toContainText(" | ");
   });
 
-  test("state panel shows decoded signal/variable values", async ({ ctPage }) => {
+  test("state panel shows decoded local variables", async ({ ctPage }) => {
     await readyOnEntry(ctPage);
     const statePanel = new StatePanel(ctPage);
     const values = await statePanel.values();
     const varNames = Object.keys(values);
     expect(varNames.length).toBeGreaterThan(0);
-    // Circom uses signal names (e.g. "in", "out") or witness indices.
-    const hasVariable = varNames.some(
-      (name) => name.length > 0,
-    );
-    expect(hasVariable).toBeTruthy();
   });
 });
 
@@ -155,16 +156,16 @@ test.describe("circom_example — state panel", () => {
 // Test suite: call trace pane
 // ---------------------------------------------------------------------------
 
-test.describe("circom_example — call trace", () => {
+test.describe("stylus_example — call trace", () => {
   test.skip(
-    !circomPipelineAvailable,
-    "Circom recorder pipeline not available (need codetracer-circom-recorder)",
+    !stylusPipelineAvailable,
+    "Stylus pipeline not available (need cast + cargo-stylus + running devnode)",
   );
 
   test.setTimeout(90_000);
-  test.use({ sourcePath: circomTestProgram ?? "", launchMode: "trace" });
+  test.use({ sourcePath: "stylus_fund_tracker/", launchMode: "trace" });
 
-  test("call trace shows compute template entry", async ({ ctPage }) => {
+  test("call trace shows function entry", async ({ ctPage }) => {
     await readyOnEntry(ctPage);
     const layout = new LayoutPage(ctPage);
     const callTraceTabs = await layout.callTraceTabs();
@@ -181,7 +182,6 @@ test.describe("circom_example — call trace", () => {
   test("continue", async ({ ctPage }) => {
     await readyOnEntry(ctPage);
     const statusBar = new StatusBar(ctPage, ctPage.locator("#status-base"));
-    const initialLocation = await statusBar.location();
     const layout = new LayoutPage(ctPage);
     await layout.continueButton().click();
     await retry(
@@ -219,20 +219,21 @@ test.describe("circom_example — call trace", () => {
 // Structural tests — run unconditionally, no Electron launch needed
 // ---------------------------------------------------------------------------
 
-test.describe("circom_example — environment detection", () => {
-  test("circom extension is classified as DB-based (no RR required)", () => {
+test.describe("stylus_example — environment detection", () => {
+  // Stylus source files are .rs (Rust) compiled to wasm32-unknown-unknown.
+  // The .rs extension is NOT DB-based; Stylus uses a separate deployment
+  // and tracing workflow via `ct arb deploy` / `ct arb explorer`.
+  test("rs extension is NOT classified as DB-based (Stylus uses pipeline detection)", () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { isDbBased } = require("../../lib/lang-support");
-    expect(isDbBased("flow_test.circom")).toBe(true);
-    expect(isDbBased("some/path/circuit.circom")).toBe(true);
-    // Sanity-check: other DB-based languages must remain unaffected.
+    // .rs files are RR-based (native Rust); Stylus detection is separate.
+    expect(isDbBased("fund_tracker.rs")).toBe(false);
+    expect(isDbBased("some/path/contract.rs")).toBe(false);
+    // Sanity-check: DB-based languages must remain unaffected.
     expect(isDbBased("main.py")).toBe(true);
-    // Sanity-check: RR-based languages must remain unaffected.
-    expect(isDbBased("main.rs")).toBe(false);
   });
 
   test("tool availability detection does not throw", () => {
-    expect(typeof circomRecorderAvailable).toBe("boolean");
-    expect(typeof circomPipelineAvailable).toBe("boolean");
+    expect(typeof stylusPipelineAvailable).toBe("boolean");
   });
 });
