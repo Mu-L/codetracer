@@ -318,7 +318,7 @@ pub struct CodeSnippet {
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
-#[serde(rename_all(serialize = "camelCase", deserialize = "camelCase"))]
+#[serde(default, rename_all(serialize = "camelCase", deserialize = "camelCase"))]
 pub struct Location {
     #[serde(deserialize_with = "deserialize_null_default")]
     pub path: String,
@@ -1238,7 +1238,7 @@ pub struct CallArg {
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all(serialize = "camelCase", deserialize = "camelCase"))]
+#[serde(default, rename_all(serialize = "camelCase", deserialize = "camelCase"))]
 pub struct CalltraceLoadArgs {
     pub location: Location,
     pub start_call_line_index: GlobalCallLineIndex,
