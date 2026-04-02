@@ -508,7 +508,7 @@ impl Handler {
         args: CalltraceLoadArgs,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
-        if self.trace_kind == TraceKind::RR {
+        let update = if self.trace_kind == TraceKind::RR {
             // TODO: calltrace? eventually in the future
             // for now callstack!
 
@@ -516,33 +516,30 @@ impl Handler {
             let callstack_lines = self.replay.load_callstack()?;
             let total_count = callstack_lines.len();
             let position = 0;
-            let update = CallArgsUpdateResults::finished_update_call_lines(
+            CallArgsUpdateResults::finished_update_call_lines(
                 callstack_lines,
                 start_call_line_index,
                 total_count,
                 position,
                 self.calltrace.depth_offset,
-            );
-            let raw_event = self.dap_client.updated_calltrace_event(&update)?;
-            sender.send(raw_event)?;
-            // warn!("load_calltrace_section not implemented for rr");
+            )
         } else {
             let start_call_line_index = args.start_call_line_index;
             let call_lines = self.load_local_calltrace(args)?;
             let total_count = self.calc_total_calls();
             let position = self.calltrace.calc_scroll_position();
-            let update = CallArgsUpdateResults::finished_update_call_lines(
+            CallArgsUpdateResults::finished_update_call_lines(
                 call_lines,
                 start_call_line_index,
                 total_count,
                 position,
                 self.calltrace.depth_offset,
-            );
-            // self.return_task((task, VOID_RESULT.to_string()))?;
-            let raw_event = self.dap_client.updated_calltrace_event(&update)?;
-            sender.send(raw_event)?;
-        }
-        self.respond_dap(req, serde_json::json!({}), sender)?;
+            )
+        };
+        let raw_event = self.dap_client.updated_calltrace_event(&update)?;
+        sender.send(raw_event)?;
+        // Include calltrace data in the response body for customRequest().
+        self.respond_dap(req, &update, sender)?;
         Ok(())
     }
 
@@ -582,10 +579,11 @@ impl Handler {
             return Err(message.into());
         };
         info!("  flow ready");
-        let raw_event = self.dap_client.updated_flow_event(flow_update)?;
+        let raw_event = self.dap_client.updated_flow_event(flow_update.clone())?;
         sender.send(raw_event)?;
 
-        self.respond_dap(req, serde_json::json!({}), sender)?;
+        // Include flow data in the response body for customRequest().
+        self.respond_dap(req, &flow_update, sender)?;
         Ok(())
     }
 
@@ -831,15 +829,23 @@ impl Handler {
             (slice.to_vec(), contents)
         };
 
-        let raw_event = self.dap_client.updated_events(page_events)?;
+        let raw_event = self.dap_client.updated_events(page_events.clone())?;
         sender.send(raw_event)?;
 
-        let raw_event_content = self.dap_client.updated_events_content(page_contents)?;
+        let raw_event_content = self.dap_client.updated_events_content(page_contents.clone())?;
         sender.send(raw_event_content)?;
 
-        // Send a DAP response so that VS Code's customRequest() resolves
-        // instead of timing out waiting for a response that never arrives.
-        self.respond_dap(req, serde_json::json!({}), sender)?;
+        // Include event data in the DAP response body so that
+        // `session.customRequest("ct/event-load")` resolves with the data
+        // (VS Code's customRequest returns the response body, not events).
+        self.respond_dap(
+            req,
+            serde_json::json!({
+                "events": page_events,
+                "content": page_contents,
+            }),
+            sender,
+        )?;
 
         Ok(())
     }
@@ -907,9 +913,10 @@ impl Handler {
             }
         }
 
-        let raw_event = self.dap_client.calltrace_search_event(calls)?;
+        let raw_event = self.dap_client.calltrace_search_event(calls.clone())?;
         sender.send(raw_event)?;
-        self.respond_dap(req, serde_json::json!({}), sender)?;
+        // Include search results in the response body for customRequest().
+        self.respond_dap(req, &calls, sender)?;
         Ok(())
     }
 
@@ -943,11 +950,12 @@ impl Handler {
             .collect();
 
         let history_update = HistoryUpdate::new(load_history_arg.expression.clone(), address, &history_results);
-        let raw_event = self.dap_client.updated_history_event(history_update)?;
+        let raw_event = self.dap_client.updated_history_event(history_update.clone())?;
 
         sender.send(raw_event)?;
 
-        self.respond_dap(req, serde_json::json!({}), sender)?;
+        // Include history data in the response body for customRequest().
+        self.respond_dap(req, &history_update, sender)?;
         Ok(())
     }
 
@@ -1780,11 +1788,11 @@ impl Handler {
             let trace_event = self.dap_client.tracepoint_locals_event(trace_values)?;
             sender.send(trace_event)?;
         }
-        let raw_event = self
-            .dap_client
-            .updated_table_event(&task::CtUpdatedTableResponseBody { table_update })?;
+        let table_body = task::CtUpdatedTableResponseBody { table_update };
+        let raw_event = self.dap_client.updated_table_event(&table_body)?;
         sender.send(raw_event)?;
-        self.respond_dap(req, serde_json::json!({}), sender)?;
+        // Include table data in the response body for customRequest().
+        self.respond_dap(req, &table_body, sender)?;
         Ok(())
     }
 
@@ -1924,10 +1932,11 @@ impl Handler {
             write_events[start..].to_vec()
         };
 
-        let raw_event = self.dap_client.loaded_terminal_event(page)?;
+        let raw_event = self.dap_client.loaded_terminal_event(page.clone())?;
         sender.send(raw_event)?;
 
-        self.respond_dap(req, serde_json::json!({}), sender)?;
+        // Include terminal data in the response body for customRequest().
+        self.respond_dap(req, &page, sender)?;
         Ok(())
     }
 
