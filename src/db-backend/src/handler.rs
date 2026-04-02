@@ -504,7 +504,7 @@ impl Handler {
 
     pub fn load_calltrace_section(
         &mut self,
-        _req: dap::Request,
+        req: dap::Request,
         args: CalltraceLoadArgs,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
@@ -542,12 +542,13 @@ impl Handler {
             let raw_event = self.dap_client.updated_calltrace_event(&update)?;
             sender.send(raw_event)?;
         }
+        self.respond_dap(req, serde_json::json!({}), sender)?;
         Ok(())
     }
 
     pub fn load_flow(
         &mut self,
-        _req: dap::Request,
+        req: dap::Request,
         arg: CtLoadFlowArguments,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
@@ -584,6 +585,7 @@ impl Handler {
         let raw_event = self.dap_client.updated_flow_event(flow_update)?;
         sender.send(raw_event)?;
 
+        self.respond_dap(req, serde_json::json!({}), sender)?;
         Ok(())
     }
 
@@ -835,6 +837,10 @@ impl Handler {
         let raw_event_content = self.dap_client.updated_events_content(page_contents)?;
         sender.send(raw_event_content)?;
 
+        // Send a DAP response so that VS Code's customRequest() resolves
+        // instead of timing out waiting for a response that never arrives.
+        self.respond_dap(req, serde_json::json!({}), sender)?;
+
         Ok(())
     }
 
@@ -880,7 +886,7 @@ impl Handler {
 
     pub fn calltrace_search(
         &mut self,
-        _req: dap::Request,
+        req: dap::Request,
         arg: CallSearchArg,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
@@ -903,6 +909,7 @@ impl Handler {
 
         let raw_event = self.dap_client.calltrace_search_event(calls)?;
         sender.send(raw_event)?;
+        self.respond_dap(req, serde_json::json!({}), sender)?;
         Ok(())
     }
 
@@ -912,7 +919,7 @@ impl Handler {
 
     pub fn load_history(
         &mut self,
-        _req: dap::Request,
+        req: dap::Request,
         load_history_arg: LoadHistoryArg,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
@@ -940,6 +947,7 @@ impl Handler {
 
         sender.send(raw_event)?;
 
+        self.respond_dap(req, serde_json::json!({}), sender)?;
         Ok(())
     }
 
@@ -1763,7 +1771,7 @@ impl Handler {
 
     pub fn update_table(
         &mut self,
-        _req: dap::Request,
+        req: dap::Request,
         args: UpdateTableArgs,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
@@ -1776,6 +1784,7 @@ impl Handler {
             .dap_client
             .updated_table_event(&task::CtUpdatedTableResponseBody { table_update })?;
         sender.send(raw_event)?;
+        self.respond_dap(req, serde_json::json!({}), sender)?;
         Ok(())
     }
 
@@ -1918,6 +1927,7 @@ impl Handler {
         let raw_event = self.dap_client.loaded_terminal_event(page)?;
         sender.send(raw_event)?;
 
+        self.respond_dap(req, serde_json::json!({}), sender)?;
         Ok(())
     }
 
