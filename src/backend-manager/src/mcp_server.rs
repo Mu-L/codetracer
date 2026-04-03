@@ -560,8 +560,21 @@ async fn dap_request(
         // Skip DAP events — we only want the response.
         let msg_type = msg.get("type").and_then(Value::as_str).unwrap_or("");
         if msg_type == "event" {
-            eprintln!("mcp: skipping interleaved DAP event while waiting for {command} response");
             continue;
+        }
+
+        // Skip responses that don't match our request_seq.  The daemon may
+        // broadcast backend responses (e.g. from ct/load-flow or
+        // ct/load-calltrace-section) to all connected clients.  When the
+        // Python subprocess inside exec_script triggers these backend
+        // operations, the broadcast arrives on this MCP socket before the
+        // actual ct/exec-script response.  Without this check, dap_request
+        // would return the wrong response, causing empty script output.
+        if msg_type == "response" {
+            let resp_seq = msg.get("request_seq").and_then(Value::as_i64).unwrap_or(-1);
+            if resp_seq != seq {
+                continue;
+            }
         }
 
         return Ok(msg);
