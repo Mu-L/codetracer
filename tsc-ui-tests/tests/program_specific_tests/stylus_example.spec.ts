@@ -37,8 +37,14 @@ import { retry } from "../../lib/retry-helpers";
 // ---------------------------------------------------------------------------
 
 /**
- * Returns true when the Stylus pipeline tools are available.
- * Requires both `ct` (with `arb` subcommand) and `cast` (Foundry).
+ * The default Arbitrum devnode RPC endpoint.
+ * Override with `STYLUS_RPC_URL` to point at a custom endpoint.
+ */
+const STYLUS_RPC_URL = process.env.STYLUS_RPC_URL ?? "http://localhost:8547";
+
+/**
+ * Returns true when the Stylus pipeline tools and infrastructure are available.
+ * Requires `cast` (Foundry), `cargo-stylus`, and a running Arbitrum devnode.
  */
 function hasStylusPipeline(): boolean {
   try {
@@ -54,7 +60,17 @@ function hasStylusPipeline(): boolean {
       encoding: "utf-8",
       timeout: 5_000,
     });
-    return stylusResult.status === 0;
+    if (stylusResult.status !== 0) return false;
+
+    // Check that the Arbitrum devnode is actually running.  Without a live
+    // devnode, contract deployment and transaction recording are impossible.
+    // We probe the JSON-RPC endpoint with `cast chain-id`.
+    const devnodeResult = childProcess.spawnSync(
+      "cast",
+      ["chain-id", "--rpc-url", STYLUS_RPC_URL],
+      { encoding: "utf-8", timeout: 5_000 },
+    );
+    return devnodeResult.status === 0;
   } catch {
     return false;
   }
