@@ -1,0 +1,103 @@
+@import "../generated/index"
+
+input
+  font-family: "SpaceGrotesk"
+  padding: 0.25em 0.75em 0.25em 0.75em
+  outline: none
+
+  &:hover
+    color: color-ui-text-primary-body !important
+
+  &:focus
+    outline: none !important
+
+  &:focus-visible
+    outline: 0.125em solid color-ui-border-focus !important
+    color: color-ui-text-primary-body !important
+
+  &:not(:placeholder-shown):not(:disabled)
+    border-color: color-ui-border-action
+    background: color-ui-surface-input-default
+    color: color-ui-text-primary-body !important
+
+  &:disabled
+    border: 0.03125em solid color-ui-border-disabled
+    background: color-ui-surface-primary-disabled
+    color: color-ui-text-disabled-default !important
+    pointer-events: none
+    cursor: not-allowed
+
+  &::placeholder
+    color: color-ui-text-default-placeholder
+
+  &:hover::placeholder,
+  &:focus-visible::placeholder,
+  &:not(:placeholder-shown):not(:disabled)::placeholder
+    color: color-ui-text-primary-body
+
+  &:disabled::placeholder
+    color: color-ui-text-disabled-default !important
+
+
+.ct-input-search-image
+  padding-left: 2.5em !important
+  background-image: ct-images-empty-search-icon !important
+  background-repeat: no-repeat !important
+  background-position: 0.75em center !important
+  background-size: 1em !important
+
+  &:hover,
+  &:focus-visible,
+  &:not(:placeholder-shown):not(:disabled)
+    background-image: ct-images-default-search-icon !important
+
+  &:disabled
+    background-image: ct-images-disabled-search-icon !important
+
+
+.ct-input-form
+  height: 2.25em
+  max-height: 2.25em
+  border-radius: 0.5em
+  background: color-ui-surface-primary-secondary
+  border: 0.03125em solid color-ui-surface-primary-secondary
+
+  &:hover
+    border-color: color-ui-border-primary-hover
+
+
+.ct-input-com-pal
+  height: 1.75em
+  max-height: 1.75em
+  width: -webkit-fill-available
+  max-width: -webkit-fill-available
+  border-radius: 0.5em
+  border: 0.03125em solid color-ui-border-primary
+  background: color-ui-surface-primary-secondary
+
+  &:hover
+    border-color: color-ui-border-primary-hover
+    color: color-ui-text-primary-body
+
+
+.ct-input-small
+.ct-input-panel
+  border-radius: 0.25em
+  background: color-ui-surface-primary-default
+
+  &:hover
+    border: 0.03125em solid color-ui-surface-primary-default
+    border-color: color-ui-border-primary-hover
+    color: color-ui-text-primary-body
+
+
+.ct-input-small
+  height: 1.5em
+  max-height: 1.75em
+  border: 0.03125em solid transparent
+
+.ct-input-panel
+  width: -webkit-fill-available
+  height: 1.75em
+  max-height: 1.75em
+  border: 0.03125em solid transparent

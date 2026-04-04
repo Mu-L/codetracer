@@ -1,22 +1,21 @@
 // File containing style for widgets that are shared across all other widgets
 if !IS_EXTENSION
   ::-webkit-scrollbar
-    width: 14px
-    height: 14px
+    width: 0.5em
+    height: 0.5em
     background-color: transparent
 
   ::-webkit-scrollbar-corner
-    background-color: WEBKIT_SCROLLER_BACKGROUND_COLOR
+    background-color: color-ui-surface-panel
 
   ::-webkit-scrollbar:hover
     background-color: transparent
 
   ::-webkit-scrollbar-thumb:vertical,
   ::-webkit-scrollbar-thumb:horizontal
-    border-radius: 100px
-    background-color: WEBKIT_SCROLLER_THUMB_BACKGROUND_COLOR
-    border: 3px solid WEBKIT_SCROLLER_BACKGROUND_COLOR
+    background-color: color-ui-surface-primary-tertiary
 
+  // TODO: Ask Niky for a constant in mapped for the color
   ::-webkit-scrollbar-thumb:vertical:active,
   ::-webkit-scrollbar-thumb:horizontal:active
     background-color: WEBKIT_SCROLLER_THUMB_ACTIVE_BACKGROUND_COLOR
@@ -109,70 +108,104 @@ html, body
 
 body
   font-family: -apple-system, 'Helvetica Neue', Helvetica, sans-serif !important
-  background-color: BACKGROUND_COLOR
+  background-color: color-ui-surface-primary-default !important
+
+[data-tippy-root]
+  max-width: calc(100vw - 0.625em)
+
+.tippy-box
+  border-radius: 0.25em
+  font-size: inherit
+
+  &[data-placement^="top"] > .tippy-arrow::before
+    bottom: -0.4375em
+    border-width: 0.5em 0.5em 0
+
+  &[data-placement^="bottom"] > .tippy-arrow::before
+    top: -0.4375em
+    border-width: 0 0.5em 0.5em
+
+  &[data-placement^="left"] > .tippy-arrow::before
+    right: -0.4375em
+    border-width: 0.5em 0 0.5em 0.5em
+
+  &[data-placement^="right"] > .tippy-arrow::before
+    left: -0.4375em
+    border-width: 0.5em 0.5em 0.5em 0
+
+.tippy-arrow
+  width: 1em
+  height: 1em
+
+.tippy-content
+  padding: 0.3125em 0.5625em
 
 .separate-bar
   width: 0px
-  height: 16px
-  border-left: 1px solid DEBUG_SEPARATE_BAR_COLOR
+  height: 1em
+  margin-top: 0.4em
+  border-left: 0.12em solid color-ui-separator-default
 
-.wrapper
-  input
-    margin-left: 0 !important
+// .wrapper
+//   input
+//     margin-left: 0 !important
 
-input
-  font-family: "SpaceGrotesk" !important
-  font-size: 14px !important
-  font-style: normal !important
-  font-weight: 400 !important
-  color: TEXT_CONTENT_COLOR
-  height: 28px
-  // font-size: 17px !important
-  border: 0
-  background-color: HEADER_ELEMENT_BACKGROUND_COLOR
-  if IS_EXTENSION
-    width: -webkit-fill-available
-  else
-    width: calc(100% - 6px)
-    margin-right: 8px
-  margin-left: 8px !important
-  margin-bottom: 5px !important
-  border-radius: 6px
-  padding-left: 24px
-  padding-bottom: 0px !important
-  padding-top: 0px !important
-  overflow: hidden !important
-  text-overflow: ellipsis !important
-  white-space: nowrap !important
-  border: 1px solid INPUT_BORDER_COLOR !important
-  background-image: INPUT_DEFAULT_SEARCH_ICON !important
-  background-repeat: no-repeat !important
-  background-position: 8px center !important
-  background-size: 12px 12px !important
+// input
+//   font-family: "SpaceGrotesk" !important
+//   font-size: 14px !important
+//   font-style: normal !important
+//   font-weight: 400 !important
+//   color: TEXT_CONTENT_COLOR
+//   height: 28px
+//   // font-size: 17px !important
+//   border: 0
+//   background-color: HEADER_ELEMENT_BACKGROUND_COLOR
+//   if IS_EXTENSION
+//     width: -webkit-fill-available
+//   else
+//     width: calc(100% - 6px)
+//     margin-right: 8px
+//   margin-left: 8px !important
+//   margin-bottom: 5px !important
+//   border-radius: 6px
+//   padding-left: 24px
+//   padding-bottom: 0px !important
+//   padding-top: 0px !important
+//   overflow: hidden !important
+//   text-overflow: ellipsis !important
+//   white-space: nowrap !important
+//   border: 1px solid INPUT_BORDER_COLOR !important
+//   background-image: INPUT_DEFAULT_SEARCH_ICON !important
+//   background-repeat: no-repeat !important
+//   background-position: 8px center !important
+//   background-size: 12px 12px !important
 
-  &:focus
-    outline: 0px solid BORDERS_COLOR !important
-    border: 1px solid INPUT_FOCUSED_BORDER_COLOR !important
-    overflow: hidden !important
-    text-overflow: ellipsis !important
-    white-space: nowrap !important
+//   &:focus
+//     outline: 0px solid BORDERS_COLOR !important
+//     border: 1px solid INPUT_FOCUSED_BORDER_COLOR !important
+//     overflow: hidden !important
+//     text-overflow: ellipsis !important
+//     white-space: nowrap !important
 
 #root-container
-  padding 0
+  // padding 0.25em
   position: fixed
-  height: calc(100% - 66px)
-  top: 38px
+  height: calc(100vh - 2.27em - 2em)
+  top: 2.27em
   z-index: 0
+  padding-left: 0
+  padding-right: 0
 
 #ROOT
-  background-color: BACKGROUND_COLOR
+  background-color: color-ui-surface-primary-default !important
   color: TEXT_CONTENT_COLOR
   height: 100%
-  width: 100vw
+  width: calc(100vw - 0.5em)
   position: relative
+  padding-right: 0.25em
+  padding-left: 0.25em
 
 #main
-  background-color: BACKGROUND_COLOR
   font-size: 20px
   display: flex
   flex-wrap: wrap
@@ -182,48 +215,32 @@ input
 #dock
   height: 80%
 
-button
-  background-color: BUTTON_BACKGROUND_COLOR
-  color: BUTTON_COLOR
-  border: 0
-  border-radius: 1ex !important
-  padding-left: 2ex
-  padding-right: 2ex
-  margin-left: 1ex !important
-  margin-right: 1ex !important
-
-  &:hover
-    background-color: HOVERED_BUTTON_BACKGROUND_COLOR
-    color: HOVERED_BUTTON_COLOR
-
-  &:focus
-    outline: 0 !important
-
 .highlight
   background-color: HIGHLIGHT_COLOR !important
 
 .value-expanded-compound::before
   content: ''
   position: absolute
-  left: 14px
-  top: 20px
+  left: 0.72em
+  top: 1.25em
   bottom: 0
-  width: 1px
+  width: 0.0625em
   background-color: VALUE_TYPE_COLOR
   opacity: 0.2
 
 .value-load-more-button
   width: 100%
 
+// TODO: Fix it?
 .component-container
   font-family: "FiraCode" !important
-  font-size: 14px !important
-  line-height: 24px !important
+  font-size: inherit !important
+  line-height: 1.5em !important
   font-weight: 400 !important
   width: 100%
   height: 100%
-  if !IS_EXTENSION
-    box-shadow: inset 2px 0px 0px 0px LAYOUT_SPLITTER_COLOR
+  // if !IS_EXTENSION
+  //   box-shadow: inset 2px 0px 0px 0px LAYOUT_SPLITTER_COLOR
 
   &:focus
     outline: 0px
@@ -371,7 +388,7 @@ input:checked ~ .checkmark:after
     transform: rotate(45deg);
 
 .dropdown-list
-  border-radius: 6px
+  border-radius: 0.325em
   background: DROPDOWN_LIST_FOCUSED_BACKGROUND_COLOR
   color: DROPDOWN_TEXT_BACKGROUND_COLOR
   display: flex
@@ -381,7 +398,7 @@ input:checked ~ .checkmark:after
   // padding-left: 10px
   // padding-bottom: 5px
   // padding-right: 10px
-  margin-top: 4px
+  margin-top: 0.24em
   right: 0
   min-width: fit-content
   position: relative
@@ -394,7 +411,7 @@ input:checked ~ .checkmark:after
     user-select: none
     list-style-type: none
     width: 100%
-    height: 24px
+    // height: 24px
     // margin-bottom: 5px
     cursor: pointer
     overflow: hidden
@@ -408,37 +425,36 @@ input:checked ~ .checkmark:after
 .hamburger-dropdown + .dropdown-list.active
   width: fit-content
 
-.layout-buttons-container-wrapper
-  outline: 4px solid PRIMARY_BASE
+// .layout-buttons-container-wrapper
+//   outline: 4px solid PRIMARY_BASE
 
 .layout-buttons-container
-  width: 28px !important
-  height: 28px !important
+  width: 1.7em !important
+  height: 1.7em !important
   background-color: SECONDARY_BASE
-  border-radius: 6px
-  background-image: LAYOUT_TAB_NESTED_ICON
+  border-radius: 0.36em
+  background-image: ct-images-layout-tab
+  background-size:  1em
   background-repeat: no-repeat
   background-position: center
-  margin-top: 2px
   cursor: pointer
 
   &:hover
     background-color: ACTIVE_LAYOUT_BUTTONS_BACKGROUND
 
   &.active
-    background-image: ACTIVE_LAYOUT_TAB_NESTED_ICON
+    background-image: ct-images-layout-tab-active
     background-color: ACTIVE_LAYOUT_BUTTONS_BACKGROUND
 
   .layout-dropdown
     width: fit-content;
     position: absolute;
-    top: 32px;
+    top: 100%
     right: 0px;
     background-color: DROPDOWN_BASE
     border-radius: 6px
     font-family: "SpaceGrotesk"
-    font-size: 14px
-    line-height: 24px
+    line-height: normal
     color: PRIMARY_TEXT_COLOR
     font-weight: 400
     padding: 4px
@@ -452,64 +468,6 @@ input:checked ~ .checkmark:after
         background-color: ACTIVE_MENU_BACKGROUND
 
 
-.custom-tooltip
-  display: block
-  position: absolute
-  font-family: "SpaceGrotesk"
-  top: 100%
-  background-color: TOOLTIP_BACKGROUND
-  color: PRIMARY_TEXT_COLOR
-  padding: 5px 10px
-  font-size: 14px
-  border-radius: 4px
-  white-space: nowrap
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2)
-  opacity: 0
-  visibility: hidden
-  transition: opacity 0.3s ease, visibility 0.3s ease, top 0.3s ease
-  pointer-events: none
-  text-align: start
-  font-size: 12px
-  line-height: 16px
-
-  &.active
-    opacity: 1
-    visibility: visible
-    top: -100%
-    height: 24px
-    right: 4px
-
-    &:after
-      content: '';
-      position: absolute;
-      top: 100%
-      left: unset
-      right: 4px
-      border-width: 8px
-      border-style: solid
-      border-color: TOOLTIP_BACKGROUND transparent transparent transparent
-
-  &:after
-    content: '';
-    position: absolute;
-    bottom: 100%
-    left: calc(50% - 8px)
-    border-width: 8px
-    border-style: solid
-    border-color: transparent transparent TOOLTIP_BACKGROUND transparent
-
-.debug-button:hover > .custom-tooltip
-.eventLog-medium-control-button:hover > .custom-tooltip
-#command-query:hover > .custom-tooltip
-.add-to-scratchpad-button:hover > .custom-tooltip
-.run-trace-button:hover > .custom-tooltip
-  opacity: 1
-  visibility: visible
-  top: calc(100% + 5px)
-  transition-delay: TOOLTIP_DELAY_TIMER
-
-.copy-file-path:hover > custom-tooltip
-  opacity: 1
 
 .run-trace-button
   .custom-tooltip
@@ -538,11 +496,11 @@ input:checked ~ .checkmark:after
   justify-content: center
   align-items: center
   font-family: 'FiraCode'
-  font-size: 14px
-  padding-left: 12px
-  padding-right: 12px
+  // font-size: 14px
+  // padding-left: 12px
+  // padding-right: 12px
   text-align: center
-  white-space: break-spaces
+  // white-space: break-spaces
 
 .jstree-default-contextmenu
   display: none !important

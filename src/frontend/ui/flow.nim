@@ -1282,43 +1282,29 @@ proc flowEventValue*(self: FlowComponent, event: FlowEvent, stepCount: int, styl
   let (klass, name) =
     case event.kind:
     of EventLogKind.Error:
-      ("flow-error", "error")
+      ("-error", "error")
     of EventLogKind.Write:
-      ("flow-std-default", "stdout")
+      ("-std", "stdout")
     of EventLogKind.WriteFile:
-      ("flow-std-default", "stdout")
+      ("-std", "stdout")
     of EventLogKind.Read:
-      ("flow-std-default", "stdin")
+      ("-std", "stdin")
     of EventLogKind.ReadFile:
-      ("flow-std-default", "stdin")
+      ("-std", "stdin")
     of EventLogKind.EvmEvent:
-      ("flow-std-default", $event.metadata)
+      ("-std", $event.metadata)
     else:
       ("", "")
-  # let klass =
-  #   case event.kind:
-  #   of EventLogKind.Error:
-  #     "flow-error"
-  #   of EventLogKind.Write:
-  #     "flow-std-default"
-  #   of EventLogKind.WriteFile:
-  #     "flow-std-default"
-  #   of EventLogKind.Read:
-  #     "flow-std-default"
-  #   of EventLogKind.ReadFile:
-  #     "flow-std-default"
-  #   else:
-  #     ""
 
   result = buildHtml(
     span(
-      class = &"flow-{flowMode}-value",
+      class = &"ct-omni-value",
       style=style
     )
   ):
     if event.text.len() > FLOW_VALUE_LIMIT:
       span(
-        class = &"flow-{flowMode}-value-name flow-view-more-button flow-hide-content",
+        class = &"ct-omni-name{klass} flow-view-more-button flow-hide-content",
         style = style,
         onmousedown = proc(e: Event, v: VNode) =
           let targetId = &"flow-{flowMode}-value-box-{stepCount}-{i}"
@@ -1336,7 +1322,7 @@ proc flowEventValue*(self: FlowComponent, event: FlowEvent, stepCount: int, styl
             self.editorUI.adjustEditorWidth()
       )
     span(
-      class = &"flow-{flowMode}-value-name {klass}-name",
+      class = &"ct-omni-name{klass}",
       onmousedown = proc(e: Event, v: VNode) =
         self.jumpToLocalStep(stepCount),
       # oncontextmenu = proc(e: Event, v: VNode) =
@@ -1428,7 +1414,7 @@ proc flowSimpleValue*(
 
   result = buildHtml(
     span(
-      class = &"flow-{flowMode}-value",
+      class = &"ct-omni-value",
       style=style
     )
   ):
@@ -1444,7 +1430,7 @@ proc flowSimpleValue*(
           renderViewOption()
     if showName:
       span(
-        class = &"flow-{flowMode}-value-name",
+        class = &"ct-omni-name",
         onmousedown = proc(e: Event, v: VNode) =
           self.jumpToLocalStep(stepCount),
         oncontextmenu = proc(e: Event, v: VNode) =
@@ -1466,7 +1452,7 @@ proc flowSimpleValue*(
         id = id,
         style = style,
         iteration = $(self.flow.steps[stepCount].iteration),
-        class = &"flow-{flowMode}-value-box " & before,
+        # class = &"flow-{flowMode}-value-box " & before,
         onmousedown = proc(e: Event, v: VNode) =
           onMouseDown(e, v, beforeValue),
         oncontextmenu = proc(e: Event, v: VNode) =

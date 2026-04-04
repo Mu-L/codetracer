@@ -273,57 +273,54 @@ method onProgramSearchResults*(self: CommandPaletteComponent, results: seq[Comma
 var initStart = true
 
 method render*(self: CommandPaletteComponent): VNode =
-  let (padClass, activeClass) = if self.active: ("ct-p-8", "ct-active") else: ("", "")
+  let (padClass, activeClass) = if self.active: ("", "ct-active") else: ("", "")
   let inputClass = if self.active and not self.inAgentMode: "ct-input-cp-background-command-palette" else: ""
   result = buildHtml(
-    tdiv(id = "command-data")
-  ):
-    tdiv(class = fmt"command-view {padClass} {activeClass}", id = "command-view"):
+    tdiv(class = fmt"command-view {padClass} {activeClass}", id = "command-view")):
       if not self.inAgentMode:
-        tdiv(id = "command-query"):
-          input(
-            `type` = "text",
-            id = "command-query-text",
-            name = "command-query",
-            placeholder = "Navigate to file or run a :command",
-            class = fmt"mousetrap {inputClass}",
-            autocomplete="off", # https://stackoverflow.com/questions/254712/disable-spell-checking-on-html-textfields
-            autocorrect="off",
-            autocapitalize="off",
-            spellcheck="false",
-            onmousedown = proc =
-              data.search(SearchFileRealTime, "".cstring),
-            oninput = proc(ev: Event, tg: VNode) =
-              let value = self.inputField.toJs.value.to(cstring)
-              self.onInput(value),
-            onkeydown = proc(e: KeyboardEvent, v: VNode) =
-              echo "command ", e.keyCode
-              if e.keyCode == DOWN_KEY_CODE: # down
-                commandSelectNext()
-              elif e.keyCode == UP_KEY_CODE: # up
-                commandSelectPrevious()
-              elif e.keyCode == ENTER_KEY_CODE: # enter
-                self.runQuery()
-              elif e.keyCode == ESC_KEY_CODE: # escape
-                self.resetCommandPalette()
-              elif e.keyCode == TAB_KEY_CODE: # tab
-                e.preventDefault()
-                self.onTab()
-          )
-          # tdiv(class = "custom-tooltip"):
-          #   text "Navigate to file (ctrl+p) / Run command (alt+p)"
+        input(
+          `type` = "text",
+          id = "command-query-text",
+          name = "command-query",
+          placeholder = "Navigate to file or run a :command",
+          class = fmt"mousetrap ct-input-com-pal ct-input-search-image",
+          autocomplete="off", # https://stackoverflow.com/questions/254712/disable-spell-checking-on-html-textfields
+          autocorrect="off",
+          autocapitalize="off",
+          spellcheck="false",
+          onmousedown = proc =
+            data.search(SearchFileRealTime, "".cstring),
+          oninput = proc(ev: Event, tg: VNode) =
+            let value = self.inputField.toJs.value.to(cstring)
+            self.onInput(value),
+          onkeydown = proc(e: KeyboardEvent, v: VNode) =
+            echo "command ", e.keyCode
+            if e.keyCode == DOWN_KEY_CODE: # down
+              commandSelectNext()
+            elif e.keyCode == UP_KEY_CODE: # up
+              commandSelectPrevious()
+            elif e.keyCode == ENTER_KEY_CODE: # enter
+              self.runQuery()
+            elif e.keyCode == ESC_KEY_CODE: # escape
+              self.resetCommandPalette()
+            elif e.keyCode == TAB_KEY_CODE: # tab
+              e.preventDefault()
+              self.onTab()
+        )
+        # tdiv(class = "custom-tooltip"):
+        #   text "Navigate to file (ctrl+p) / Run command (alt+p)"
 
-          if self.active:
-            tdiv(
-              id = "command-results",
-              onmousedown = proc(e: Event, et: VNode) = e.preventDefault()
-            ):
-              if self.results.len > 0:
-                for i, result in self.results:
-                  commandResultView(self, result, i == self.selected, i mod 2 == 0, i, data.services.search.activeCommandName)
-              else:
-                tdiv(class = "command-result empty"):
-                  text "No matching result found."
+        if self.active:
+          tdiv(
+            id = "command-results",
+            onmousedown = proc(e: Event, et: VNode) = e.preventDefault()
+          ):
+            if self.results.len > 0:
+              for i, result in self.results:
+                commandResultView(self, result, i == self.selected, i mod 2 == 0, i, data.services.search.activeCommandName)
+            else:
+              tdiv(class = "command-result empty"):
+                text "No matching result found."
       else:
         let agent = cast[AgentActivityComponent](data.ui.componentMapping[Content.AgentActivity][data.ui.componentMapping[Content.AgentActivity].len() - 1])
         agent.inCommandPalette = true

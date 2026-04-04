@@ -1,20 +1,18 @@
 
 .lm_goldenlayout
-  background: BACKGROUND_COLOR !important
-  border-right: 1px solid PRIMARY_BASE
+  background: color-ui-surface-primary-default !important
+  // border-right: 1px solid PRIMARY_BASE
 
 .lm_header
-  background-color: HEADER_PANEL_BACKGROUND_COLOR !important
+  background-color: transparent !important
   color: HEADER_PANEL_COLOR !important
   position: relative
-  height: 34px !important
-  padding-left: 2px !important
+  // height: 2em !important
   box-shadow: 2px 0 0 0 HEADER_PANEL_BACKGROUND_COLOR !important
   z-index: 3 !important
-  margin-right: 2px !important
 
 .lm_splitter
-  background: LAYOUT_SPLITTER_COLOR !important
+  background: color-ui-surface-primary-default !important
   opacity: unset !important
   transition: opacity 200ms ease !important
   z-index: 4 !important
@@ -23,8 +21,7 @@
   overflow: hidden !important
 
 .lm_tabs
-  width: calc(100% - 2px)
-  background-color: HEADER_PANEL_BACKGROUND_COLOR !important
+  width: 100%
   display: flex
   justify-content: space-between
 
@@ -34,31 +31,31 @@
 
 .lm_tab
   font-family: "SpaceGrotesk" !important
-  font-size: 14px !important
+  font-size: inherit !important
   font-style: normal
   font-weight: 600 !important
   letter-spacing: -0.14px !important
   //height: 25px !important
-  background-color: HEADER_PANEL_INACTIVE_COLOR !important
-  color: HEADER_PANEL_COLOR !important
+  background-color: colors-ui-surface-panel !important
+  color: colors-ui-text-default-tab !important
   margin: 0 !important
   border: 0 !important
-  margin-top: 2px !important
-  padding-top: 2px !important
-  padding-bottom: 2px !important
-  padding-left: 8px !important
-  padding-right: 25px !important
+  // margin-top: 2px !important
+  // padding-top: 2px !important
+  // padding-bottom: 2px !important
+  padding: 0.38em 0.5em !important
   box-shadow: none !important
-  height: 24px !important
-  line-height: 24px !important
+  line-height: normal !important
   // max-width: min(200px, 30%)
   overflow: hidden
-  border-radius: 6px
+  border-radius: 0.36em
   // margin-left: 2px !important
-  margin-right: 4px !important
+  margin-right: 0.24em !important
   margin-bottom: 0px !important
   flex: 1
   text-align: center
+  display: flex !important
+  align-items: center !important
   // box-sizing: border-box
 
 .lm_tabdropdown::before
@@ -66,68 +63,69 @@
   vertical-align: text-top !important
 
 .lm_item
-  background-color: LAYOUT_SPLITTER_COLOR !important
-  outline: 1px solid LAYOUT_SPLITTER_COLOR !important
+  background-color: transparent !important
+  // outline: 1px solid LAYOUT_SPLITTER_COLOR !important
   z-index: 3 !important
 
 .lm_items
-  transform: translateX(-2px)
+  // transform: translateX(-2px)
   // box-shadow: inset -1px 0 0 0 LAYOUT_SPLITTER_COLOR
   // width: calc(100% - 6px)
-  border-radius: 6px
+  border-radius: 0.36em
 
 .lm_content
-  background-color: BACKGROUND_COLOR !important
-  box-shadow: inset 2px 0px 0px 0px LAYOUT_SPLITTER_COLOR
+  background-color: color-ui-surface-panel !important
+  // box-shadow: inset 2px 0px 0px 0px LAYOUT_SPLITTER_COLOR
   border: 0 !important
-  padding-top: 8px
-  border-radius: 6px
+  // padding-top: 8px
+  border-radius: 0.36em
+  font-size: inherit
+  padding: 0.5em 0.25em 0em 0.25em
   // padding-right: 2px
-  margin-left: 2px
+  // margin-left: 2px
   // padding-right: 10px
 
 .lm_items
-  background-color: LAYOUT_SPLITTER_COLOR
+  background-color: transparent
   // outline: 2px solid PRIMARY_BASE
 
 .lm_splitter.lm_horizontal
-  width: 2px !important
+  width: 4px !important
 
 .lm_splitter.lm_vertical
-  height: 2px !important
+  height: 4px !important
 
 .lm_splitter.lm_vertical .lm_drag_handle
   top: 0 !important
-  height: 4px !important
-  background-color: LAYOUT_SPLITTER_COLOR
+  height: 2px !important
+  background-color: color-ui-surface-primary-default
 
 .lm_splitter.lm_horizontal .lm_drag_handle
   //left: -5px
   left: 0 !important
   width: 4px !important
-  background-color: LAYOUT_SPLITTER_COLOR
+  background-color: color-ui-surface-primary-default
 
 .lm_title
   color: HEADER_PANEL_COLOR !important
   // font-family: sans-serif !important
   font-weight: 500 !important
-  font-size: 14px !important
   overflow: hidden
   white-space: nowrap
   text-overflow: ellipsis
   width: 100%
-  padding-top: 0px !important
+  padding-top: 0em !important
   text-align: start !important
 // direction: rtl
 
 .lm_active
-  background-color: HEADER_ACTIVE_PANEL_BACKGROUND_COLOR !important
+  background-color: color-ui-surface-panel !important
   //border-radius: 2px
-  border-top-left-radius: 6px
-  border-top-right-radius: 6px
-  border-bottom-right-radius: 0px
-  border-bottom-left-radius: 0px
-  box-shadow: 0px 8px 0px 0px HEADER_ACTIVE_PANEL_BACKGROUND_COLOR !important
+  border-top-left-radius: 0.36em
+  border-top-right-radius: 0.36em
+  border-bottom-right-radius: 0em
+  border-bottom-left-radius: 0em
+  box-shadow: 0em 0.48em 0em 0em color-ui-surface-panel !important
   overflow: visible !important
 
   &::before
@@ -136,14 +134,14 @@
     position: absolute;
     display: block;
     height: 80%;
-    width: 26px;
-    bottom: 0px;
-    z-index: 1;
-    left: -26px;
-    border-radius: 0 0 10px 0;
-    opacity: 1;
-    box-shadow: 10px 0.34em 0 -4px SECONDARY_BASE
-    transform: translate(0px, 4.1px)
+    width: 1.625em
+    bottom: 0em
+    z-index: 1
+    left: -1.625em
+    border-radius: 0 0 0.625em 0
+    opacity: 1
+    box-shadow: 0.625em 0.34em 0 -0.25em color-ui-surface-panel
+    transform: translate(0em, 0.25625em)
 
   &::after
     content: " ";
@@ -151,14 +149,14 @@
     position: absolute;
     display: block;
     height: 80%;
-    width: 26px;
-    bottom: 0px;
-    z-index: 1;
-    right: -26px;
-    border-radius: 0 0 0 10px;
-    opacity: 1;
-    box-shadow: -10px 0.34em 0 -4px SECONDARY_BASE
-    transform: translate(0px, 4.1px)
+    width: 1.625em
+    bottom: 0em
+    z-index: 1
+    right: -1.625em
+    border-radius: 0 0 0 0.625em
+    opacity: 1
+    box-shadow: -0.625em 0.34em 0 -0.25em color-ui-surface-panel
+    transform: translate(0em, 0.25625em)
 
 .lm_header .lm_active .lm_title
   color: HEADER_ACTIVE_PANEL_TEXT_COLOR !important
@@ -192,7 +190,10 @@
 
 .lm_header .lm_tab .lm_close_tab
   background-image: LAYOUT_TAB_CLOSE_ICON_PATH !important
-  width: 8px !important
-  height: 8px !important
-  top: 10px !important
-  padding-right: 4px !important
+  width: 0.6em !important
+  height: 0.6em !important
+  background-size: 0.6em 0.6em
+  position: static !important
+
+.lm_header .lm_tab
+  height: 1.01em !important

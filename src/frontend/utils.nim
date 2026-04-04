@@ -9,6 +9,24 @@ const
   VALUE_COMPONENT_NAME_WIDTH*: float = 40.0
   VALUE_COMPONENT_VALUE_WIDTH*: float = 55.0
 
+proc monacoLineNumbersMinChars*(lineCount: int): int =
+  ## Reserve enough width for the largest line number currently visible in the
+  ## editor model. We keep one extra character because the custom HTML gutter
+  ## adds internal padding before the right-aligned text.
+  max(4, ($max(1, lineCount)).len + 2)
+
+proc monacoLineDecorationsWidth*(fontSize: int): int =
+  ## Reserve only the custom marker lane and the folding chevron lane.
+  ## The line-number column width is controlled separately via
+  ## `lineNumbersMinChars`.
+  let markerLane = (fontSize * 9) div 5
+  let foldingLane = fontSize div 2
+  max(20, markerLane + foldingLane)
+
+proc lineCountForGutter*(content: cstring): int =
+  ## Count logical lines for gutter sizing from Monaco-facing cstring content.
+  ($content).splitLines().len
+
 proc connectionLossMessage*(reason: ConnectionLossReason): cstring =
   ## Human-readable message describing why the connection is inactive.
   case reason:
@@ -753,7 +771,7 @@ data.ui = Components(
   layoutSizes: LayoutSizes(startSize: true),
   monacoEditors: @[],
   traceMonacoEditors: @[],
-  fontSize: 15,
+  fontSize: 16,
   editModeHiddenPanels: @[],
   savedLayoutBeforeEdit: nil,
   editModeLayout: nil,

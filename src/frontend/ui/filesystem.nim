@@ -172,7 +172,7 @@ method render*(self: FilesystemComponent): VNode =
                     data: self.service.filesystem.toJs,
                     animation: false,
                   },
-                  plugins: @[cstring"contextmenu", cstring"search"]
+                  plugins: @[cstring"contextmenu", cstring"search", cstring"wholerow"]
               })
 
               jqFind(".filesystem").toJs.on(

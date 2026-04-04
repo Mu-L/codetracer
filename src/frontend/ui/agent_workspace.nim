@@ -240,9 +240,10 @@ proc initEditor(self: AgentWorkspaceComponent) =
     cstring"codetracerWhite"
   else:
     cstring"codetracerDark"
+  let placeholder = cstring"// Select a file to view agent workspace content"
 
   self.editor = awCreateMonacoEditor(divId, js{
-    value: cstring"// Select a file to view agent workspace content",
+    value: placeholder,
     language: lang,
     readOnly: true,
     theme: theme,
@@ -250,8 +251,11 @@ proc initEditor(self: AgentWorkspaceComponent) =
     folding: true,
     fontSize: self.data.ui.fontSize,
     minimap: js{ enabled: false },
+    renderIndentGuides: true,
     renderLineHighlight: cstring"none",
-    lineDecorationsWidth: 20,
+    lineNumbersMinChars: monacoLineNumbersMinChars(lineCountForGutter(placeholder)),
+    lineDecorationsWidth: monacoLineDecorationsWidth(self.data.ui.fontSize),
+    showFoldingControls: cstring"always",
     scrollBeyondLastLine: false,
     contextmenu: false,
     glyphMargin: true
@@ -273,6 +277,10 @@ proc switchToFile(self: AgentWorkspaceComponent, fileIndex: int) =
       # agent workspace directory. For now, show a placeholder.
       let placeholder = cstring(fmt"// Agent workspace file: {entry.path}")
       self.editor.awSetMonacoValue(placeholder)
+      let options = cast[MonacoEditorOptions](self.editor.getOptions())
+      options.lineNumbersMinChars = monacoLineNumbersMinChars(lineCountForGutter(placeholder))
+      options.lineDecorationsWidth = monacoLineDecorationsWidth(self.data.ui.fontSize)
+      self.editor.updateOptions(options)
       let lang = guessLanguageFromPath(entry.path)
       let model = self.editor.awGetMonacoModel()
       if not model.isNil:

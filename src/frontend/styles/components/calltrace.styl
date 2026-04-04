@@ -8,10 +8,6 @@
   top: 50%
   font-size: 3ch
 
-.calltrace-search
-  if !IS_EXTENSION
-    padding-right: 8px
-
 .calltrace-view
 
   width: 100%
@@ -161,17 +157,10 @@
     // font-size: 16px
     color: TEXT_CONTENT_COLOR
     float: left
-    background-color: BACKGROUND_COLOR
+    // background-color: BACKGROUND_COLOR
 
-    &:hover > ul
-      display: block
-      font-weight: normal
-      transform: translate(0px, 20px)
-      white-space: normal
-      transition-delay: 1.3s
-      opacity: 1
-      visibility: visible
-      pointer-events: none
+    &:hover
+      background-color: #2e2e2e
 
   .call-text
     padding-left: 2px
@@ -467,36 +456,30 @@
     display: inline-flex
 
 .calltrace-view
-  font-size: 14px
+  // font-size: 14px
   height: 100%
   color: COLOR
-  if !IS_EXTENSION
-    padding-left: 4px
+  // if !IS_EXTENSION
+  //   padding-left: 4px
   // background-color: BACKGROUND_COLOR
 
 .full-calltrace
   background-color: FULL_CALLTRACE_BG_COLOR
   color: FULL_CALLTRACE_FG_COLOR
   height: 100%
-  font-size: 14px
+  // font-size: 14px
   overflow-x: hidden
   overflow-y: scroll
   width: 500px
 
-.local-calltrace
-  background-color: BACKGROUND_COLOR
-  color: COLOR
-  margin-left: 4px
-  padding-right: 8px
-  overflow: visible
-  max-width: -webkit-fill-available
-  min-width: fit-content
-
-.calltrace-search-input
-  if !IS_EXTENSION
-    margin-left: 4px !important
-  else
-    margin: 4px !important
+// .local-calltrace
+//   background-color: BACKGROUND_COLOR
+//   color: COLOR
+//   margin-left: 4px
+//   padding-right: 8px
+//   overflow: visible
+//   max-width: -webkit-fill-available
+//   min-width: fit-content
 
 .step-list
   overflow: auto
@@ -579,7 +562,6 @@
   text-overflow: ellipsis
   overflow: hidden
   white-space: nowrap
-  padding-right: 8px
 
   &:hover .code-tooltip
     display: block
@@ -646,6 +628,8 @@
 .value-expanded-atom-parent
   display: flex
   flex-direction: row
+  align-items: center
+  width: fit-content
 
 .value-expanded-compound-parent
   display: flex
@@ -715,12 +699,15 @@
 //     top: 0
 //     transform: rotate(135deg)
 
+// TODO: Fix it later on!
 .value-components-container
-  overflow-y: scroll
+  // overflow-y: scroll
   position: relative
   height: 100%
-  if !IS_EXTENSION
-    margin-left: 2px
+  overflow: auto
+  margin-top: 0.25em
+  // if !IS_EXTENSION
+  //   margin-left: 2px
   // margin: 5px
   // margin-right: -5px
 
@@ -749,21 +736,17 @@
   .code-editor
     height: 100px
 
-
-#gdb-evaluate
-  font-size: 14px
-  color: COLOR
-
 .local-calltrace-view
   .event-selected
     padding-right: 8px
 
+// TODO: Fix event-selected
 .event-selected
-  background: SELECTED_BACKGROUND_COLOR !important
+  background: #3E3E3B !important
 
 .code-state-line
   color:TEXT_CONTENT_COLOR
-  margin-left: 1.5em
+  // margin-left: 1.5em
   margin-bottom: .5em
 
 .call-search-results

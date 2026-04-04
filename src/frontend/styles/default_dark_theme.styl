@@ -101,8 +101,6 @@ LAYOUT_TAB_NESTED_ICON = url('../../public/resources/window/layout_nested_button
 ACTIVE_LAYOUT_TAB_NESTED_ICON = url('../../public/resources/window/active_layout_nested_button_dark.svg')
 LAYOUT_DROPDOWN_ICON_COLOR = #1e1f26
 
-ELEMENT_COMPONENT_CLOSE_ICON = url('../../public/resources/shared/element_component_close_dark.svg')
-
 SHARED_OPEN_FA_ICON = url('../../public/resources/shared/filesystem/filesystem_open_toggle_dark.svg')
 SHARED_CLOSE_FA_ICON = url('../../public/resources/shared/filesystem/filesystem_close_toggle_dark.svg')
 HIGHLIGHT_LINE_ARROW = url('../../public/resources/shared/highlight_line_arrow.svg')
@@ -268,10 +266,10 @@ INSTANTIATIONS_MENU_COLOR_BG = #3761D3
 INSTANTIATIONS_MENU_COLOR_FG = #D3E9E9
 INCODE_COLOR_BG = #77DA1D
 INCODE_COLOR_BORDER = #77FF00
-MENU_LINE_HEIGHT = 25px
-MENU_FONT_SIZE = 14px
-MENU_SHORTCUT_FONT_SIZE = 16px
-MENU_NAME_PADDING = 5px
+MENU_LINE_HEIGHT = 1.5625em
+MENU_FONT_SIZE = 0.875em
+MENU_SHORTCUT_FONT_SIZE = 1em
+MENU_NAME_PADDING = 0.3125em
 // MENU_BACKGROUND_COLOR=#293247
 DEBUG_BUTTON_COLOR=#fefefe
 
@@ -286,17 +284,17 @@ WEBKIT_SCROLLER_THUMB_ACTIVE_BACKGROUND_COLOR=DEBUG_BUTTON_ACTIVE_BACKGROUND
 
 RR_TICKS_EMPTY_REMAINING_COLOR=#38393A
 
-MENU_NODE_WIDTH=200px
-MENU_NODE_NAME_WIDTH=140px
-MENU_NODE_SHORTCUT_WIDTH=195px
-MENU_NODE_ICON_WIDTH=17px
-MENU_NODE_MIN_WIDTH=200px
-MENU_NODE_NAME_MIN_WIDTH=166px
-MENU_SEARCH_INPUT_WIDTH=289px
-MENU_SEARCH_INPUT_MIN_WIDTH=183px
-MENU_ELEMENT_NAME_WIDTH=195px
-MENU_ELEMENT_NAME_MIN_WIDTH=83px
-MENU_NODE_SHORTCUT_MIN_WIDTH=17px
+MENU_NODE_WIDTH=12.5em
+MENU_NODE_NAME_WIDTH=8.75em
+MENU_NODE_SHORTCUT_WIDTH=12.1875em
+MENU_NODE_ICON_WIDTH=1.0625em
+MENU_NODE_MIN_WIDTH=12.5em
+MENU_NODE_NAME_MIN_WIDTH=10.375em
+MENU_SEARCH_INPUT_WIDTH=18.0625em
+MENU_SEARCH_INPUT_MIN_WIDTH=11.4375em
+MENU_ELEMENT_NAME_WIDTH=12.1875em
+MENU_ELEMENT_NAME_MIN_WIDTH=5.1875em
+MENU_NODE_SHORTCUT_MIN_WIDTH=1.0625em
 NAVIGATION_MENU_COLOR=#EDEDEE
 NAVIGATION_MENU_BACKGROUND_COLOR=DROPDOWN_BASE
 NAVIGATION_MENU_INPUT_BACKGROUND_COLOR=SECONDARY_BASE
@@ -375,8 +373,6 @@ EVENT_LOG_CARET_DOWN_COLOR=#646e85
 EVENT_LOG_INPUT_COLOR=PRIMARY_TEXT_COLOR
 EVENT_LOG_ROWS_BORDERS_COLOR=LINE_STROKE
 
-EVENT_LOG_FA_DOWN_ICON=url("../../public/resources/shared/fa_down_dark.svg")
-EVENT_LOG_FA_UP_ICON=url("../../public/resources/shared/fa_up_dark.svg")
 
 // dropdown menus
 DROPDOWN_COLOR=PRIMARY_TEXT_COLOR
@@ -395,7 +391,7 @@ CHECKMARK_BORDER_COLOR=#2c3040
 
 INPUT_BACKGROUND_COLOR=#2c3040
 INPUT_PLACEHOLDER_COLOR=#C8C8C8
-INPUT_DEFAULT_SEARCH_ICON=url("../../public/resources/shared/input_default_search_icon_dark.svg")
+
 
 
 TRACEPOINT_CHEVRON_COLOR=#5E5F65
@@ -472,3 +468,52 @@ AGENT_HOVER_BACKGROUND = #242424
 AGENT_WHITE = #FAFAFA
 
 TEST_ACTIVE_BACKGROUND = #15803D
+
+
+// AFTER THIS LINE TO KEEP:
+ct-images-layout-tab=url('../../public/resources/window/layout_nested_button_dark.svg')
+ct-images-layout-tab-active=url('../../public/resources/window/active_layout_nested_button_dark.svg')
+ct-images-value-history-toggle=url('../../public/resources/shared/history_value_view_toggle_dark.svg')
+ct-images-event-log-fa-down=url("../../public/resources/shared/fa_down_dark.svg")
+ct-images-event-log-fa-up=url("../../public/resources/shared/fa_up_dark.svg")
+
+ct-images-default-search-icon=url("../../public/resources/shared/input_default_search_icon_dark.svg")
+ct-images-disabled-search-icon=url("../../public/resources/shared/input_disabled_search_icon_dark.svg")
+ct-images-empty-search-icon=url("../../public/resources/shared/input_empty_search_icon_dark.svg")
+
+ct-images-history-back = url("../../public/resources/debug/history_back_black.svg")
+ct-images-history-forward = url("../../public/resources/debug/history_forward_black.svg")
+
+ct-images-next = url("../../public/resources/debug/next_dark.svg")
+ct-images-reverse-next = url("../../public/resources/debug/reverse_next_dark.svg")
+
+ct-images-step-in = url("../../public/resources/debug/step-in_dark.svg")
+ct-images-reverse-step-in = url("../../public/resources/debug/reverse_step-in_dark.svg")
+
+ct-images-step-out = url("../../public/resources/debug/step-out_dark.svg")
+ct-images-reverse-step-out = url("../../public/resources/debug/reverse_step-out_dark.svg")
+
+ct-images-continue = url("../../public/resources/debug/continue_dark.svg")
+ct-images-reverse-continue = url("../../public/resources/debug/reverse_continue_dark.svg")
+
+ct-images-reset-operation = url("../../public/resources/debug/reset_operation_dark.svg")
+ct-images-reset-operation-loading = url("../../public/resources/debug/pause_ongoing_16.gif")
+
+ct-images-stop = url("../../public/resources/debug/stop_16_dark.svg")
+
+ct-images-jump-before = url("../../public/resources/debug/jump-before_16_dark.svg")
+ct-images-jump-after = url("../../public/resources/debug/jump-after_16_dark.svg")
+
+ct-images-run-to-entry = url("../../public/resources/debug/run_to_entry_dark.svg")
+
+ct-images-run-tests = url("../../public/resources/shared/run_test_img.svg")
+ct-images-run-tests-loading = url("../../public/resources/shared/rerecord_animation.svg")
+
+ct-images-logo-dark = url("../../public/resources/menu/ct_logo_dark.svg")
+
+ct-images-copy-path = url("../../public/resources/menu/copy_file_path_dark.svg")
+
+ct-images-open-fa=url('../../public/resources/shared/filesystem/filesystem_open_toggle_dark.svg')
+ct-images-close-fa=url('../../public/resources/shared/filesystem/filesystem_close_toggle_dark.svg')
+
+ct-images-element-close=url('../../public/resources/shared/element_component_close_dark.svg')

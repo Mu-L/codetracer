@@ -13,7 +13,8 @@ let
 proc getCurrentMonacoTheme(editor: MonacoEditor): cstring {.importjs:"#._themeService._theme.themeName".}
 proc toggleTrace*(editorUI: EditorViewComponent, name: cstring, line: int)
 proc closeTrace*(self: TraceComponent)
-proc resizeTraceHandler(self: TraceComponent)
+proc resizeTraceHandler*(self: TraceComponent)
+proc refreshTraceTableLayout*(self: TraceComponent)
 
 when defined(ctInExtension):
   var tracepointComponentMapping* {.exportc.}: JsAssoc[cstring, JsAssoc[int, TraceComponent]] = JsAssoc[cstring, JsAssoc[int, TraceComponent]]{}
@@ -350,6 +351,7 @@ proc renderTableResults(
           serverSide: true,
           deferRender: true,
           scrollY: 150,
+          scrollCollapse: true,
           processing: true,
           fixedColumns: true,
           info: false,
@@ -391,13 +393,8 @@ proc renderTableResults(
         self.dataTable.updateTableFooter()
       )
 
-      # add handler for table redraw event
-      self.dataTable.context.on(cstring("draw.dt"), proc(e, show, row: js) =
-        discard windowSetTimeout(proc = self.dataTable.updateTableRows(), 100)
-      )
-
       # resize data table to fit container
-      self.dataTable.resizeTable()
+      self.refreshTraceTableLayout()
 
       # add event listener for scrolling to update table footer
       let scrollBodyDom = jq(cstring(fmt"#chart-table-{self.id} .dt-scroll-body"))
@@ -727,9 +724,20 @@ proc getTracepointInfo(trace: TraceComponent): Tracepoint =
 
   return result
 
+proc tracepointSearchValue(self: TraceComponent): cstring =
+  let searchInput = jqFind("#tracepoint-" & $self.id & "-search")
+  if searchInput.isNil or searchInput.toJs.length.to(int) == 0:
+    return cstring""
+
+  let inputNode = searchInput[0]
+  if inputNode.toJs == jsUndefined:
+    return cstring""
+
+  result = inputNode.value.to(cstring)
+
 proc traceMenuView(self: TraceComponent): VNode =
-  var search = proc(ev: Event, tg: VNode) =
-    let value = cast[cstring](ev.target.value)
+  var search = proc =
+    let value = self.tracepointSearchValue()
     if not self.dataTable.context.isNil:
       self.dataTable.context.search(value).draw()
 
@@ -738,6 +746,8 @@ proc traceMenuView(self: TraceComponent): VNode =
   ):
     tdiv(class = "trace-search"):
       input(
+        class = "ct-input-panel ct-input-search-image",
+        id = &"tracepoint-{self.id}-search",
         `type` = "text",
         id = cstring(fmt"trace-input-{self.id}"),
         onchange = search,
@@ -870,15 +880,15 @@ proc ensureMonacoEditor(self: TraceComponent) =
         lineNumbers: traceLine,
         folding: false,
         glyphMargin: false,
-        fontSize: 14,
+        fontSize: data.ui.fontSize,
         minimap: js{ enabled: false },
-        scrollbar: js{
-          vertical: "visible",
-          horizontalScrollbarSize: 4,
-          horizontalSliderSize: 4,
-          verticalScrollbarSize: 4,
-          verticalSliderSize: 4
-        },
+        # scrollbar: js{
+        #   vertical: "visible",
+        #   horizontalScrollbarSize: 4,
+        #   horizontalSliderSize: 4,
+        #   verticalScrollbarSize: 4,
+        #   verticalSliderSize: 4
+        # },
         overflowWidgetsDomNode: overflowHost,
         fixedOverflowWidgets: true
       )
@@ -1025,15 +1035,20 @@ proc toggleChartKindMenu(self: TraceComponent) =
   else:
     self.closeKindSwitchMenu()
 
-proc resizeTraceHandler(self: TraceComponent) =
+proc resizeTraceHandler*(self: TraceComponent) =
   let traceMain = document.getElementById(cstring(fmt"trace-{self.id}"))
+  if traceMain.isNil:
+    return
 
   self.calcTraceWidth()
   traceMain.style.width = cstring(fmt"{self.traceWidth}px")
 
-  if not self.dataTable.context.isNil:
-    self.dataTable.resizeTable()
-    self.dataTable.updateTableFooter()
+proc refreshTraceTableLayout*(self: TraceComponent) =
+  if self.dataTable.isNil or self.dataTable.context.isNil:
+    return
+
+  self.dataTable.resizeTable()
+  self.dataTable.updateTableFooter()
 
 proc togglePoint*(trace: TraceComponent) =
   if trace.viewZone.isNil:
@@ -1099,6 +1114,10 @@ proc togglePoint*(trace: TraceComponent) =
     # add reference to trace table footer dom
     trace.dataTable.footerDom =
       cast[Element](trace.chartTableDom.findNodeInElement(".data-tables-footer"))
+    discard setTimeout(proc =
+      trace.resizeTraceHandler()
+      trace.refreshTraceTableLayout()
+    , 0)
 
     trace.chartLineDom =
       cast[Element](jq(
@@ -1235,6 +1254,10 @@ proc toggleTrace*(editorUI: EditorViewComponent, name: cstring, line: int) =
     # add reference to trace table footer dom
     trace.dataTable.footerDom =
       cast[Element](trace.chartTableDom.findNodeInElement(".data-tables-footer"))
+    discard setTimeout(proc =
+      trace.resizeTraceHandler()
+      trace.refreshTraceTableLayout()
+    , 0)
 
     trace.chartLineDom =
       cast[Element](jq(

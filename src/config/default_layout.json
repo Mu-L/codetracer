@@ -7,9 +7,9 @@
         "responsiveMode": "always"
     },
     "dimensions": {
-        "borderWidth": 2,
+        "borderWidth": 4,
         "borderHeight": 4,
-        "headerHeight": 35,
+        "headerHeight": 32,
         "dragProxyWidth": 300,
         "dragProxyHeight": 200
     },

@@ -46,30 +46,54 @@ proc resizeTableScrollArea*(self: DataTableComponent) =
   let container = cast[Node](self.context.table().container())
 
   if not container.isNil:
-    let containerHeight = container.toJs.clientHeight.to(int)
+    # DataTables measures itself from its wrapper, but our real viewport is the
+    # surrounding `.data-table` flex item.
+    let viewport =
+      if not container.parentNode.isNil:
+        cast[Node](container.parentNode)
+      else:
+        container
+    let containerHeight = max(viewport.toJs.clientHeight.to(int), container.toJs.clientHeight.to(int))
     let scrollArea = cast[Node](container.findNodeInElement(".dt-scroll"))
-    let scrollBody = cast[Node](scrollArea.findNodeInElement(".dt-scroll-body"))
+    let scrollBody =
+      if not scrollArea.isNil:
+        cast[Node](scrollArea.findNodeInElement(".dt-scroll-body"))
+      else:
+        nil
 
-    scrollArea.style.height = cstring(fmt"{containerHeight}px")
-    scrollArea.style.maxHeight = cstring(fmt"{containerHeight}px")
-    scrollBody.style.height = cstring(fmt"{containerHeight}px")
-    scrollBody.style.maxHeight = cstring(fmt"{containerHeight}px")
-    self.scrollAreaHeight = containerHeight
-    self.context.scroller.measure()
+    if containerHeight > 0 and not scrollArea.isNil and not scrollBody.isNil:
+      container.style.height = cstring(fmt"{containerHeight}px")
+      container.style.maxHeight = cstring(fmt"{containerHeight}px")
+      scrollArea.style.height = cstring(fmt"{containerHeight}px")
+      scrollArea.style.maxHeight = cstring(fmt"{containerHeight}px")
+      scrollBody.style.height = cstring(fmt"{containerHeight}px")
+      scrollBody.style.maxHeight = cstring(fmt"{containerHeight}px")
+      self.scrollAreaHeight = containerHeight
+      discard self.context.columns.adjust()
+      self.context.scroller.measure()
 
 proc updateTableFooter*(self: DataTableComponent) =
+  if self.footerDom.isNil:
+    return
+
   if not self.inputFieldChange:
     let inputField = self.footerDom.findNodeInElement(".data-tables-footer-input")
-    inputField.value = cstring($(self.startRow))
+    if not inputField.isNil:
+      inputField.value = cstring($(self.startRow))
 
   let endRowField = self.footerDom.findNodeInElement(".data-tables-footer-end-row")
-  endRowField.innerHTML = cstring($(self.endRow))
+  if not endRowField.isNil:
+    endRowField.innerHTML = cstring($(self.endRow))
 
   let rowsCountField = self.footerDom.findNodeInElement(".data-tables-footer-rows-count")
-  rowsCountField.innerHTML = cstring($(self.rowsCount))
+  if not rowsCountField.isNil:
+    rowsCountField.innerHTML = cstring($(self.rowsCount))
 
 
 proc updateTableRows*(self: DataTableComponent, redraw: bool = true) =
+  if self.context.isNil:
+    return
+
   let context = self.context
   let scroller = context.scroller
   let page = scroller.page()
@@ -83,7 +107,9 @@ proc updateTableRows*(self: DataTableComponent, redraw: bool = true) =
 proc resizeTable*(self: DataTableComponent) =
   if not self.context.isNil:
     self.resizeTableScrollArea()
-    self.updateTableRows()
+    self.updateTableRows(redraw = false)
+    if not self.footerDom.isNil:
+      self.updateTableFooter()
 
 proc scrollTable*(table: DataTableComponent, position: cstring) =
   try:
@@ -108,7 +134,7 @@ proc tableFooter*(table: DataTableComponent): VNode =
     tdiv(class = "data-tables-footer-info"):
       text "Rows"
       input(
-        class = "data-tables-footer-input",
+        class = "ct-input-small mx-2",
         onkeydown = proc(ev: KeyboardEvent, et: VNode) =
           if ev.keyCode == ENTER_KEY_CODE:
             table.inputFieldChange = false

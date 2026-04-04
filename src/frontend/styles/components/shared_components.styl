@@ -1,0 +1,55 @@
+@import "../generated/index"
+
+generateSpacing(prefix, property)
+  for key in 2 4 6 8
+    val = unit(key / 4, 'em')
+
+    .{prefix}-{key}
+      {property}: val
+
+    .{prefix}x-{key}
+      {property}-left: val
+      {property}-right: val
+
+    .{prefix}y-{key}
+      {property}-top: val
+      {property}-bottom: val
+
+    .{prefix}t-{key}
+      {property}-top: val
+
+    .{prefix}b-{key}
+      {property}-bottom: val
+
+    .{prefix}l-{key}
+      {property}-left: val
+
+    .{prefix}r-{key}
+      {property}-right: val
+
+generateGap(prefix)
+  for key in 2 4 6 8
+    val = unit(key / 4, 'em')
+
+    .{prefix}-{key}
+      gap: val
+
+.ct-fill-available
+  width: -webkit-fill-available
+  max-width: -webkit-fill-available
+
+.ct-flex
+  display: flex
+  align-items: center
+  justify-content: center
+  padding: 0.25em
+  flex-shrink: 0 !important
+  box-sizing: border-box
+  flex: 0 0 1.75em
+
+[class*="ct-gap-"]
+  display: flex
+
+generateSpacing('ct-m', 'margin')
+generateSpacing('ct-p', 'padding')
+generateGap('ct-gap')

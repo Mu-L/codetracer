@@ -15,7 +15,7 @@
   display: inline-block;
   color: black;
   white-space: nowrap;
-  padding: 0 4px 0 1px;
+  padding: 0 0.25em 0 0.0625em;
   margin: 0;
   vertical-align: top;
 }
@@ -60,7 +60,7 @@
   display: none;
 }
 .jstree-anchor > .jstree-themeicon {
-  margin-right: 2px;
+  margin-right: 0.125em;
 }
 .jstree-no-icons .jstree-themeicon,
 .jstree-anchor > .jstree-themeicon-hidden {
@@ -71,10 +71,10 @@
   display: none;
 }
 .jstree-rtl .jstree-anchor {
-  padding: 0 1px 0 4px;
+  padding: 0 0.0625em 0 0.25em;
 }
 .jstree-rtl .jstree-anchor > .jstree-themeicon {
-  margin-left: 2px;
+  margin-left: 0.125em;
   margin-right: 0;
 }
 .jstree-rtl .jstree-node {
@@ -117,23 +117,23 @@
 .vakata-context,
 .vakata-context ul {
   margin: 0;
-  padding: 2px;
+  padding: 0.125em;
   position: absolute;
   background: #f5f5f5;
-  border: 1px solid #979797;
-  box-shadow: 2px 2px 2px #999999;
+  border: 0.0625em solid #979797;
+  box-shadow: 0.125em 0.125em 0.125em #999999;
 }
 .vakata-context ul {
   list-style: none;
   left: 100%;
   margin-top: -2.7em;
-  margin-left: -4px;
+  margin-left: -0.25em;
 }
 .vakata-context .vakata-context-right ul {
   left: auto;
   right: 100%;
   margin-left: auto;
-  margin-right: -4px;
+  margin-right: -0.25em;
 }
 .vakata-context li {
   list-style: none;
@@ -146,13 +146,13 @@
   color: black;
   white-space: nowrap;
   line-height: 2.4em;
-  text-shadow: 1px 1px 0 white;
-  border-radius: 1px;
+  text-shadow: 0.0625em 0.0625em 0 white;
+  border-radius: 0.0625em;
 }
 .vakata-context li > a:hover {
   position: relative;
   background-color: #e8eff7;
-  box-shadow: 0 0 2px #0a6aa1;
+  box-shadow: 0 0 0.125em #0a6aa1;
 }
 .vakata-context li > a.vakata-context-parent {
   background-image: url("data:image/gif;base64,R0lGODlhCwAHAIAAACgoKP///yH5BAEAAAEALAAAAAALAAcAAAIORI4JlrqN1oMSnmmZDQUAOw==");
@@ -165,19 +165,19 @@
 .vakata-context .vakata-context-hover > a {
   position: relative;
   background-color: #e8eff7;
-  box-shadow: 0 0 2px #0a6aa1;
+  box-shadow: 0 0 0.125em #0a6aa1;
 }
 .vakata-context .vakata-context-separator > a,
 .vakata-context .vakata-context-separator > a:hover {
   background: white;
   border: 0;
-  border-top: 1px solid #e2e3e3;
-  height: 1px;
-  min-height: 1px;
-  max-height: 1px;
+  border-top: 0.0625em solid #e2e3e3;
+  height: 0.0625em;
+  min-height: 0.0625em;
+  max-height: 0.0625em;
   padding: 0;
   margin: 0 0 0 2.4em;
-  border-left: 1px solid #e0e0e0;
+  border-left: 0.0625em solid #e0e0e0;
   text-shadow: 0 0 0 transparent;
   box-shadow: 0 0 0 transparent;
   border-radius: 0;
@@ -209,11 +209,11 @@
 }
 .vakata-context li > a .vakata-contextmenu-sep {
   display: inline-block;
-  width: 1px;
+  width: 0.0625em;
   height: 2.4em;
   background: white;
   margin: 0 0.5em 0 0;
-  border-left: 1px solid #e2e3e3;
+  border-left: 0.0625em solid #e2e3e3;
 }
 .vakata-context .vakata-contextmenu-shortcut {
   font-size: 0.8em;
@@ -225,7 +225,7 @@
   left: auto;
   right: 100%;
   margin-left: auto;
-  margin-right: -4px;
+  margin-right: -0.25em;
 }
 .vakata-context-rtl li > a.vakata-context-parent {
   background-image: url("data:image/gif;base64,R0lGODlhCwAHAIAAACgoKP///yH5BAEAAAEALAAAAAALAAcAAAINjI+AC7rWHIsPtmoxLAA7");
@@ -235,12 +235,12 @@
 .vakata-context-rtl .vakata-context-separator > a {
   margin: 0 2.4em 0 0;
   border-left: 0;
-  border-right: 1px solid #e2e3e3;
+  border-right: 0.0625em solid #e2e3e3;
 }
 .vakata-context-rtl .vakata-context-left ul {
   right: auto;
   left: 100%;
-  margin-left: -4px;
+  margin-left: -0.25em;
   margin-right: auto;
 }
 .vakata-context-rtl li > a > i {
@@ -255,30 +255,30 @@
   position: absolute;
   top: 0;
   left: 0;
-  margin: -5px 0 0 0;
+  margin: -0.3125em 0 0 0;
   padding: 0;
   border-right: 0;
-  border-top: 5px solid transparent;
-  border-bottom: 5px solid transparent;
-  border-left: 5px solid;
+  border-top: 0.3125em solid transparent;
+  border-bottom: 0.3125em solid transparent;
+  border-left: 0.3125em solid;
   width: 0;
   height: 0;
   font-size: 0;
   line-height: 0;
 }
 #jstree-dnd {
-  line-height: 16px;
+  line-height: 1em;
   margin: 0;
-  padding: 4px;
+  padding: 0.25em;
 }
 #jstree-dnd .jstree-icon,
 #jstree-dnd .jstree-copy {
   display: inline-block;
   text-decoration: none;
-  margin: 0 2px 0 0;
+  margin: 0 0.125em 0 0;
   padding: 0;
-  width: 16px;
-  height: 16px;
+  width: 1em;
+  height: 1em;
 }
 #jstree-dnd .jstree-ok {
   background: green;
@@ -287,7 +287,7 @@
   background: red;
 }
 #jstree-dnd .jstree-copy {
-  margin: 0 2px 0 2px;
+  margin: 0 0.125em 0 0.125em;
 }
 .jstree-default .jstree-node,
 .jstree-default .jstree-icon {
@@ -301,18 +301,18 @@
 }
 .jstree-default .jstree-hovered {
   background: #3A3A3A;
-  border-radius: 2px;
-  box-shadow: inset 0 0 1px #cccccc;
+  border-radius: 0.125em;
+  box-shadow: inset 0 0 0.0625em #cccccc;
 }
 .jstree-default .jstree-context {
   background: #3A3A3A;
-  border-radius: 2px;
-  box-shadow: inset 0 0 1px #cccccc;
+  border-radius: 0.125em;
+  box-shadow: inset 0 0 0.0625em #cccccc;
 }
 .jstree-default .jstree-clicked {
   background: #4F4F4F;
-  border-radius: 2px;
-  box-shadow: inset 0 0 1px #999999;
+  border-radius: 0.125em;
+  box-shadow: inset 0 0 0.0625em #999999;
 }
 .jstree-default .jstree-no-icons .jstree-anchor > .jstree-themeicon {
   display: none;
@@ -375,38 +375,36 @@
   box-sizing: border-box;
 }
 .jstree-default .jstree-wholerow-hovered {
-  background: #e7f4f9;
+  background: #2e2e2e;
 }
 .jstree-default .jstree-wholerow-clicked {
-  background: #beebff;
-  background: -webkit-linear-gradient(top, #beebff 0%, #a8e4ff 100%);
-  background: linear-gradient(to bottom, #beebff 0%, #a8e4ff 100%);
+  background: #3E3E3B;
 }
 .jstree-default .jstree-node {
-  min-height: 24px;
-  line-height: 24px;
-  margin-left: 8px;
-  min-width: 24px;
+  min-height: 1.5em;
+  line-height: 1.5em;
+  margin-left: 0.5em;
+  min-width: 1.5em;
 }
 .jstree-default .jstree-anchor {
-  line-height: 24px;
-  height: 24px;
+  line-height: 1.5em;
+  height: 1.5em;
 }
 .jstree-default .jstree-icon {
-  width: 24px;
-  height: 24px;
-  line-height: 24px;
+  width: 1.5em;
+  height: 1.5em;
+  line-height: 1.5em;
 }
 .jstree-default .jstree-icon:empty {
-  width: 24px;
-  height: 24px;
-  line-height: 24px;
+  width: 1.5em;
+  height: 1.5em;
+  line-height: 1.5em;
 }
 .jstree-default.jstree-rtl .jstree-node {
-  margin-right: 24px;
+  margin-right: 1.5em;
 }
 .jstree-default .jstree-wholerow {
-  height: 24px;
+  height: 1.5em;
 }
 .jstree-default .jstree-node,
 .jstree-default .jstree-icon {
@@ -422,33 +420,33 @@
   background-image: url("../resources/shared/filesystem/filesystem_close_toggle_dark.svg");
   background-repeat: none;
   background-position: center;
-  background-size: 8px 6px;
-  transform: translateX(4px);
+  background-size: 0.5em 0.375em;
+  transform: translateX(0.25em);
 }
 .jstree-default .jstree-closed > .jstree-ocl {
   background-image: url("../resources/shared/filesystem/filesystem_open_toggle_dark.svg");
   background-repeat: none;
   background-position: center;
-  background-size: 6px 8px;
-  transform: translateX(4px);
+  background-size: 0.375em 0.5em;
+  transform: translateX(0.25em);
 }
 .jstree-default .jstree-leaf > .jstree-ocl {
   background-image: none;
 }
 .jstree-default .jstree-themeicon {
   background: url("../resources/shared/filesystem/filesystem_default_folder.svg") center center no-repeat;
-  background-size: 16px 16px;
+  background-size: 1em 1em;
 }
 .jstree-default > .jstree-no-dots .jstree-node,
 .jstree-default > .jstree-no-dots .jstree-leaf > .jstree-ocl {
   background: transparent;
 }
-.jstree-default > .jstree-no-dots .jstree-open > .jstree-ocl {
-  background-position: -36px -4px;
+/* .jstree-default > .jstree-no-dots .jstree-open > .jstree-ocl {
+  background-position: -2.25em -0.25em;
 }
 .jstree-default > .jstree-no-dots .jstree-closed > .jstree-ocl {
-  background-position: -4px -4px;
-}
+  background-position: -0.25em -0.25em;
+} */
 .jstree-default .jstree-disabled {
   background: transparent;
 }
@@ -459,24 +457,24 @@
   background: #efefef;
 }
 .jstree-default .jstree-checkbox {
-  background-position: -164px -4px;
+  background-position: -10.25em -0.25em;
 }
 .jstree-default .jstree-checkbox:hover {
-  background-position: -164px -36px;
+  background-position: -10.25em -2.25em;
 }
 .jstree-default.jstree-checkbox-selection .jstree-clicked > .jstree-checkbox,
 .jstree-default .jstree-checked > .jstree-checkbox {
-  background-position: -228px -4px;
+  background-position: -14.25em -0.25em;
 }
 .jstree-default.jstree-checkbox-selection .jstree-clicked > .jstree-checkbox:hover,
 .jstree-default .jstree-checked > .jstree-checkbox:hover {
-  background-position: -228px -36px;
+  background-position: -14.25em -2.25em;
 }
 .jstree-default .jstree-anchor > .jstree-undetermined {
-  background-position: -196px -4px;
+  background-position: -12.25em -0.25em;
 }
 .jstree-default .jstree-anchor > .jstree-undetermined:hover {
-  background-position: -196px -36px;
+  background-position: -12.25em -2.25em;
 }
 .jstree-default .jstree-checkbox-disabled {
   opacity: 0.8;
@@ -488,34 +486,34 @@
   /* Chrome 19+ & Safari 6+ */
 }
 .jstree-default > .jstree-striped {
-  background-size: auto 48px;
+  background-size: auto 3em;
 }
 .jstree-default.jstree-rtl .jstree-node {
   background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAACAQMAAAB49I5GAAAABlBMVEUAAAAdHRvEkCwcAAAAAXRSTlMAQObYZgAAAAxJREFUCNdjAAMOBgAAGAAJMwQHdQAAAABJRU5ErkJggg==");
-  background-position: 100% 1px;
+  background-position: 100% 0.0625em;
   background-repeat: repeat-y;
 }
 .jstree-default.jstree-rtl .jstree-last {
   background: transparent;
 }
 .jstree-default.jstree-rtl .jstree-open > .jstree-ocl {
-  background-position: -132px -36px;
+  background-position: -8.25em -2.25em;
 }
 .jstree-default.jstree-rtl .jstree-closed > .jstree-ocl {
-  background-position: -100px -36px;
+  background-position: -6.25em -2.25em;
 }
 .jstree-default.jstree-rtl .jstree-leaf > .jstree-ocl {
-  background-position: -68px -36px;
+  background-position: -4.25em -2.25em;
 }
 .jstree-default.jstree-rtl > .jstree-no-dots .jstree-node,
 .jstree-default.jstree-rtl > .jstree-no-dots .jstree-leaf > .jstree-ocl {
   background: transparent;
 }
 .jstree-default.jstree-rtl > .jstree-no-dots .jstree-open > .jstree-ocl {
-  background-position: -36px -36px;
+  background-position: -2.25em -2.25em;
 }
 .jstree-default.jstree-rtl > .jstree-no-dots .jstree-closed > .jstree-ocl {
-  background-position: -4px -36px;
+  background-position: -0.25em -2.25em;
 }
 .jstree-default .jstree-themeicon-custom {
   background-color: transparent;
@@ -527,18 +525,18 @@
 }
 .jstree-default .jstree-file {
   background: url("../resources/shared/filesystem/filesystem_default_file.svg") center center no-repeat;
-  background-size: 16px 16px;
+  background-size: 1em 1em;
 }
 .jstree-default .jstree-folder {
-  background: url("../resources/jstree/32px.png") -260px -4px no-repeat;
+  background: url("../resources/jstree/32px.png") -16.25em -0.25em no-repeat;
 }
 .jstree-default > .jstree-container-ul > .jstree-node {
   margin-left: 0;
   margin-right: 0;
 }
 #jstree-dnd.jstree-default {
-  line-height: 24px;
-  padding: 0 4px;
+  line-height: 1.5em;
+  padding: 0 0.25em;
 }
 #jstree-dnd.jstree-default .jstree-ok,
 #jstree-dnd.jstree-default .jstree-er {
@@ -548,21 +546,21 @@
 }
 #jstree-dnd.jstree-default i {
   background: transparent;
-  width: 24px;
-  height: 24px;
-  line-height: 24px;
+  width: 1.5em;
+  height: 1.5em;
+  line-height: 1.5em;
 }
 #jstree-dnd.jstree-default .jstree-ok {
-  background-position: -4px -68px;
+  background-position: -0.25em -4.25em;
 }
 #jstree-dnd.jstree-default .jstree-er {
-  background-position: -36px -68px;
+  background-position: -2.25em -4.25em;
 }
 .jstree-default .jstree-ellipsis {
   overflow: hidden;
 }
 .jstree-default .jstree-ellipsis .jstree-anchor {
-  width: calc(100% - 29px);
+  width: calc(100% - 1.8125em);
   text-overflow: ellipsis;
   overflow: hidden;
 }
@@ -573,63 +571,63 @@
   background: transparent;
 }
 .jstree-default-small .jstree-node {
-  min-height: 18px;
-  line-height: 18px;
-  margin-left: 18px;
-  min-width: 18px;
+  min-height: 1.125em;
+  line-height: 1.125em;
+  margin-left: 1.125em;
+  min-width: 1.125em;
 }
 .jstree-default-small .jstree-anchor {
-  line-height: 18px;
-  height: 18px;
+  line-height: 1.125em;
+  height: 1.125em;
 }
 .jstree-default-small .jstree-icon {
-  width: 18px;
-  height: 18px;
-  line-height: 18px;
+  width: 1.125em;
+  height: 1.125em;
+  line-height: 1.125em;
 }
 .jstree-default-small .jstree-icon:empty {
-  width: 18px;
-  height: 18px;
-  line-height: 18px;
+  width: 1.125em;
+  height: 1.125em;
+  line-height: 1.125em;
 }
 .jstree-default-small.jstree-rtl .jstree-node {
-  margin-right: 18px;
+  margin-right: 1.125em;
 }
 .jstree-default-small .jstree-wholerow {
-  height: 18px;
+  height: 1.125em;
 }
 .jstree-default-small .jstree-node,
 .jstree-default-small .jstree-icon {
   background-image: url("../resources/jstree/32px.png");
 }
 .jstree-default-small .jstree-node {
-  background-position: -295px -7px;
+  background-position: -18.4375em -0.4375em;
   background-repeat: repeat-y;
 }
 .jstree-default-small .jstree-last {
   background: transparent;
 }
 .jstree-default-small .jstree-open > .jstree-ocl {
-  background-position: -135px -7px;
+  background-position: -8.4375em -0.4375em;
 }
 .jstree-default-small .jstree-closed > .jstree-ocl {
-  background-position: -103px -7px;
+  background-position: -6.4375em -0.4375em;
 }
 .jstree-default-small .jstree-leaf > .jstree-ocl {
-  background-position: -71px -7px;
+  background-position: -4.4375em -0.4375em;
 }
 .jstree-default-small .jstree-themeicon {
-  background-position: -263px -7px;
+  background-position: -16.4375em -0.4375em;
 }
 .jstree-default-small > .jstree-no-dots .jstree-node,
 .jstree-default-small > .jstree-no-dots .jstree-leaf > .jstree-ocl {
   background: transparent;
 }
 .jstree-default-small > .jstree-no-dots .jstree-open > .jstree-ocl {
-  background-position: -39px -7px;
+  background-position: -2.4375em -0.4375em;
 }
 .jstree-default-small > .jstree-no-dots .jstree-closed > .jstree-ocl {
-  background-position: -7px -7px;
+  background-position: -0.4375em -0.4375em;
 }
 .jstree-default-small .jstree-disabled {
   background: transparent;
@@ -641,24 +639,24 @@
   background: #efefef;
 }
 .jstree-default-small .jstree-checkbox {
-  background-position: -167px -7px;
+  background-position: -10.4375em -0.4375em;
 }
 .jstree-default-small .jstree-checkbox:hover {
-  background-position: -167px -39px;
+  background-position: -10.4375em -2.4375em;
 }
 .jstree-default-small.jstree-checkbox-selection .jstree-clicked > .jstree-checkbox,
 .jstree-default-small .jstree-checked > .jstree-checkbox {
-  background-position: -231px -7px;
+  background-position: -14.4375em -0.4375em;
 }
 .jstree-default-small.jstree-checkbox-selection .jstree-clicked > .jstree-checkbox:hover,
 .jstree-default-small .jstree-checked > .jstree-checkbox:hover {
-  background-position: -231px -39px;
+  background-position: -14.4375em -2.4375em;
 }
 .jstree-default-small .jstree-anchor > .jstree-undetermined {
-  background-position: -199px -7px;
+  background-position: -12.4375em -0.4375em;
 }
 .jstree-default-small .jstree-anchor > .jstree-undetermined:hover {
-  background-position: -199px -39px;
+  background-position: -12.4375em -2.4375em;
 }
 .jstree-default-small .jstree-checkbox-disabled {
   opacity: 0.8;
@@ -670,34 +668,34 @@
   /* Chrome 19+ & Safari 6+ */
 }
 .jstree-default-small > .jstree-striped {
-  background-size: auto 36px;
+  background-size: auto 2.25em;
 }
 .jstree-default-small.jstree-rtl .jstree-node {
   background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAACAQMAAAB49I5GAAAABlBMVEUAAAAdHRvEkCwcAAAAAXRSTlMAQObYZgAAAAxJREFUCNdjAAMOBgAAGAAJMwQHdQAAAABJRU5ErkJggg==");
-  background-position: 100% 1px;
+  background-position: 100% 0.0625em;
   background-repeat: repeat-y;
 }
 .jstree-default-small.jstree-rtl .jstree-last {
   background: transparent;
 }
 .jstree-default-small.jstree-rtl .jstree-open > .jstree-ocl {
-  background-position: -135px -39px;
+  background-position: -8.4375em -2.4375em;
 }
 .jstree-default-small.jstree-rtl .jstree-closed > .jstree-ocl {
-  background-position: -103px -39px;
+  background-position: -6.4375em -2.4375em;
 }
 .jstree-default-small.jstree-rtl .jstree-leaf > .jstree-ocl {
-  background-position: -71px -39px;
+  background-position: -4.4375em -2.4375em;
 }
 .jstree-default-small.jstree-rtl > .jstree-no-dots .jstree-node,
 .jstree-default-small.jstree-rtl > .jstree-no-dots .jstree-leaf > .jstree-ocl {
   background: transparent;
 }
 .jstree-default-small.jstree-rtl > .jstree-no-dots .jstree-open > .jstree-ocl {
-  background-position: -39px -39px;
+  background-position: -2.4375em -2.4375em;
 }
 .jstree-default-small.jstree-rtl > .jstree-no-dots .jstree-closed > .jstree-ocl {
-  background-position: -7px -39px;
+  background-position: -0.4375em -2.4375em;
 }
 .jstree-default-small .jstree-themeicon-custom {
   background-color: transparent;
@@ -708,18 +706,18 @@
   background: url("../resources/jstree/throbber.gif") center center no-repeat;
 }
 .jstree-default-small .jstree-file {
-  background: url("../resources/jstree/32px.png") -103px -71px no-repeat;
+  background: url("../resources/jstree/32px.png") -6.4375em -4.4375em no-repeat;
 }
 .jstree-default-small .jstree-folder {
-  background: url("../resources/jstree/32px.png") -263px -7px no-repeat;
+  background: url("../resources/jstree/32px.png") -16.4375em -0.4375em no-repeat;
 }
 .jstree-default-small > .jstree-container-ul > .jstree-node {
   margin-left: 0;
   margin-right: 0;
 }
 #jstree-dnd.jstree-default-small {
-  line-height: 18px;
-  padding: 0 4px;
+  line-height: 1.125em;
+  padding: 0 0.25em;
 }
 #jstree-dnd.jstree-default-small .jstree-ok,
 #jstree-dnd.jstree-default-small .jstree-er {
@@ -729,21 +727,21 @@
 }
 #jstree-dnd.jstree-default-small i {
   background: transparent;
-  width: 18px;
-  height: 18px;
-  line-height: 18px;
+  width: 1.125em;
+  height: 1.125em;
+  line-height: 1.125em;
 }
 #jstree-dnd.jstree-default-small .jstree-ok {
-  background-position: -7px -71px;
+  background-position: -0.4375em -4.4375em;
 }
 #jstree-dnd.jstree-default-small .jstree-er {
-  background-position: -39px -71px;
+  background-position: -2.4375em -4.4375em;
 }
 .jstree-default-small .jstree-ellipsis {
   overflow: hidden;
 }
 .jstree-default-small .jstree-ellipsis .jstree-anchor {
-  width: calc(100% - 23px);
+  width: calc(100% - 1.4375em);
   text-overflow: ellipsis;
   overflow: hidden;
 }
@@ -754,63 +752,63 @@
   background: transparent;
 }
 .jstree-default-large .jstree-node {
-  min-height: 32px;
-  line-height: 32px;
-  margin-left: 32px;
-  min-width: 32px;
+  min-height: 2em;
+  line-height: 2em;
+  margin-left: 2em;
+  min-width: 2em;
 }
 .jstree-default-large .jstree-anchor {
-  line-height: 32px;
-  height: 32px;
+  line-height: 2em;
+  height: 2em;
 }
 .jstree-default-large .jstree-icon {
-  width: 32px;
-  height: 32px;
-  line-height: 32px;
+  width: 2em;
+  height: 2em;
+  line-height: 2em;
 }
 .jstree-default-large .jstree-icon:empty {
-  width: 32px;
-  height: 32px;
-  line-height: 32px;
+  width: 2em;
+  height: 2em;
+  line-height: 2em;
 }
 .jstree-default-large.jstree-rtl .jstree-node {
-  margin-right: 32px;
+  margin-right: 2em;
 }
 .jstree-default-large .jstree-wholerow {
-  height: 32px;
+  height: 2em;
 }
 .jstree-default-large .jstree-node,
 .jstree-default-large .jstree-icon {
   background-image: url("../resources/jstree/32px.png");
 }
 .jstree-default-large .jstree-node {
-  background-position: -288px 0px;
+  background-position: -18em 0em;
   background-repeat: repeat-y;
 }
 .jstree-default-large .jstree-last {
   background: transparent;
 }
 .jstree-default-large .jstree-open > .jstree-ocl {
-  background-position: -128px 0px;
+  background-position: -8em 0em;
 }
 .jstree-default-large .jstree-closed > .jstree-ocl {
-  background-position: -96px 0px;
+  background-position: -6em 0em;
 }
 .jstree-default-large .jstree-leaf > .jstree-ocl {
-  background-position: -64px 0px;
+  background-position: -4em 0em;
 }
 .jstree-default-large .jstree-themeicon {
-  background-position: -256px 0px;
+  background-position: -16em 0em;
 }
 .jstree-default-large > .jstree-no-dots .jstree-node,
 .jstree-default-large > .jstree-no-dots .jstree-leaf > .jstree-ocl {
   background: transparent;
 }
 .jstree-default-large > .jstree-no-dots .jstree-open > .jstree-ocl {
-  background-position: -32px 0px;
+  background-position: -2em 0em;
 }
 .jstree-default-large > .jstree-no-dots .jstree-closed > .jstree-ocl {
-  background-position: 0px 0px;
+  background-position: 0em 0em;
 }
 .jstree-default-large .jstree-disabled {
   background: transparent;
@@ -822,24 +820,24 @@
   background: #efefef;
 }
 .jstree-default-large .jstree-checkbox {
-  background-position: -160px 0px;
+  background-position: -10em 0em;
 }
 .jstree-default-large .jstree-checkbox:hover {
-  background-position: -160px -32px;
+  background-position: -10em -2em;
 }
 .jstree-default-large.jstree-checkbox-selection .jstree-clicked > .jstree-checkbox,
 .jstree-default-large .jstree-checked > .jstree-checkbox {
-  background-position: -224px 0px;
+  background-position: -14em 0em;
 }
 .jstree-default-large.jstree-checkbox-selection .jstree-clicked > .jstree-checkbox:hover,
 .jstree-default-large .jstree-checked > .jstree-checkbox:hover {
-  background-position: -224px -32px;
+  background-position: -14em -2em;
 }
 .jstree-default-large .jstree-anchor > .jstree-undetermined {
-  background-position: -192px 0px;
+  background-position: -12em 0em;
 }
 .jstree-default-large .jstree-anchor > .jstree-undetermined:hover {
-  background-position: -192px -32px;
+  background-position: -12em -2em;
 }
 .jstree-default-large .jstree-checkbox-disabled {
   opacity: 0.8;
@@ -851,34 +849,34 @@
   /* Chrome 19+ & Safari 6+ */
 }
 .jstree-default-large > .jstree-striped {
-  background-size: auto 64px;
+  background-size: auto 4em;
 }
 .jstree-default-large.jstree-rtl .jstree-node {
   background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAACAQMAAAB49I5GAAAABlBMVEUAAAAdHRvEkCwcAAAAAXRSTlMAQObYZgAAAAxJREFUCNdjAAMOBgAAGAAJMwQHdQAAAABJRU5ErkJggg==");
-  background-position: 100% 1px;
+  background-position: 100% 0.0625em;
   background-repeat: repeat-y;
 }
 .jstree-default-large.jstree-rtl .jstree-last {
   background: transparent;
 }
 .jstree-default-large.jstree-rtl .jstree-open > .jstree-ocl {
-  background-position: -128px -32px;
+  background-position: -8em -2em;
 }
 .jstree-default-large.jstree-rtl .jstree-closed > .jstree-ocl {
-  background-position: -96px -32px;
+  background-position: -6em -2em;
 }
 .jstree-default-large.jstree-rtl .jstree-leaf > .jstree-ocl {
-  background-position: -64px -32px;
+  background-position: -4em -2em;
 }
 .jstree-default-large.jstree-rtl > .jstree-no-dots .jstree-node,
 .jstree-default-large.jstree-rtl > .jstree-no-dots .jstree-leaf > .jstree-ocl {
   background: transparent;
 }
 .jstree-default-large.jstree-rtl > .jstree-no-dots .jstree-open > .jstree-ocl {
-  background-position: -32px -32px;
+  background-position: -2em -2em;
 }
 .jstree-default-large.jstree-rtl > .jstree-no-dots .jstree-closed > .jstree-ocl {
-  background-position: 0px -32px;
+  background-position: 0em -2em;
 }
 .jstree-default-large .jstree-themeicon-custom {
   background-color: transparent;
@@ -889,18 +887,18 @@
   background: url("../resources/jstree/throbber.gif") center center no-repeat;
 }
 .jstree-default-large .jstree-file {
-  background: url("../resources/jstree/32px.png") -96px -64px no-repeat;
+  background: url("../resources/jstree/32px.png") -6em -4em no-repeat;
 }
 .jstree-default-large .jstree-folder {
-  background: url("../resources/jstree/32px.png") -256px 0px no-repeat;
+  background: url("../resources/jstree/32px.png") -16em 0em no-repeat;
 }
 .jstree-default-large > .jstree-container-ul > .jstree-node {
   margin-left: 0;
   margin-right: 0;
 }
 #jstree-dnd.jstree-default-large {
-  line-height: 32px;
-  padding: 0 4px;
+  line-height: 2em;
+  padding: 0 0.25em;
 }
 #jstree-dnd.jstree-default-large .jstree-ok,
 #jstree-dnd.jstree-default-large .jstree-er {
@@ -910,21 +908,21 @@
 }
 #jstree-dnd.jstree-default-large i {
   background: transparent;
-  width: 32px;
-  height: 32px;
-  line-height: 32px;
+  width: 2em;
+  height: 2em;
+  line-height: 2em;
 }
 #jstree-dnd.jstree-default-large .jstree-ok {
-  background-position: 0px -64px;
+  background-position: 0em -4em;
 }
 #jstree-dnd.jstree-default-large .jstree-er {
-  background-position: -32px -64px;
+  background-position: -2em -4em;
 }
 .jstree-default-large .jstree-ellipsis {
   overflow: hidden;
 }
 .jstree-default-large .jstree-ellipsis .jstree-anchor {
-  width: calc(100% - 37px);
+  width: calc(100% - 2.3125em);
   text-overflow: ellipsis;
   overflow: hidden;
 }
@@ -934,40 +932,40 @@
 .jstree-default-large.jstree-rtl .jstree-last {
   background: transparent;
 }
-@media (max-width: 768px) {
+@media (max-width: 48em) {
   #jstree-dnd.jstree-dnd-responsive {
-    line-height: 40px;
+    line-height: 2.5em;
     font-weight: bold;
     font-size: 1.1em;
-    text-shadow: 1px 1px white;
+    text-shadow: 0.0625em 0.0625em white;
   }
   #jstree-dnd.jstree-dnd-responsive > i {
     background: transparent;
-    width: 40px;
-    height: 40px;
+    width: 2.5em;
+    height: 2.5em;
   }
   #jstree-dnd.jstree-dnd-responsive > .jstree-ok {
     background-image: url("../resources/jstree/40px.png");
-    background-position: 0 -200px;
-    background-size: 120px 240px;
+    background-position: 0 -12.5em;
+    background-size: 7.5em 15em;
   }
   #jstree-dnd.jstree-dnd-responsive > .jstree-er {
     background-image: url("../resources/jstre/40px.png");
-    background-position: -40px -200px;
-    background-size: 120px 240px;
+    background-position: -2.5em -12.5em;
+    background-size: 7.5em 15em;
   }
   #jstree-marker.jstree-dnd-responsive {
-    border-left-width: 10px;
-    border-top-width: 10px;
-    border-bottom-width: 10px;
-    margin-top: -10px;
+    border-left-width: 0.625em;
+    border-top-width: 0.625em;
+    border-bottom-width: 0.625em;
+    margin-top: -0.625em;
   }
 }
-@media (max-width: 768px) {
+@media (max-width: 48em) {
   .jstree-default-responsive {
     /*
 	.jstree-open > .jstree-ocl,
-	.jstree-closed > .jstree-ocl { border-radius:20px; background-color:white; }
+	.jstree-closed > .jstree-ocl { border-radius:1.25em; background-color:white; }
 	*/
   }
   .jstree-default-responsive .jstree-icon {
@@ -978,28 +976,28 @@
     background: transparent;
   }
   .jstree-default-responsive .jstree-node {
-    min-height: 40px;
-    line-height: 40px;
-    margin-left: 40px;
-    min-width: 40px;
+    min-height: 2.5em;
+    line-height: 2.5em;
+    margin-left: 2.5em;
+    min-width: 2.5em;
     white-space: nowrap;
   }
   .jstree-default-responsive .jstree-anchor {
-    line-height: 40px;
-    height: 40px;
+    line-height: 2.5em;
+    height: 2.5em;
   }
   .jstree-default-responsive .jstree-icon,
   .jstree-default-responsive .jstree-icon:empty {
-    width: 40px;
-    height: 40px;
-    line-height: 40px;
+    width: 2.5em;
+    height: 2.5em;
+    line-height: 2.5em;
   }
   .jstree-default-responsive > .jstree-container-ul > .jstree-node {
     margin-left: 0;
   }
   .jstree-default-responsive.jstree-rtl .jstree-node {
     margin-left: 0;
-    margin-right: 40px;
+    margin-right: 2.5em;
     background: transparent;
   }
   .jstree-default-responsive.jstree-rtl .jstree-container-ul > .jstree-node {
@@ -1008,7 +1006,7 @@
   .jstree-default-responsive .jstree-ocl,
   .jstree-default-responsive .jstree-themeicon,
   .jstree-default-responsive .jstree-checkbox {
-    background-size: 120px 240px;
+    background-size: 7.5em 15em;
   }
   .jstree-default-responsive .jstree-leaf > .jstree-ocl,
   .jstree-default-responsive.jstree-rtl .jstree-leaf > .jstree-ocl {
@@ -1018,41 +1016,41 @@
     background-position: 0 0 !important;
   }
   .jstree-default-responsive .jstree-closed > .jstree-ocl {
-    background-position: 0 -40px !important;
+    background-position: 0 -2.5em !important;
   }
   .jstree-default-responsive.jstree-rtl .jstree-closed > .jstree-ocl {
-    background-position: -40px 0 !important;
+    background-position: -2.5em 0 !important;
   }
   .jstree-default-responsive .jstree-themeicon {
-    background-position: -40px -40px;
+    background-position: -2.5em -2.5em;
   }
   .jstree-default-responsive .jstree-checkbox,
   .jstree-default-responsive .jstree-checkbox:hover {
-    background-position: -40px -80px;
+    background-position: -2.5em -5em;
   }
   .jstree-default-responsive.jstree-checkbox-selection .jstree-clicked > .jstree-checkbox,
   .jstree-default-responsive.jstree-checkbox-selection .jstree-clicked > .jstree-checkbox:hover,
   .jstree-default-responsive .jstree-checked > .jstree-checkbox,
   .jstree-default-responsive .jstree-checked > .jstree-checkbox:hover {
-    background-position: 0 -80px;
+    background-position: 0 -5em;
   }
   .jstree-default-responsive .jstree-anchor > .jstree-undetermined,
   .jstree-default-responsive .jstree-anchor > .jstree-undetermined:hover {
-    background-position: 0 -120px;
+    background-position: 0 -7.5em;
   }
   .jstree-default-responsive .jstree-anchor {
     font-weight: bold;
     font-size: 1.1em;
-    text-shadow: 1px 1px white;
+    text-shadow: 0.0625em 0.0625em white;
   }
   .jstree-default-responsive > .jstree-striped {
     background: transparent;
   }
   .jstree-default-responsive .jstree-wholerow {
-    border-top: 1px solid rgba(255, 255, 255, 0.7);
-    border-bottom: 1px solid rgba(64, 64, 64, 0.2);
+    border-top: 0.0625em solid rgba(255, 255, 255, 0.7);
+    border-bottom: 0.0625em solid rgba(64, 64, 64, 0.2);
     background: #ebebeb;
-    height: 40px;
+    height: 2.5em;
   }
   .jstree-default-responsive .jstree-wholerow-hovered {
     background: #e7f4f9;
@@ -1061,10 +1059,10 @@
     background: #beebff;
   }
   .jstree-default-responsive .jstree-children .jstree-last > .jstree-wholerow {
-    box-shadow: inset 0 -6px 3px -5px #666666;
+    box-shadow: inset 0 -0.375em 0.1875em -0.3125em #666666;
   }
   .jstree-default-responsive .jstree-children .jstree-open > .jstree-wholerow {
-    box-shadow: inset 0 6px 3px -5px #666666;
+    box-shadow: inset 0 0.375em 0.1875em -0.3125em #666666;
     border-top: 0;
   }
   .jstree-default-responsive .jstree-children .jstree-open + .jstree-open {
@@ -1076,20 +1074,20 @@
   .jstree-default-responsive .jstree-themeicon,
   .jstree-default-responsive .jstree-checkbox {
     background-image: url("../resources/jstree/40px.png");
-    background-size: 120px 240px;
+    background-size: 7.5em 15em;
   }
   .jstree-default-responsive .jstree-node {
-    background-position: -80px 0;
+    background-position: -5em 0;
     background-repeat: repeat-y;
   }
   .jstree-default-responsive .jstree-last {
     background: transparent;
   }
   .jstree-default-responsive .jstree-leaf > .jstree-ocl {
-    background-position: -40px -120px;
+    background-position: -2.5em -7.5em;
   }
   .jstree-default-responsive .jstree-last > .jstree-ocl {
-    background-position: -40px -160px;
+    background-position: -2.5em -10em;
   }
   .jstree-default-responsive .jstree-themeicon-custom {
     background-color: transparent;
@@ -1097,12 +1095,12 @@
     background-position: 0 0;
   }
   .jstree-default-responsive .jstree-file {
-    background: url("../resources/jstree/40px.png") 0 -160px no-repeat;
-    background-size: 120px 240px;
+    background: url("../resources/jstree/40px.png") 0 -10em no-repeat;
+    background-size: 7.5em 15em;
   }
   .jstree-default-responsive .jstree-folder {
-    background: url("../resources/jstree/40px.png") -40px -40px no-repeat;
-    background-size: 120px 240px;
+    background: url("../resources/jstree/40px.png") -2.5em -2.5em no-repeat;
+    background-size: 7.5em 15em;
   }
   .jstree-default-responsive > .jstree-container-ul > .jstree-node {
     margin-left: 0;

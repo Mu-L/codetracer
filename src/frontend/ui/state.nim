@@ -183,8 +183,9 @@ method render*(self: StateComponent): VNode =
         onmouseleave = proc = self.chevronClicked = false
       )
     ):
-      if not self.inExtension:
-        excerpt(self)
+      # TODO: For now comment out as per new design
+      # if not self.inExtension:
+      #   excerpt(self)
       watchView(self) # TODO: Add later on
 
       tdiv(class = "value-components-container"):
@@ -256,9 +257,7 @@ proc excerpt(self: StateComponent): VNode =
 
 proc watchView(self: StateComponent): VNode =
   result = buildHtml(
-    tdiv(id = "gdb-evaluate")
-  ):
-    form(
+    input(
       onsubmit = proc(ev: Event, v: VNode) =
       ev.stopPropagation()
       ev.preventDefault()
@@ -273,9 +272,13 @@ proc watchView(self: StateComponent): VNode =
           self.loadLocals()
           jq("#watch").toJs.value = cstring"",
       onmousemove = proc(ev: Event, tg:VNode) = ev.stopPropagation(),
-      onclick = proc(ev: Event, tg:VNode) = ev.stopPropagation()
-    ):
-      input(`type`="text", placeholder="Enter a watch expression", id="watch")
+      onclick = proc(ev: Event, tg:VNode) = ev.stopPropagation(),
+      `type`="text",
+      placeholder="Enter a watch expression",
+      id="watch",
+      class="ct-input-panel ct-fill-available"
+    )
+  )
 
 
 method onCompleteMove*(self: StateComponent, response: MoveState) {.async.} =

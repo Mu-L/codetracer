@@ -466,6 +466,7 @@ type
   GoldenLayout* = ref object of js
     loadLayout*:        proc(layoutConfig: GoldenLayoutResolvedConfig)
     saveLayout*:        proc(): GoldenLayoutResolvedConfig
+    toConfig*:          proc(): GoldenLayoutResolvedConfig
     groundItem*:        GoldenContentItem
     registerComponent*: proc(name: cstring, factoryFunction: proc(container: GoldenContainer, state: GoldenItemState))
     newItem*:           proc(config: js): GoldenContentItem

@@ -79,22 +79,22 @@
   background-color: FLOW_PARALLEL_AFTER_VALUE_BACKGROUND_COLOR
   color: FLOW_PARALLEL_AFTER_VALUE_COLOR
 
-.flow-parallel-value-box
-  width: fit-content
-  display: inline-block
-  padding-left: 5px
-  padding-right: 5px
-  padding-top: 0
-  box-sizing: border-box
-  text-align: center
-  border-top-right-radius: 4px
-  border-bottom-right-radius: 4px
-  font-family: "FiraCode"
-  white-space: nowrap
-  max-width: 30ch
-  min-width: auto
-  overflow: hidden
-  text-overflow: ellipsis
+// .flow-parallel-value-box
+//   width: fit-content
+//   display: inline-block
+//   padding-left: 5px
+//   padding-right: 5px
+//   padding-top: 0
+//   box-sizing: border-box
+//   text-align: center
+//   border-top-right-radius: 4px
+//   border-bottom-right-radius: 4px
+//   font-family: "FiraCode"
+//   white-space: nowrap
+//   max-width: 30ch
+//   min-width: auto
+//   overflow: hidden
+//   text-overflow: ellipsis
 
 .flow-dual-value-before
   border-top-right-radius: 0px !important
@@ -104,19 +104,19 @@
   border-top-left-radius: 0px !important
   border-bottom-left-radius: 0px !important
 
-.flow-parallel-value-before-only
-  background-color: FLOW_PARALLEL_BEFORE_ONLY_VALUE_BACKGROUND_COLOR
-  color: FLOW_PARALLEL_BEFORE_ONLY_VALUE_COLOR
-  // box-shadow: 1px 1px 1px FLOW_LOOP_VALUE_BOX_SHADOW_COLOR
+// .flow-parallel-value-before-only
+//   background-color: FLOW_PARALLEL_BEFORE_ONLY_VALUE_BACKGROUND_COLOR
+//   color: FLOW_PARALLEL_BEFORE_ONLY_VALUE_COLOR
+//   // box-shadow: 1px 1px 1px FLOW_LOOP_VALUE_BOX_SHADOW_COLOR
 
-.flow-parallel-value-after-only
-  background-color: FLOW_PARALLEL_AFTER_VALUE_BACKGROUND_COLOR
-  color: FLOW_PARALLEL_AFTER_VALUE_COLOR
-  // box-shadow: -1px -1px FLOW_PARALLEL_BEFORE_VALUE_BACKGROUND_COLOR
+// .flow-parallel-value-after-only
+//   background-color: FLOW_PARALLEL_AFTER_VALUE_BACKGROUND_COLOR
+//   color: FLOW_PARALLEL_AFTER_VALUE_COLOR
+//   // box-shadow: -1px -1px FLOW_PARALLEL_BEFORE_VALUE_BACKGROUND_COLOR
 
-.flow-parallel-value-dual
-  background-color: FLOW_PARALLEL_DUAL_VALUE_BACKGROUND_COLOR
-  color: FLOW_PARALLEL_DUAL_VALUE_COLOR
+// .flow-parallel-value-dual
+//   background-color: FLOW_PARALLEL_DUAL_VALUE_BACKGROUND_COLOR
+//   color: FLOW_PARALLEL_DUAL_VALUE_COLOR
 
 .flow-inline-value-box
   height: 17px
@@ -390,15 +390,15 @@
   background-color: FLOW_BACKGROUND_COLOR
   border-top-left-radius: 0
   border-top-right-radius: 0
-  border-bottom-left-radius: 6px
-  border-bottom-right-radius: 6px
+  border-bottom-left-radius: 0.375em
+  border-bottom-right-radius: 0.375em
   color: PRIMARY_TEXT_COLOR
   display: inline-flex
-  font-size: 14px
+  font-size: inherit
   // height: 40px
-  min-width: 50px
+  min-width: 3.125em
   max-width: 100ch !important
-  padding-right: 8px
+  padding-right: 0.5em
   position: relative
   // width: fit-content
   // margin-top: 16px
@@ -411,19 +411,19 @@
     display: flex
     align-items: center
     content: 'Values:'
-    font-size: 12px
+    font-size: 0.75em
     width: 100%
-    height: 24px
-    top: -24px
+    height: 1.5em
+    top: -1.5em
     left: 0
     background-color: FLOW_VALUE_NAME_BACKGROUND
-    border-top-left-radius: 6px
-    border-top-right-radius: 6px
-    text-indent: 5px
+    border-top-left-radius: 0.375em
+    border-top-right-radius: 0.375em
+    text-indent: 0.3125em
     font-weight: bold
 
   .value-expanded-compound::before
-    left: 4px !important
+    left: 0.25em !important
 
   .toggle-value-history
     display: none
@@ -432,39 +432,39 @@
     display: none
 
   .value-expanded-name
-    padding-left: 0px !important
+    padding-left: 0 !important
 
   .flow-tooltip-step-info
     font-style: italic
     color: FLOW_VALUE_NAME_BACKGROUND
 
   .add-to-scratchpad-button
-    width: 16px
-    height: 16px
+    width: 1em
+    height: 1em
     background-image: ADD_TO_SCRATCHPAD_BUTTON_IMAGE
-    background-size: 16px 16px
+    background-size: 1em 1em
     background-position: center
     background-repeat: no-repeat
     cursor: pointer
-    transform: translateX(-4px)
-    border-radius: 100px
-    outline: 1px solid HISTORY_TOGGLE_ACTIVE_OUTLINE
+    transform: translateX(-0.25em)
+    border-radius: 6.25em
+    outline: 0.0625em solid HISTORY_TOGGLE_ACTIVE_OUTLINE
 
     &:hover
-      outline: 2px solid HISTORY_TOGGLE_ACTIVE_OUTLINE
+      outline: 0.125em solid HISTORY_TOGGLE_ACTIVE_OUTLINE
 
     &:active
       opacity: 0.5
 
     .custom-tooltip
-      left: -140px
-      top: -6px
+      left: -8.75em
+      top: -0.375em
 
       &:after
         border-color: transparent transparent transparent TOOLTIP_BACKGROUND
         left: 98%
         bottom: 0%
-        border-width: 12px
+        border-width: 0.75em
         top: 0%
 
   &[data-placement^="top"] > .tippy-arrow::before {

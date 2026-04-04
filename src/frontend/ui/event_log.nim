@@ -77,7 +77,7 @@ when defined(ctInExtension):
     result = eventLogComponentForExtension
 
 proc events(self: EventLogComponent)
-proc resizeEventLogHandler(self: EventLogComponent)
+proc resizeEventLogHandler*(self: EventLogComponent)
 
 proc denseId*(context: EventLogComponent): cstring =
   cstring("eventLog-" & $context.id & "-dense-table-" & $context.index)
@@ -90,9 +90,25 @@ template local*(expression: untyped): untyped {.dirty.} =
 
 proc recalculateKinds(self: EventLogComponent)
 
-proc resizeEventLogHandler(self: EventLogComponent) =
+proc resizeEventLogHandler*(self: EventLogComponent) =
+  if self.denseTable.isNil or self.denseTable.context.isNil:
+    return
+
   self.denseTable.resizeTable()
+  if not self.denseTable.footerDom.isNil:
+    self.denseTable.updateTableFooter()
   # self.detailedTable.resizeTable()
+
+proc eventLogSearchValue(self: EventLogComponent): cstring =
+  let searchInput = jqFind("#eventLog-" & $self.id & "-search")
+  if searchInput.isNil or searchInput.toJs.length.to(int) == 0:
+    return cstring""
+
+  let inputNode = searchInput[0]
+  if inputNode.toJs == jsUndefined:
+    return cstring""
+
+  result = inputNode.value.to(cstring)
 
 proc filterEvents(self: EventLogComponent): seq[ProgramEvent] =
   var events: seq[ProgramEvent] = @[]
@@ -297,7 +313,7 @@ proc jump(self: EventLogComponent, table: JsObject, e: JsObject) =
     event.stdout = true
     event.maxRRTicks = 0
   else:
-    cerror "event_log: datatable row data undefined"
+    # DataTables emits placeholder rows while the table is empty; they are not real events.
     return
   self.programEventJump(event)
   # if self.data.ui.activeFocus != self:
@@ -357,7 +373,7 @@ proc events(self: EventLogComponent) =
     if data.toJs != jsUndefined:
       event = cast[ProgramEvent](data)
     else:
-      cerror "event_log: datatable row data undefined"
+      # Empty-table placeholder rows should not open an event view.
       return
 
     if event.kind != TraceLogEvent:
@@ -519,7 +535,9 @@ proc events(self: EventLogComponent) =
           ordering:       true,
           searching:      true,
           scrollY:        2000,
+          scrollCollapse: true,
           scroller:       true,
+          scrollerCollapse: true,
           fixedColumns:   true,
           info: false,
           lengthChange: false,
@@ -623,6 +641,7 @@ proc events(self: EventLogComponent) =
     jqFind(cstring"#" & context.detailedId & cstring" tbody").on(cstring"click", cstring"tr", proc(e: js) = handler(context.detailedTable.context, e))
     jqFind(cstring"#" & context.denseId & cstring" tbody").on(cstring"mouseover", cstring"td", proc(e: js) = handlerMouseover(context.denseTable.context, e))
     jqFind(cstring"#" & context.denseId & cstring" tbody").on(cstring"contextmenu", cstring"tr", proc(e: js) = handlerRightClick(context.denseTable.context, e))
+
     if self.resizeObserver.isNil:
       let componentTab = cast[Node](jq(&"#eventLogComponent-{self.id}"))
       let resizeObserver = createResizeObserver(proc(entries: seq[Element]) =
@@ -787,8 +806,8 @@ proc eventLogCategoryButtonView(self: EventLogComponent, event: EventDropDownBox
   proc showDropdown(e: Event, et: VNode)
   let category = event
   let categoryName = ($event).toLowerAscii()
-  let dropDownId = local("category-" & categoryName & fmt"-{self.id}")
-  var dropDownClass = if event == Filter: local("category-dropdown-button") else: local("medium-control-button")
+  let dropDownId = "category-image"
+  var dropDownClass = if event == Filter: "ct-button-image-md-secondary ct-mr-2 ct-button-no-border" else: "medium-control-button"
   let dropDownListId = dropDownId & "-list"
   var dropDownListClass = "dropdown-list"
   var dropDownContainerClass = "dropdown-container"
@@ -799,29 +818,43 @@ proc eventLogCategoryButtonView(self: EventLogComponent, event: EventDropDownBox
     self: EventLogComponent,
     tag: EventTag,
     kind: EventLogKind
-  ) : VNode =
+  ): VNode =
     let checkBoxName = local($tag & "-" & $kind & "-checkbox")
+    let isChecked = self.selectedKinds[kind]
+    let checkmarkState =
+      if isChecked:
+        "checked"
+      else:
+        "unchecked"
 
     buildHtml(
       li(class = "dropdown-list-item")
     ):
       label(
         `for` = checkBoxName,
-        onclick = proc (e: Event, et: VNode)=
-          self.switchEventKindSelection(kind)
-          self.denseTable.context.ajax.reload(nil, false)
-          self.autoScrollUpdate = true
-          showDropdown(e, et)
+        class = "ct-checkmark-field"
       ):
         input(
+          id = checkBoxName,
           name = checkBoxName,
           `type` = "checkbox",
-          class = "checkbox",
-          checked = toChecked(self.selectedKinds[kind]),
-          value = ($kind)
+          class = "ct-checkmark-input",
+          checked = toChecked(isChecked),
+          value = ($kind),
+          onchange = proc (e: Event, et: VNode) =
+            self.switchEventKindSelection(kind)
+            self.denseTable.context.ajax.reload(nil, false)
+            self.autoScrollUpdate = true
+            showDropdown(e, et)
         )
-        span(class = "checkmark")
-        text(EVENT_LOG_KIND_NAMES[kind])
+        span(
+          class = "ct-checkmark",
+          `data-state` = checkmarkState,
+          `aria-hidden` = "true"
+        )
+        span(class = "ct-checkmark-label"):
+          text(EVENT_LOG_KIND_NAMES[kind])
+
 
   proc eventLogTagButtonCheckboxView(
     self: EventLogComponent,
@@ -830,7 +863,15 @@ proc eventLogCategoryButtonView(self: EventLogComponent, event: EventDropDownBox
     let checkBoxName = local($tag & "-checkbox")
     let checkBoxState = self.checkIndeterminateCheckbox(tag)
     let isChecked = checkBoxState[0]
-    let checkmarkClass = checkBoxState[1]
+    let isIndeterminate = checkBoxState[1] == "checkmark-indeterminate"
+
+    let checkmarkState =
+      if isIndeterminate:
+        "indeterminate"
+      elif isChecked:
+        "checked"
+      else:
+        "unchecked"
 
     if not isChecked and isChecked != self.isTagSelected(tag):
       self.switchEventTagSelection(tag)
@@ -840,25 +881,33 @@ proc eventLogCategoryButtonView(self: EventLogComponent, event: EventDropDownBox
     ):
       label(
         `for` = checkBoxName,
-        onclick = proc (ev: Event, et: VNode) =
-          self.switchEventTagSelection(tag)
-          self.denseTable.context.ajax.reload(nil, false)
-          self.autoScrollUpdate = true
-          showDropdown(ev, et)
+        class = "ct-checkmark-field"
       ):
         input(
+          id = checkBoxName,
           name = checkBoxName,
           `type` = "checkbox",
-          class = "checkbox",
+          class = "ct-checkmark-input",
           checked = toChecked(isChecked),
-          value = ($tag)
+          value = ($tag),
+          onchange = proc (e: Event, et: VNode) =
+            self.switchEventTagSelection(tag)
+            self.denseTable.context.ajax.reload(nil, false)
+            self.autoScrollUpdate = true
+            showDropdown(e, et)
         )
-        span(class = checkmarkClass)
-        text(EVENT_LOG_TAG_NAMES[tag])
+        span(
+          class = "ct-checkmark",
+          `data-state` = checkmarkState,
+          `aria-hidden` = "true"
+        )
+        span(class = "ct-checkmark-label"):
+          text(EVENT_LOG_TAG_NAMES[tag])
 
   proc dropdownVNode(): VNode =
     var activeTraceClass = if self.isOnlyTraceSelected(): "active" else: ""
     var activeEventsClass = if self.isOnlyRecordedEventSelected(): "active" else: ""
+    var buttonClass = "ct-button-sm-secondary"
 
     buildHtml(
       tdiv(class = dropDownContainerClass, id = dropDownContainerId)
@@ -880,9 +929,9 @@ proc eventLogCategoryButtonView(self: EventLogComponent, event: EventDropDownBox
               for kind in tagKinds[tag]:
                 eventLogKindButtonCheckboxView(self, tag, kind)
       tdiv(class = "toggle-buttons"):
-        tdiv(
+        button(
           id = local("category-onlytrace"),
-          class = local("medium-control-button") & fmt" {activeTraceClass}",
+          class = buttonClass & fmt" {activeTraceClass} ct-mx-2",
           tabIndex = "0",
           onmousedown = proc (e: Event, et: VNode) =
             e.preventDefault(),
@@ -898,9 +947,9 @@ proc eventLogCategoryButtonView(self: EventLogComponent, event: EventDropDownBox
             id = "eventLog-tooltip-trace",
             class = "custom-tooltip",
           ): text("Display only trace logs: events that happened as part of the debugging")
-        tdiv(
+        button(
           id=local("category-only-recorded-event"),
-          class = local("medium-control-button") & fmt" {activeEventsClass}",
+          class = buttonClass & fmt" {activeEventsClass} ct-mr-2",
           tabIndex = "0",
           onmousedown = proc (e: Event, et: VNode) =
             e.preventDefault(),
@@ -916,9 +965,9 @@ proc eventLogCategoryButtonView(self: EventLogComponent, event: EventDropDownBox
             id = "eventLog-tooltip-event",
             class = "custom-tooltip",
           ): text("Display only recorded events: events from the original record")
-        tdiv(
+        button(
           id = local("category-enabledisable"),
-          class = local("medium-control-button"),
+          class = buttonClass,
           tabIndex = "0",
           onmousedown = proc (e: Event, et: VNode) =
             e.preventDefault(),
@@ -943,13 +992,13 @@ proc eventLogCategoryButtonView(self: EventLogComponent, event: EventDropDownBox
 
     let filterButton = document.getElementById(dropDownId)
     let rect = filterButton.getBoundingClientRect()
-    let fullWidth = document.body.getBoundingClientRect().width
 
     dropdownElem.style.position = "absolute"
-    dropdownElem.style.top = $(rect.bottom) & "px"
-    dropdownElem.style.right = $(fullWidth - rect.right) & "px"
+    dropdownElem.style.top = &"{rect.bottom}px"
+    dropdownElem.style.left = &"{rect.left}px"
     dropdownElem.style.zIndex = 1000
     dropdownElem.style.display = "block"
+
     filterButton.focus()
 
   proc hideDropdown(e: Event, et: VNode) =
@@ -958,7 +1007,7 @@ proc eventLogCategoryButtonView(self: EventLogComponent, event: EventDropDownBox
       dropdownElem.style.display = "none"
 
   buildHtml(
-    tdiv(
+    button(
       id=dropDownId,
       class = dropDownClass,
       tabindex = "0",
@@ -981,10 +1030,15 @@ proc eventLogCategoryButtonView(self: EventLogComponent, event: EventDropDownBox
 
 proc eventLogHeaderView*(self: EventLogComponent): VNode =
   var search = proc =
-    let value = jqFind("#eventLog-" & $self.id & "-search input")[0].value.to(cstring)
     if not self.isDetailed:
+      if self.denseTable.isNil or self.denseTable.context.isNil:
+        return
+      let value = self.eventLogSearchValue()
       self.denseTable.context.search(value).draw()
     else:
+      if self.detailedTable.isNil or self.detailedTable.context.isNil:
+        return
+      let value = self.eventLogSearchValue()
       self.detailedTable.context.search(value).draw()
 
   var buttonClass = "hamburger-dropdown"
@@ -994,16 +1048,17 @@ proc eventLogHeaderView*(self: EventLogComponent): VNode =
     dropDownListClass = dropDownListClass & " hidden"
 
   buildHtml(
-    tdiv(class = local("header"))
+    tdiv(class = "ct-flex")
   ):
-    tdiv(id = "eventLog-" & $self.id & "-search", class = local("search")):
-      input(
-        class = "eventLog-search-field",
-        `type` = "text",
-        placeholder = "Find event",
-        onchange = search,
-        oninput = search
-      )
+    eventLogCategoryButtonView(self, EventDropDownBox.Filter)
+    input(
+      class = "ct-input-panel ct-input-search-image",
+      id = &"eventLog-{self.id}-search",
+      `type` = "text",
+      placeholder = "Find event",
+      onchange = search,
+      oninput = search
+    )
 
     tdiv(class = local("switch") & " " & local("button") & " " & local("normal-color-button")):
       if not self.isDetailed:
@@ -1017,8 +1072,6 @@ proc eventLogHeaderView*(self: EventLogComponent): VNode =
           redrawAll()):
           text "dense"
 
-    tdiv(class = local("categories")):
-      eventLogCategoryButtonView(self, EventDropDownBox.Filter)
 
 proc loadEvents*(self: EventLogComponent, update: TableData) =
   console.log(cstring(fmt"event_log: loadEvents records={update.data.len} draw={update.draw}"))
@@ -1150,7 +1203,10 @@ proc eventLogAfterRedraws(self: EventLogComponent) =
   self.events()
   let denseWrapper = cstring"#" & self.denseId & cstring"_wrapper"
   let detailedWrapper = cstring"#" & self.detailedId & cstring"_wrapper"
-  let eventId = cstring"eventLogComponent-" & $self.id
+  let componentTab = cast[Node](jq(&"#eventLogComponent-{self.id}"))
+
+  self.denseTable.footerDom =
+    cast[Element](componentTab.findNodeInElement(".data-tables-footer"))
 
   if not self.inExtension:
     if not self.isDetailed:
@@ -1162,15 +1218,8 @@ proc eventLogAfterRedraws(self: EventLogComponent) =
 
   self.denseTable.updateTableRows(redraw = true)
   self.detailedTable.updateTableRows(redraw = true)
-
-  if self.resizeObserver.isNil:
-    let componentTab = cast[Node](jq(&"#eventLogComponent-{self.id}"))
-    let resizeObserver = createResizeObserver(proc(entries: seq[Element]) =
-      for entry in entries:
-        let timeout = setTimeout(proc =
-          resizeEventLogHandler(self), 100))
-    resizeObserver.observe(componentTab)
-    self.resizeObserver = resizeObserver
+  # if self.denseTable.scrollAreaHeight == 0:
+  resizeEventLogHandler(self)
 
 method render*(self: EventLogComponent): VNode =
   self.kxi.afterRedraws.add(proc = self.eventLogAfterRedraws())

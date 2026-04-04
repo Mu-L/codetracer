@@ -357,8 +357,7 @@ proc navigationMenuView*(self: MenuComponent): VNode =
         ev.stopPropagation()
         toggle(self)
         discard setTimeout(proc() = jq("#navigation-menu").focus(), 10)):
-      tdiv(id="menu-root-logo"):
-        tdiv(id="menu-logo-img")
+      tdiv(id="menu-logo-img")
 
     if self.active:
       tdiv(

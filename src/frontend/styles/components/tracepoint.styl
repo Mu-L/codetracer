@@ -84,19 +84,40 @@
     width: 100%
     height: -webkit-fill-available
 
+    .dt-scroll
+      overflow-x: auto !important
+
+    .dt-scroll-body
+      overflow-x: auto !important
+      overflow-y: auto !important
+
+    .trace-table
+      width: max-content !important
+      min-width: 100%
+      max-width: none
+
+      tbody
+        width: max-content
+        min-width: 100%
+
     .direct-location-rr-ticks
-      transform: translateY(0px)
-      padding-top: 2px
+      transform: translateY(0)
+      padding-top: 0.125em
+      flex: 0 0 auto
+      min-width: max-content
 
     tbody
       tr
-        height: 24px
+        height: 1.5em
+        width: max-content
+        min-width: 100%
 
       td
-        height: 24px
+        height: 1.5em
+        flex-shrink: 0
 
     .rr-ticks-time-container
-      height: 16px
+      height: 1em
       line-height: normal
 
     .trace-line
@@ -104,14 +125,16 @@
       color: COLOR
 
     .trace-values
-      padding-top: 4px !important
-      line-height: 16px !important
-      width: 80%
+      padding-top: 0.25em !important
+      line-height: 1em !important
+      width: auto
+      min-width: max-content
+      flex: 0 0 auto
       color: TEXT_CONTENT_COLOR
       cursor: pointer
       overflow: visible
       white-space: nowrap
-      display: flex
+      display: block
 
       // &:hover
       //   overflow-x: overlay !important
@@ -128,11 +151,11 @@
 
     .direct-location-rr-ticks
       width: 20%
-      height: 22px
+      height: 1.375em
 
   .scrollbar
     .slider
-      border-radius: 2.5px
+      border-radius: 0.15625em
 
   .trace-chevron
     position: absolute
@@ -276,21 +299,21 @@
     width: -webkit-fill-available
     padding-right: 8px
 
-    input
-      height: 24px
-      font-size: 14px
-      border: 0
-      background-color: HEADER_ELEMENT_BACKGROUND_COLOR
-      color: TEXT_CONTENT_COLOR
-      margin-left: 10%
-      // margin-top: 5px
-      margin-bottom: 0px !important
-      border-radius: 6px
-      padding-left: 24px
+    // input
+    //   height: 24px
+    //   font-size: 14px
+    //   border: 0
+    //   background-color: HEADER_ELEMENT_BACKGROUND_COLOR
+    //   color: TEXT_CONTENT_COLOR
+    //   margin-left: 10%
+    //   // margin-top: 5px
+    //   margin-bottom: 0px !important
+    //   border-radius: 6px
+    //   padding-left: 24px
 
-      &:focus
-        border: 1px solid BORDERS_COLOR
-        outline: none
+    //   &:focus
+    //     border: 1px solid BORDERS_COLOR
+    //     outline: none
 
   .hamburger-dropdown
     border-radius: 6px

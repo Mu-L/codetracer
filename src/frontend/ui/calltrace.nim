@@ -526,24 +526,16 @@ proc searchCalltraceView(self: CalltraceComponent): VNode =
       self.api.emit(CtSearchCalltrace, CallSearchArg(value: self.searchText))
 
   buildHtml(
-    tdiv(class = "calltrace-search")
+    input(
+      tabIndex = "0",
+      class = "ct-input-panel ct-input-search-image",
+      `type` = "text",
+      placeholder = "Search",
+      onkeydown = onSearch,
+      onblur = proc() =
+        self.isSearching = false
+    )
   ):
-    form(
-      class = &"calltrace-search-form-{self.id}",
-      onsubmit = proc(ev: Event, v: VNode) =
-        ev.preventDefault()
-        ev.stopPropagation()
-        discard
-    ):
-      input(
-        tabIndex = "0",
-        class = "calltrace-search-input",
-        `type` = "text",
-        placeholder = "Search",
-        onkeydown = onSearch,
-        onblur = proc() =
-          self.isSearching = false)
-
     searchResultsView(self)
 
 method locationLang*(self: CalltraceComponent): Lang =

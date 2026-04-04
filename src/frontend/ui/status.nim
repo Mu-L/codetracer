@@ -28,8 +28,9 @@ proc locationView(self: StatusComponent): VNode =
           title = fullPathWithRRTicks
         ):
           text fullPathWithRRTicks
-        tdiv(
-          class = "copy-file-path",
+        button(
+          id = "copy-path-image",
+          class = "ct-button-image-md-secondary ct-button-no-border",
           onclick = proc =
             clipboardCopy(path)
             self.copyMessageActive = true
