@@ -229,6 +229,8 @@ proc nativeReplayTraceKindForHost(): string =
   ## Keep Linux/macOS on RR while routing Windows native recordings to TTD.
   when defined(windows):
     "ttd"
+  elif defined(macosx):
+    "rr"  # MCR backend in ct-rr-support handles macOS via --backend mcr
   else:
     "rr"
 

@@ -144,6 +144,8 @@ proc replay*(
       let traceKind =
         if fileExists(traceFolder / "trace_metadata.json"):
           "db"
+        elif traceFolder.endsWith(".ct") or fileExists(traceFolder / "mcr"):
+          "rr"  # MCR uses same replay-worker as RR (via ct-rr-support)
         else:
           # replay traces (RR/TTD) carry trace_db_metadata.json
           "rr"

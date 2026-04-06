@@ -94,6 +94,21 @@ pub struct BackendManager {
     daemon_state: Option<DaemonState>,
 }
 
+/// Check whether `path` is a file whose first 5 bytes match the CTFS magic
+/// number (`0xC0 0xDE 0x72 0xAC 0xE2`).  Returns `false` for directories,
+/// missing files, or files shorter than 5 bytes.
+fn has_ctfs_magic(path: &std::path::Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+    let Ok(mut f) = std::fs::File::open(path) else {
+        return false;
+    };
+    let mut magic = [0u8; 5];
+    use std::io::Read;
+    f.read_exact(&mut magic).is_ok() && magic == [0xC0, 0xDE, 0x72, 0xAC, 0xE2]
+}
+
 // TODO: cleanup on exit
 // TODO: Handle signals
 impl BackendManager {
@@ -5379,7 +5394,9 @@ impl BackendManager {
         let dap_launch_opts = {
             let mut opts = dap_init::DapLaunchOptions::default();
             let needs_rr_support = trace_path.join("rr").is_dir()
-                || trace_path.join("ttd-trace-manifest.json").is_file();
+                || trace_path.join("ttd-trace-manifest.json").is_file()
+                || trace_path.extension().map_or(false, |ext| ext == "ct")
+                || has_ctfs_magic(&trace_path);
             if needs_rr_support {
                 let rr_support_cmd = std::env::var("CODETRACER_CT_RR_SUPPORT_CMD")
                     .ok()
