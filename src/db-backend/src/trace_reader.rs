@@ -103,6 +103,42 @@ pub trait TraceReader: std::fmt::Debug + Send {
     /// Return the full line→steps map for a given path.
     fn step_map_for_path(&self, path_id: PathId) -> Option<&HashMap<usize, Vec<DbStep>>>;
 
+    // ── Iteration helpers ────────────────────────────────────────────
+
+    /// Iterate over all functions with their ids.
+    ///
+    /// Returns `(FunctionId, &FunctionRecord)` pairs in id order.
+    fn functions_iter(&self) -> Box<dyn Iterator<Item = (FunctionId, &FunctionRecord)> + '_>;
+
+    /// Iterate over all calls in order.
+    fn calls_iter(&self) -> Box<dyn Iterator<Item = &DbCall> + '_>;
+
+    /// Return a slice of steps starting from `start_id` to the end.
+    ///
+    /// Returns an empty slice when `start_id` is out of bounds.
+    fn steps_from(&self, start_id: StepId) -> &[DbStep];
+
+    // ── Instructions ────────────────────────────────────────────────
+
+    /// Assembly instructions recorded at a particular step.
+    fn instructions_at(&self, step_id: StepId) -> Option<&Vec<String>>;
+
+    // ── Derived queries ─────────────────────────────────────────────
+
+    /// Convenience: look up the `CallKey` for the call containing `step_id`.
+    ///
+    /// Equivalent to `self.step(step_id).map(|s| s.call_key)`.
+    fn call_key_for_step(&self, step_id: StepId) -> Option<CallKey> {
+        self.step(step_id).map(|s| s.call_key)
+    }
+
+    /// Return events associated with a step.
+    ///
+    /// When `exact` is `true`, only events at exactly `step_id` are returned.
+    /// When `false`, events across the entire "line visit" (a contiguous run
+    /// of steps on the same source line) are returned.
+    fn load_step_events(&self, step_id: StepId, exact: bool) -> Vec<DbRecordEvent>;
+
     // ── Metadata ────────────────────────────────────────────────────
 
     /// The working directory the trace was recorded in.

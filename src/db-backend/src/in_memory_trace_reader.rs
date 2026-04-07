@@ -124,6 +124,43 @@ impl TraceReader for InMemoryTraceReader {
         self.db.step_map.get(path_id)
     }
 
+    // ── Iteration helpers ────────────────────────────────────────────
+
+    fn functions_iter(&self) -> Box<dyn Iterator<Item = (FunctionId, &FunctionRecord)> + '_> {
+        Box::new(
+            self.db
+                .functions
+                .iter()
+                .enumerate()
+                .map(|(i, f)| (FunctionId(i), f)),
+        )
+    }
+
+    fn calls_iter(&self) -> Box<dyn Iterator<Item = &DbCall> + '_> {
+        Box::new(self.db.calls.iter())
+    }
+
+    fn steps_from(&self, start_id: StepId) -> &[DbStep] {
+        let start = start_id.0 as usize;
+        if start < self.db.steps.items.len() {
+            &self.db.steps.items[start..]
+        } else {
+            &[]
+        }
+    }
+
+    // ── Instructions ────────────────────────────────────────────────
+
+    fn instructions_at(&self, step_id: StepId) -> Option<&Vec<String>> {
+        self.db.instructions.get(step_id)
+    }
+
+    // ── Derived queries ─────────────────────────────────────────────
+
+    fn load_step_events(&self, step_id: StepId, exact: bool) -> Vec<DbRecordEvent> {
+        self.db.load_step_events(step_id, exact)
+    }
+
     // ── Metadata ────────────────────────────────────────────────────
 
     fn workdir(&self) -> &Path {

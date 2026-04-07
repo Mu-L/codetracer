@@ -318,7 +318,7 @@ impl Handler {
         }
 
         let exact = false; // or for now try as flow // true just for this exact step
-        let step_events = self.db.load_step_events(self.step_id, exact);
+        let step_events = self.reader.load_step_events(self.step_id, exact);
         // info!("step events for {:?} {:?}", self.step_id, step_events);
         if !step_events.is_empty() && step_events[0].kind == EventLogKind::Error {
             let error_text = &step_events[0].content;
@@ -490,7 +490,8 @@ impl Handler {
     }
 
     fn load_local_calltrace(&mut self, args: CalltraceLoadArgs) -> Result<Vec<CallLine>, Box<dyn Error>> {
-        let call_key = self.db.call_key_for_step(self.step_id);
+        let call_key = self.reader.call_key_for_step(self.step_id)
+            .expect("load_local_calltrace: invalid step_id");
         self.calltrace.optimize_collapse = args.optimize_collapse;
         if call_key != self.calltrace.start_call_key {
             // When not auto-collapsing (e.g. Python API bridge), pass the
@@ -498,9 +499,11 @@ impl Handler {
             // The GUI uses auto_collapsing=true and handles expand/collapse
             // interactively, so it does not need this.
             let max_depth = if args.auto_collapsing { None } else { Some(args.depth) };
+            // TODO(Phase 4): calltrace.jump_to_with_depth takes &Db; migrate to &dyn TraceReader
             self.calltrace
                 .jump_to_with_depth(self.step_id, args.auto_collapsing, max_depth, &self.db);
         }
+        // TODO(Phase 4): calltrace.load_lines takes &Db; migrate to &dyn TraceReader
         self.calltrace
             .load_lines(args.start_call_line_index, args.height, &self.db, &mut self.expr_loader)
     }
@@ -565,6 +568,7 @@ impl Handler {
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
         let mut flow_replay: Box<dyn Replay> = if self.trace_kind == TraceKind::DB {
+            // TODO(Phase 4): DbReplay needs full Db; revisit when Replay is refactored
             Box::new(DbReplay::new(self.db.clone()))
         } else {
             Box::new(RRDispatcher::new("flow", self.load_flow_index, self.ct_rr_args.clone()))
@@ -614,6 +618,7 @@ impl Handler {
         count_limit: usize,
     ) -> Result<(Call, usize), Box<dyn Error>> {
         // expanded children count not used here: we add actual children
+        // TODO(Phase 4): migrate to_call to TraceReader or free function
         let mut call = self.db.to_call(db_call, &mut self.expr_loader);
         let mut count = 1; // our call
                            // TODO: on depth/count limit
@@ -902,15 +907,16 @@ impl Handler {
         let mut list: Vec<usize> = vec![];
         let re = Regex::new(&arg.value.clone())?;
 
-        for (id, function) in self.db.functions.iter().enumerate() {
+        for (id, function) in self.reader.functions_iter() {
             if re.is_match(&function.name) {
-                list.push(id);
+                list.push(id.0);
             }
         }
 
-        for db_call in self.db.calls.clone().iter() {
+        for db_call in self.reader.calls_iter() {
             if list.contains(&db_call.function_id.0) {
                 // expanded children count not relevant here
+                // TODO(Phase 4): migrate to_call to TraceReader or free function
                 calls.push(self.db.to_call(db_call, &mut self.expr_loader));
             }
         }
@@ -1091,9 +1097,9 @@ impl Handler {
         let mut path_id: PathId = self.load_path_id(&loc.path)?;
         // TODO: eventually expose slice index? not obvious if easy
         // for now this is not often
-        for step in &self.db.steps.items[(self.step_id.0 as usize)..] {
-            let call = &self.db.calls[step.call_key];
-            let function = &self.db.functions[call.function_id];
+        for step in self.reader.steps_from(self.step_id) {
+            let call = self.reader.call(step.call_key).expect("get_call_target: invalid call_key");
+            let function = self.reader.function(call.function_id).expect("get_call_target: invalid function_id");
             if loc.token == function.name {
                 line = function.line;
                 path_id = function.path_id;
@@ -1623,6 +1629,7 @@ impl Handler {
     }
 
     pub fn search_program(&mut self, query: String, _task: Task) -> Result<(), Box<dyn Error>> {
+        // TODO(Phase 4): ProgramSearchTool::new takes &Db; migrate to &dyn TraceReader
         let program_search_tool = ProgramSearchTool::new(&self.db);
         let _results = program_search_tool.search(&query, &mut self.expr_loader)?;
         // TODO: send with DAP
@@ -1841,7 +1848,7 @@ impl Handler {
                 for (line, step_id) in interesting_steps.iter() {
                     if step_id.0 != NO_STEP_ID {
                         let current_step = *self.reader.step(*step_id).expect("load_asm_function: invalid step_id");
-                        if let Some(asm_instructions) = self.db.instructions.get(*step_id) {
+                        if let Some(asm_instructions) = self.reader.instructions_at(*step_id) {
                             if asm_instructions.is_empty() {
                                 instructions.push(Instruction::empty(
                                     *line,
@@ -1959,8 +1966,8 @@ impl Handler {
         } else {
             // Fast path: scan the db event records for Write events only,
             // skipping the expensive full load_events() pipeline.
-            self.db
-                .events
+            self.reader
+                .events()
                 .iter()
                 .enumerate()
                 .filter(|(_, record)| record.kind == EventLogKind::Write)
@@ -2045,6 +2052,7 @@ impl Handler {
         //   the equivalent of [4, 2]
         //   how to do it efficiently is a non-trivial question: maybe by iterating through previous steps,
         //   or a new kind of index?
+        // TODO(Phase 4): migrate to_call and load_location to TraceReader or free function
         let call = self.db.to_call(call_record, &mut self.expr_loader);
         let current_call_key = self.reader.step(self.step_id).expect("produce_stack_frame: invalid step_id").call_key;
         let location = if call_record.key == current_call_key {
@@ -2164,6 +2172,7 @@ impl Handler {
 
                 stack_frames
             } else {
+                // TODO(Phase 4): calltrace.load_callstack takes &Db; migrate to &dyn TraceReader
                 self.calltrace
                     .load_callstack(self.step_id, &self.db)
                     .iter()
