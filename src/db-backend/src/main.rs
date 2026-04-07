@@ -45,6 +45,8 @@ mod paths;
 mod program_search_tool;
 mod query;
 mod replay;
+mod trace_reader;
+mod in_memory_trace_reader;
 mod rr_dispatcher;
 mod step_lines_loader;
 mod task;

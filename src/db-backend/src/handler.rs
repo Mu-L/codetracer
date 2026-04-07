@@ -8,12 +8,14 @@ use std::io;
 use std::path::Path;
 use std::sync::mpsc::Sender;
 
-use codetracer_trace_types::{CallKey, EventLogKind, Line, PathId, StepId, TypeKind, VariableId, NO_KEY};
+use codetracer_trace_types::{CallKey, EventLogKind, FullValueRecord, Line, PathId, StepId, TypeKind, VariableId, NO_KEY};
 
 use crate::calltrace::Calltrace;
 use crate::dap::{self, DapClient, DapMessage};
-use crate::db::{Db, DbCall, DbRecordEvent, DbReplay, DbStep};
+use crate::db::{Db, DbCall, DbRecordEvent, DbReplay};
 use crate::event_db::{EventDb, SingleTableId};
+use crate::in_memory_trace_reader::InMemoryTraceReader;
+use crate::trace_reader::TraceReader;
 use crate::expr_loader::ExprLoader;
 use crate::flow_preloader::FlowPreloader;
 use crate::lang::{lang_from_context, Lang};
@@ -42,6 +44,12 @@ const TRACEPOINT_RESULTS_LIMIT_BEFORE_UPDATE: usize = 5;
 #[derive(Debug)]
 pub struct Handler {
     pub db: Box<Db>,
+    /// Abstracted read-only access to trace data.
+    ///
+    /// During Phase 3 migration, both `db` (direct) and `reader` (abstracted)
+    /// coexist. New code should use `reader`; remaining `db` accesses will be
+    /// migrated incrementally.
+    pub reader: Box<dyn TraceReader>,
     pub step_id: StepId,
     pub last_location: Location,
     // pub sender_tx: mpsc::Sender<Response>,
@@ -119,10 +127,15 @@ impl Handler {
         } else {
             Box::new(RRDispatcher::new(&ct_rr_args.name, 0, ct_rr_args.clone()))
         };
+        // Wrap a clone of the Db in an InMemoryTraceReader so that new code
+        // can go through the TraceReader abstraction. The original `db` is
+        // kept around until all direct accesses are migrated.
+        let reader: Box<dyn TraceReader> = Box::new(InMemoryTraceReader::new(*db.clone()));
         // let sender = sender::Sender::new();
         let mut handler = Handler {
             trace_kind,
             db: db.clone(),
+            reader,
             step_id: StepId(0),
             last_location: Location {
                 key: format!("{}", NO_KEY.0),
@@ -185,12 +198,12 @@ impl Handler {
 
     fn load_location(&self, step_id: StepId) -> Location {
         let step_id_int = step_id.0;
-        let step_record = &self.db.steps[step_id];
+        let step_record = self.reader.step(step_id).expect("load_location: invalid step_id");
         let path = format!(
             "{}",
-            self.db
-                .workdir
-                .join(self.db.load_path_from_id(&step_record.path_id))
+            self.reader
+                .workdir()
+                .join(self.reader.path(step_record.path_id).unwrap_or(""))
                 .display()
         );
         let line = step_record.line.0;
@@ -200,8 +213,8 @@ impl Handler {
         assert!(call_key_int >= 0);
 
         let function_name = if step_record.call_key != NO_KEY {
-            let call = &self.db.calls[call_key];
-            let function = &self.db.functions[call.function_id];
+            let call = self.reader.call(call_key).expect("load_location: invalid call_key");
+            let function = self.reader.function(call.function_id).expect("load_location: invalid function_id");
             function.name.clone()
         } else {
             "<unknown>".to_string()
@@ -272,18 +285,18 @@ impl Handler {
 
         if self.step_id.0 > self.previous_step_id.0 {
             let mut raw_output_events: Vec<dap::DapMessage> = vec![];
-            for event in self.db.events.iter() {
+            for event in self.reader.events().iter() {
                 if event.step_id.0 > self.previous_step_id.0 && event.step_id.0 <= self.step_id.0 {
                     // different kind of if-s:
                     //   upper if the event is in the range of the move
                     //   this internal one: for which kinds do we produce dap events
                     #[allow(clippy::collapsible_if)]
                     if event.kind == EventLogKind::Write {
-                        let step = self.db.steps[event.step_id];
+                        let step = *self.reader.step(event.step_id).expect("prepare_output_events: invalid step_id");
                         info!("generate output event");
                         let raw_output_event = self.dap_client.output_event(
                             "stdout",
-                            &self.db.paths[step.path_id],
+                            self.reader.path(step.path_id).unwrap_or(""),
                             step.line.0 as usize,
                             &event.content,
                         )?;
@@ -499,7 +512,7 @@ impl Handler {
                 collapsed_count += 1;
             }
         }
-        self.db.calls.len() - collapsed_count
+        self.reader.call_count() - collapsed_count
     }
 
     pub fn load_calltrace_section(
@@ -617,8 +630,9 @@ impl Handler {
         if depth < depth_limit && db_call.key.0 >= 0 {
             for child_call_id in &db_call.children_keys {
                 assert!(child_call_id.0 >= 0);
+                let child_db_call = self.reader.call(*child_call_id).expect("to_ct_calltrace_call: invalid child call_key").clone();
                 let (child_call, child_call_count) = self.to_ct_calltrace_call(
-                    &self.db.calls[*child_call_id].clone(),
+                    &child_db_call,
                     depth + 1,
                     depth_limit,
                     count_limit - count,
@@ -641,12 +655,12 @@ impl Handler {
     }
 
     fn on_step_id_limit(&self, step_index: usize, forward: bool) -> bool {
-        if self.db.steps.is_empty() {
+        if self.reader.step_count() == 0 {
             return true;
         }
         if forward {
             // moving forward
-            step_index >= self.db.steps.len() - 1 // we're on the last one
+            step_index >= self.reader.step_count() - 1 // we're on the last one
         } else {
             // moving backwards
             step_index == 0
@@ -655,11 +669,11 @@ impl Handler {
 
     fn single_step_line(&self, step_index: usize, forward: bool) -> usize {
         // taking note of db.lines limits: returning a valid step id always
-        if self.db.steps.is_empty() {
+        if self.reader.step_count() == 0 {
             return step_index;
         }
         if forward {
-            if step_index < self.db.steps.len() - 1 {
+            if step_index < self.reader.step_count() - 1 {
                 step_index + 1
             } else {
                 step_index
@@ -731,7 +745,7 @@ impl Handler {
                     false,
                     sender.clone(),
                 )?;
-            } else if self.step_id.0 as usize == self.db.steps.len() - 1 {
+            } else if self.step_id.0 as usize == self.reader.step_count() - 1 {
                 self.send_notification(NotificationKind::Info, "End of record reached", false, sender.clone())?;
             }
         }
@@ -906,8 +920,8 @@ impl Handler {
         Ok(())
     }
 
-    fn id_to_name(&self, variable_id: VariableId) -> &String {
-        &self.db.variable_names[variable_id]
+    fn id_to_name(&self, variable_id: VariableId) -> &str {
+        self.reader.variable_name(variable_id).unwrap_or("<unknown>")
     }
 
     pub fn load_history(
@@ -957,11 +971,11 @@ impl Handler {
     }
 
     fn load_path_id(&self, path: &str) -> Option<PathId> {
-        self.db.path_map.get(path).copied()
+        self.reader.path_id_for(path)
     }
 
     fn find_next_step(&self, path_id: PathId, line: usize) -> Option<StepId> {
-        if let Some(records) = self.db.step_map[path_id].get(&line) {
+        if let Some(records) = self.reader.steps_on_line(path_id, line) {
             for record in records {
                 if record.step_id > self.step_id {
                     return Some(record.step_id);
@@ -980,7 +994,8 @@ impl Handler {
         }
 
         // Get the closest step if not.
-        let line_map = &self.db.step_map[path_id];
+        let empty_map = HashMap::new();
+        let line_map = self.reader.step_map_for_path(path_id).unwrap_or(&empty_map);
         let mut lines: Vec<&usize> = line_map.keys().collect();
         lines.sort();
         let mut closest_line: Option<usize> = None;
@@ -1088,7 +1103,7 @@ impl Handler {
 
         if let Some(step_id) = self.get_closest_step_id(&SourceLocation {
             line: line.into(),
-            path: self.db.load_path_from_id(&path_id).to_string(),
+            path: self.reader.path(path_id).unwrap_or("").to_string(),
         }) {
             return Some(step_id);
         }
@@ -1232,8 +1247,8 @@ impl Handler {
         if !self.breakpoints.is_empty() {
             return;
         }
-        if let Some(first_step) = self.db.steps.first() {
-            let path = self.db.load_path_from_id(&first_step.path_id).to_string();
+        if let Some(first_step) = self.reader.step(StepId(0)) {
+            let path = self.reader.path(first_step.path_id).unwrap_or("").to_string();
             self.breakpoints.entry((path, first_step.line.0)).or_default();
         }
     }
@@ -1781,16 +1796,16 @@ impl Handler {
 
     fn load_steps_for_call(&mut self, call_key: CallKey) -> IndexMap<i64, StepId> {
         let mut list: IndexMap<i64, StepId> = IndexMap::default();
-        let db_call = &self.db.calls[call_key];
-        let function_step = self.db.steps[db_call.step_id];
+        let db_call = self.reader.call(call_key).expect("load_steps_for_call: invalid call_key").clone();
+        let function_step = *self.reader.step(db_call.step_id).expect("load_steps_for_call: invalid step_id");
         let location = self.load_location(db_call.step_id);
         let function_location = self
             .flow_preloader
             .expr_loader
             .find_function_location(&location, &function_step.line);
         for line in function_location.function_first..function_location.function_last {
-            let function_id = &self.db.functions[db_call.function_id];
-            let step_map = &self.db.step_map[function_id.path_id];
+            let function_id = self.reader.function(db_call.function_id).expect("load_steps_for_call: invalid function_id");
+            let step_map = self.reader.step_map_for_path(function_id.path_id).expect("load_steps_for_call: missing step_map");
             if let Some(steps) = step_map.get(&(line as usize)) {
                 for step in steps {
                     if step.call_key == call_key {
@@ -1825,12 +1840,12 @@ impl Handler {
                 let interesting_steps = self.load_steps_for_call(call_key);
                 for (line, step_id) in interesting_steps.iter() {
                     if step_id.0 != NO_STEP_ID {
-                        let current_step = self.db.steps[*step_id];
+                        let current_step = *self.reader.step(*step_id).expect("load_asm_function: invalid step_id");
                         if let Some(asm_instructions) = self.db.instructions.get(*step_id) {
                             if asm_instructions.is_empty() {
                                 instructions.push(Instruction::empty(
                                     *line,
-                                    self.db.load_path_from_id(&current_step.path_id),
+                                    self.reader.path(current_step.path_id).unwrap_or(""),
                                     step_id.0,
                                 ))
                             }
@@ -1838,7 +1853,7 @@ impl Handler {
                                 instructions.push(Instruction {
                                     args: "".to_string(),
                                     high_level_line: *line,
-                                    high_level_path: self.db.load_path_from_id(&current_step.path_id).to_string(),
+                                    high_level_path: self.reader.path(current_step.path_id).unwrap_or("").to_string(),
                                     name: arg.to_string(),
                                     offset: current_step.step_id.0,
                                     other: "".to_string(),
@@ -1846,10 +1861,11 @@ impl Handler {
                             }
                         }
                     } else {
+                        let fn_id = self.reader.call(call_key).expect("load_asm_function: invalid call_key").function_id;
+                        let fn_path_id = self.reader.function(fn_id).expect("load_asm_function: invalid function_id").path_id;
                         instructions.push(Instruction::empty(
                             *line,
-                            self.db
-                                .load_path_from_id(&self.db.functions[self.db.calls[call_key].function_id].path_id),
+                            self.reader.path(fn_path_id).unwrap_or(""),
                             NO_STEP_ID,
                         ))
                     }
@@ -1972,11 +1988,11 @@ impl Handler {
     fn to_program_event(&self, event_record: &DbRecordEvent, index: usize) -> ProgramEvent {
         let step_id_int = event_record.step_id.0;
         let (path, line) = if step_id_int != NO_INDEX {
-            let step_record = &self.db.steps[event_record.step_id];
+            let step_record = self.reader.step(event_record.step_id).expect("to_program_event: invalid step_id");
             (
-                self.db
-                    .workdir
-                    .join(self.db.load_path_from_id(&step_record.path_id))
+                self.reader
+                    .workdir()
+                    .join(self.reader.path(step_record.path_id).unwrap_or(""))
                     .display()
                     .to_string(),
                 step_record.line.0,
@@ -1998,19 +2014,14 @@ impl Handler {
             high_level_path: path,
             high_level_line: line,
             base64_encoded: false,
-            max_rr_ticks: self
-                .db
-                .steps
-                .last()
-                .unwrap_or(&DbStep {
-                    step_id: StepId(0),
-                    path_id: PathId(0),
-                    line: Line(0),
-                    call_key: CallKey(0),
-                    global_call_key: CallKey(0),
-                })
-                .step_id
-                .0,
+            max_rr_ticks: if self.reader.step_count() > 0 {
+                self.reader
+                    .step(StepId((self.reader.step_count() - 1) as i64))
+                    .map(|s| s.step_id.0)
+                    .unwrap_or(0)
+            } else {
+                0
+            },
         }
     }
 
@@ -2035,7 +2046,8 @@ impl Handler {
         //   how to do it efficiently is a non-trivial question: maybe by iterating through previous steps,
         //   or a new kind of index?
         let call = self.db.to_call(call_record, &mut self.expr_loader);
-        let location = if call_record.key == self.db.steps[self.step_id].call_key {
+        let current_call_key = self.reader.step(self.step_id).expect("produce_stack_frame: invalid step_id").call_key;
+        let location = if call_record.key == current_call_key {
             self.db
                 .load_location(self.step_id, call_record.key, &mut self.expr_loader)
         } else {
@@ -2186,8 +2198,8 @@ impl Handler {
             self.respond_dap(request, dap_types::ScopesResponseBody { scopes: vec![] }, sender)?;
             return Ok(());
         }
-        let call = &self.db.calls[CallKey(arg.frame_id)];
-        let function = &self.db.functions[call.function_id];
+        let call = self.reader.call(CallKey(arg.frame_id)).expect("load_dap_scopes: invalid call_key");
+        let function = self.reader.function(call.function_id).expect("load_dap_scopes: invalid function_id");
         let scope = dap_types::Scope {
             name: function.name.clone(),
             presentation_hint: Some("locals".to_string()),
@@ -2221,10 +2233,14 @@ impl Handler {
             self.respond_dap(request, dap_types::VariablesResponseBody { variables: vec![] }, sender)?;
             return Ok(());
         }
-        let full_value_locals: Vec<Variable> = self.db.variables[self.step_id]
+        let empty_vars: Vec<FullValueRecord> = vec![];
+        let vars_slice = self.reader.variables_at(self.step_id).unwrap_or(&empty_vars);
+        let full_value_locals: Vec<Variable> = vars_slice
             .iter()
             .map(|v| Variable {
-                expression: self.db.variable_name(v.variable_id).to_string(),
+                expression: self.reader.variable_name(v.variable_id).unwrap_or("<unknown>").to_string(),
+                // to_ct_value is a Db method that depends on type resolution;
+                // keep using self.db for it until TraceReader gains value conversion.
                 value: self.db.to_ct_value(&v.value),
                 address: NO_ADDRESS,
             })
