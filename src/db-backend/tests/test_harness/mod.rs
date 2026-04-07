@@ -1301,6 +1301,15 @@ pub fn record_stylus_wasm_trace(wasm_path: &Path, trace_dir: &Path, evm_trace_pa
 /// and sets `workdir` to CWD. The DAP server's ExprLoader resolves source files relative
 /// to workdir, so we must copy the source file into the trace_dir to make it findable.
 fn record_python_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String> {
+    record_python_trace_with_format(source_path, trace_dir, "binary")
+}
+
+/// Record a Python trace with the specified trace format.
+///
+/// Delegates to the pure-Python recorder, passing `CODETRACER_TRACE_FORMAT`
+/// as an environment variable so the recorder can select the output format
+/// (e.g. `"binary"` for CBOR+Zstd, `"ctfs"` for the `.ct` CTFS container).
+fn record_python_trace_with_format(source_path: &Path, trace_dir: &Path, trace_format: &str) -> Result<(), String> {
     let recorder = find_python_recorder()
         .ok_or("Python recorder not found. Set CODETRACER_PYTHON_RECORDER_PATH or check out the sibling/submodule")?;
     fs::create_dir_all(trace_dir).map_err(|e| format!("failed to create trace dir: {}", e))?;
@@ -1328,6 +1337,7 @@ fn record_python_trace(source_path: &Path, trace_dir: &Path) -> Result<(), Strin
     let output = Command::new(python)
         .args([recorder.to_str().unwrap(), source_path.to_str().unwrap()])
         .current_dir(trace_dir)
+        .env("CODETRACER_TRACE_FORMAT", trace_format)
         .output()
         .map_err(|e| format!("failed to run Python recorder: {}", e))?;
 
@@ -1357,6 +1367,14 @@ fn record_python_trace(source_path: &Path, trace_dir: &Path) -> Result<(), Strin
 /// Uses the same invocation pattern as `tracepoint_interpreter/tests.rs`:
 /// `ruby <recorder> --out-dir <trace_dir> <source>` with `CODETRACER_DB_TRACE_PATH`.
 fn record_ruby_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String> {
+    record_ruby_trace_with_format(source_path, trace_dir, "binary")
+}
+
+/// Record a Ruby trace with the specified trace format.
+///
+/// Delegates to the pure-Ruby recorder, passing `CODETRACER_TRACE_FORMAT`
+/// as an environment variable so the recorder can select the output format.
+fn record_ruby_trace_with_format(source_path: &Path, trace_dir: &Path, trace_format: &str) -> Result<(), String> {
     let recorder = find_ruby_recorder()
         .ok_or("Ruby recorder not found. Set CODETRACER_RUBY_RECORDER_PATH or check out the sibling/submodule")?;
     fs::create_dir_all(trace_dir).map_err(|e| format!("failed to create trace dir: {}", e))?;
@@ -1370,6 +1388,7 @@ fn record_ruby_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String>
             source_path.to_str().unwrap(),
         ])
         .env("CODETRACER_DB_TRACE_PATH", trace_path.to_str().unwrap())
+        .env("CODETRACER_TRACE_FORMAT", trace_format)
         .output()
         .map_err(|e| format!("failed to run Ruby recorder: {}", e))?;
 
@@ -1665,9 +1684,27 @@ impl TestRecording {
     ///
     /// For interpreted languages, the "binary_path" is the source path itself.
     pub fn create_db_trace(source_path: &Path, language: Language, version_label: &str) -> Result<Self, String> {
+        Self::create_db_trace_with_format(source_path, language, version_label, "binary")
+    }
+
+    /// Create a DB-based trace recording with a specific trace format.
+    ///
+    /// The `trace_format` parameter is passed to the recorder via the
+    /// `CODETRACER_TRACE_FORMAT` environment variable. Supported values
+    /// depend on the recorder but typically include `"binary"` (default,
+    /// CBOR+Zstd) and `"ctfs"` (the `.ct` CTFS container format).
+    ///
+    /// For interpreted languages, the "binary_path" is the source path itself.
+    pub fn create_db_trace_with_format(
+        source_path: &Path,
+        language: Language,
+        version_label: &str,
+        trace_format: &str,
+    ) -> Result<Self, String> {
         let temp_dir = std::env::temp_dir().join(format!(
-            "flow_test_{}_{}_{}",
+            "flow_test_{}_{}_{}_{}",
             language.extension(),
+            trace_format,
             version_label.replace('.', "_"),
             std::process::id()
         ));
@@ -1682,8 +1719,8 @@ impl TestRecording {
 
         // Record trace using the appropriate language recorder
         match language {
-            Language::Python => record_python_trace(source_path, &trace_dir)?,
-            Language::Ruby => record_ruby_trace(source_path, &trace_dir)?,
+            Language::Python => record_python_trace_with_format(source_path, &trace_dir, trace_format)?,
+            Language::Ruby => record_ruby_trace_with_format(source_path, &trace_dir, trace_format)?,
             Language::JavaScript => record_javascript_trace(source_path, &trace_dir)?,
             Language::Bash => record_bash_trace(source_path, &trace_dir)?,
             Language::Zsh => record_zsh_trace(source_path, &trace_dir)?,
@@ -1697,13 +1734,17 @@ impl TestRecording {
         }
 
         // Verify the essential trace files were produced.
-        // Some recorders (e.g. JS with --format binary) produce trace.bin instead of trace.json.
+        // Different formats produce different files:
+        //   - JSON format: trace.json
+        //   - Binary (CBOR+Zstd): trace.bin
+        //   - CTFS: trace.ct
         let trace_json = trace_dir.join("trace.json");
         let trace_bin = trace_dir.join("trace.bin");
+        let trace_ct = trace_dir.join("trace.ct");
         let trace_metadata = trace_dir.join("trace_metadata.json");
-        if !trace_json.exists() && !trace_bin.exists() {
+        if !trace_json.exists() && !trace_bin.exists() && !trace_ct.exists() {
             return Err(format!(
-                "neither trace.json nor trace.bin produced in {}",
+                "no trace file (trace.json, trace.bin, or trace.ct) produced in {}",
                 trace_dir.display()
             ));
         }
@@ -1737,13 +1778,35 @@ impl TestRecording {
 /// For Ruby traces, paths are relative to the recorder's CWD, which is the
 /// codetracer repo root, so the original source path matches via suffix match.
 pub fn run_db_flow_test(config: &FlowTestConfig, version_label: &str) -> Result<(), String> {
+    run_db_flow_test_with_format(config, version_label, "binary")
+}
+
+/// Run a flow integration test for a DB-based language with a specific trace format.
+///
+/// Same as `run_db_flow_test` but records the trace in the given format.
+/// The `trace_format` parameter is passed through to
+/// `TestRecording::create_db_trace_with_format` (and ultimately to the recorder
+/// via the `CODETRACER_TRACE_FORMAT` environment variable).
+///
+/// Supported formats: `"binary"` (default CBOR+Zstd), `"ctfs"` (`.ct` container).
+pub fn run_db_flow_test_with_format(
+    config: &FlowTestConfig,
+    version_label: &str,
+    trace_format: &str,
+) -> Result<(), String> {
     println!("Source: {}", config.source_path.display());
     println!("Language: {:?}", config.language);
     println!("Version: {}", version_label);
+    println!("Trace format: {}", trace_format);
 
     // Create DB-based recording (no rr needed)
     println!("Recording trace...");
-    let recording = TestRecording::create_db_trace(&config.source_path, config.language, version_label)?;
+    let recording = TestRecording::create_db_trace_with_format(
+        &config.source_path,
+        config.language,
+        version_label,
+        trace_format,
+    )?;
     println!("Recording created at: {}", recording.trace_dir.display());
 
     // Start DAP client via stdio (cross-platform, no Unix sockets)
