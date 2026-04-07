@@ -43,6 +43,7 @@ pub mod program_search_tool;
 pub mod query;
 pub mod replay;
 pub mod trace_reader;
+pub mod in_memory_trace_reader;
 pub mod rr_dispatcher;
 pub mod step_lines_loader;
 pub mod task;
