@@ -1,6 +1,7 @@
 use std::cmp::{max, min};
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use codetracer_trace_types::{CallKey, StepId};
 use log::info;
@@ -9,7 +10,9 @@ use crate::db::{Db, DbReplay, DbStep};
 use crate::distinct_vec::DistinctVec;
 use crate::expr_loader::ExprLoader;
 use crate::flow_preloader::FlowPreloader;
+use crate::in_memory_trace_reader::InMemoryTraceReader;
 use crate::task::{FlowMode, LineStep, LineStepKind, LineStepValue, Location, TraceKind};
+use crate::trace_reader::TraceReader;
 
 #[derive(Debug, Clone)]
 pub struct StepLinesLoader {
@@ -18,10 +21,10 @@ pub struct StepLinesLoader {
 }
 
 impl StepLinesLoader {
-    pub fn new(db: &Db, expr_loader: &mut ExprLoader) -> Self {
+    pub fn new(db: &Db, expr_loader: &mut ExprLoader, _reader: &dyn TraceReader) -> Self {
         let mut global_line_steps = DistinctVec::new();
         for (step_id_int, step) in db.steps.iter().enumerate() {
-            let line_step = Self::simple_line_step(StepId(step_id_int as i64), *step, db, expr_loader);
+            let line_step = Self::simple_line_step(StepId(step_id_int as i64), *step, db, expr_loader, _reader);
             global_line_steps.push(line_step);
         }
         StepLinesLoader {
@@ -30,7 +33,7 @@ impl StepLinesLoader {
         }
     }
 
-    fn simple_line_step(step_id: StepId, step: DbStep, db: &Db, expr_loader: &mut ExprLoader) -> LineStep {
+    fn simple_line_step(step_id: StepId, step: DbStep, db: &Db, expr_loader: &mut ExprLoader, _reader: &dyn TraceReader) -> LineStep {
         // let mut expr_loader = ExprLoader::new();
         let line = step.line;
         let raw_path = format!("{}", db.workdir.join(db.load_path_from_id(&step.path_id)).display());
@@ -62,6 +65,7 @@ impl StepLinesLoader {
         forward_count: usize,
         db: &Db,
         flow_preloader: &mut FlowPreloader,
+        _reader: &dyn TraceReader,
     ) -> Vec<LineStep> {
         let mut line_steps = vec![];
         let location_step_index = location.rr_ticks.0;
@@ -86,7 +90,8 @@ impl StepLinesLoader {
                 let location = self.global_line_steps[step_id].location.clone();
                 // let function_id = db.calls[call_key].function_id;
                 // let function_first = db.functions[function_id].line;
-                let mut replay = DbReplay::new(Box::new(db.clone()));
+                let reader: Arc<dyn TraceReader> = Arc::new(InMemoryTraceReader::new(db.clone()));
+                let mut replay = DbReplay::new(Box::new(db.clone()), reader);
                 let flow_update = flow_preloader.load(location, FlowMode::Call, TraceKind::DB, &mut replay);
                 if !flow_update.error && !flow_update.view_updates.is_empty() {
                     let flow_view_update = &flow_update.view_updates[0];

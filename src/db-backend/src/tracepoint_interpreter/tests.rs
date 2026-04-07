@@ -9,15 +9,18 @@ use std::{
     iter::zip,
     path::{Path, PathBuf},
     process::Command,
+    sync::Arc,
 };
 
 use codetracer_trace_types::{StepId, TypeKind};
 
 use crate::{
     db::{Db, DbReplay},
+    in_memory_trace_reader::InMemoryTraceReader,
     lang::Lang,
     replay::Replay,
     task::StringAndValueTuple,
+    trace_reader::TraceReader,
     trace_processor::{load_trace_data, load_trace_metadata, TraceProcessor},
     value::Value,
 };
@@ -118,7 +121,8 @@ fn check_tracepoint_evaluate(
     let mut interpreter = TracepointInterpreter::new(1);
     interpreter.register_tracepoint(0, src)?;
 
-    let mut db_replay = DbReplay::new(Box::new(db.clone()));
+    let reader: Arc<dyn TraceReader> = Arc::new(InMemoryTraceReader::new(db.clone()));
+    let mut db_replay = DbReplay::new(Box::new(db.clone()), reader);
     for step in db.step_from(StepId(0), true) {
         let curr_line = step.line.0 as usize;
         db_replay.jump_to(step.step_id)?;

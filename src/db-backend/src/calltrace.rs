@@ -9,6 +9,7 @@ use crate::expr_loader::ExprLoader;
 use crate::task::{
     CallLine, CallLineContentKind, CallLineMetadata, CalltraceNonExpandedKind, GlobalCallLineIndex, NO_DEPTH, NO_INDEX,
 };
+use crate::trace_reader::TraceReader;
 
 #[derive(Debug, Clone)]
 pub struct Calltrace {
@@ -35,7 +36,7 @@ pub struct CallState {
 }
 
 impl Calltrace {
-    pub fn new(db: &Db) -> Self {
+    pub fn new(db: &Db, _reader: &dyn TraceReader) -> Self {
         let mut call_states = DistinctVec::new();
         for call_key_int in 0..db.calls.len() {
             let call_key = CallKey(call_key_int as i64);
@@ -64,8 +65,8 @@ impl Calltrace {
         }
     }
 
-    pub fn jump_to(&mut self, step_id: StepId, auto_collapsing: bool, db: &Db) {
-        self.jump_to_with_depth(step_id, auto_collapsing, None, db);
+    pub fn jump_to(&mut self, step_id: StepId, auto_collapsing: bool, db: &Db, _reader: &dyn TraceReader) {
+        self.jump_to_with_depth(step_id, auto_collapsing, None, db, _reader);
     }
 
     /// Jump to the call containing `step_id` and rebuild the global call-line
@@ -77,14 +78,14 @@ impl Calltrace {
     /// up to `max_depth` are expanded so that the full tree is visible —
     /// this is the path taken by the Python API bridge which does not use
     /// the GUI's collapsing behaviour.
-    pub fn jump_to_with_depth(&mut self, step_id: StepId, auto_collapsing: bool, max_depth: Option<usize>, db: &Db) {
+    pub fn jump_to_with_depth(&mut self, step_id: StepId, auto_collapsing: bool, max_depth: Option<usize>, db: &Db, _reader: &dyn TraceReader) {
         let call_key = db.call_key_for_step(step_id);
         if auto_collapsing {
-            self.autocollapse_callstack(step_id, call_key, db);
+            self.autocollapse_callstack(step_id, call_key, db, _reader);
         } else if let Some(depth_limit) = max_depth {
             // Expand all calls up to the requested depth so the Python API
             // (and other non-GUI callers) can see the full call tree.
-            self.expand_all_up_to_depth(depth_limit, db);
+            self.expand_all_up_to_depth(depth_limit, db, _reader);
         }
         self.start_call_key = call_key;
         self.rebuild_global_call_lines();
@@ -92,7 +93,7 @@ impl Calltrace {
 
     /// Mark all calls at depth <= `max_depth` as expanded so they appear
     /// in the global call-line index built by [`rebuild_global_call_lines`].
-    fn expand_all_up_to_depth(&mut self, max_depth: usize, db: &Db) {
+    fn expand_all_up_to_depth(&mut self, max_depth: usize, db: &Db, _reader: &dyn TraceReader) {
         for call_key_int in 0..self.call_states.len() {
             let call_key = CallKey(call_key_int as i64);
             let call = &db.calls[call_key];
@@ -287,13 +288,13 @@ impl Calltrace {
     //   collapse x/expand x
     //   filter?
     //   (property: calltrace valid and matching what is happening?)
-    fn autocollapse_callstack(&mut self, step_id: StepId, current_call_key: CallKey, db: &Db) {
+    fn autocollapse_callstack(&mut self, step_id: StepId, current_call_key: CallKey, db: &Db, _reader: &dyn TraceReader) {
         // autocollapse siblings before the current call
         // on each level of the callstack
         // potentially also part of the callstack itself
         // if it's too long
         // TODO
-        let callstack = self.load_callstack(step_id, db);
+        let callstack = self.load_callstack(step_id, db, _reader);
 
         // callstack originally is in opposite order of depth
         //   compared to call state/calltrace iteration:
@@ -347,7 +348,7 @@ impl Calltrace {
         // unimplemented!()
     }
 
-    pub fn load_callstack(&self, step_id: StepId, db: &Db) -> Vec<DbCall> {
+    pub fn load_callstack(&self, step_id: StepId, db: &Db, _reader: &dyn TraceReader) -> Vec<DbCall> {
         let mut callstack = vec![];
         if step_id.0 < db.steps.len().try_into().unwrap_or(i64::MAX) {
             let current_step = &db.steps[step_id];
@@ -373,19 +374,20 @@ impl Calltrace {
         count: usize,
         db: &Db,
         expr_loader: &mut ExprLoader,
+        _reader: &dyn TraceReader,
     ) -> Result<Vec<CallLine>, Box<dyn Error>> {
         let mut results = vec![];
         let mut index = from;
         while results.len() < count && index.0 < self.global_call_lines.len() {
             let metadata = &self.global_call_lines[index];
-            results.push(self.to_call_line(metadata, db, expr_loader));
+            results.push(self.to_call_line(metadata, db, expr_loader, _reader));
             index += 1;
         }
         // info!("{:?}", results);
         Ok(results)
     }
 
-    fn to_call_line(&self, metadata: &CallLineMetadata, db: &Db, expr_loader: &mut ExprLoader) -> CallLine {
+    fn to_call_line(&self, metadata: &CallLineMetadata, db: &Db, expr_loader: &mut ExprLoader, _reader: &dyn TraceReader) -> CallLine {
         if metadata.content.kind == CallLineContentKind::Call {
             let call = db.to_call(&self.calls[metadata.content.call_key], expr_loader);
             CallLine::call(

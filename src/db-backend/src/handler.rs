@@ -7,6 +7,7 @@ use std::error::Error;
 use std::io;
 use std::path::Path;
 use std::sync::mpsc::Sender;
+use std::sync::Arc;
 
 use codetracer_trace_types::{CallKey, EventLogKind, FullValueRecord, Line, PathId, StepId, TypeKind, VariableId, NO_KEY};
 
@@ -46,10 +47,12 @@ pub struct Handler {
     pub db: Box<Db>,
     /// Abstracted read-only access to trace data.
     ///
-    /// During Phase 3 migration, both `db` (direct) and `reader` (abstracted)
+    /// Shared via `Arc` so that `DbReplay` (and other consumers) can hold
+    /// a reference to the same reader without cloning the underlying data.
+    /// During the migration, both `db` (direct) and `reader` (abstracted)
     /// coexist. New code should use `reader`; remaining `db` accesses will be
     /// migrated incrementally.
-    pub reader: Box<dyn TraceReader>,
+    pub reader: Arc<dyn TraceReader>,
     pub step_id: StepId,
     pub last_location: Location,
     // pub sender_tx: mpsc::Sender<Response>,
@@ -118,19 +121,20 @@ impl Handler {
     }
 
     pub fn construct(trace_kind: TraceKind, ct_rr_args: CtRRArgs, db: Box<Db>, indirect_send: bool) -> Handler {
-        let calltrace = Calltrace::new(&db);
-        let trace = CoreTrace::default();
-        let mut expr_loader = ExprLoader::new(trace.clone());
-        let step_lines_loader = StepLinesLoader::new(&db, &mut expr_loader);
-        let replay: Box<dyn Replay> = if trace_kind == TraceKind::DB {
-            Box::new(DbReplay::new(db.clone()))
-        } else {
-            Box::new(RRDispatcher::new(&ct_rr_args.name, 0, ct_rr_args.clone()))
-        };
         // Wrap a clone of the Db in an InMemoryTraceReader so that new code
         // can go through the TraceReader abstraction. The original `db` is
         // kept around until all direct accesses are migrated.
-        let reader: Box<dyn TraceReader> = Box::new(InMemoryTraceReader::new(*db.clone()));
+        // Using Arc so that DbReplay and Handler share the same reader instance.
+        let reader: Arc<dyn TraceReader> = Arc::new(InMemoryTraceReader::new(*db.clone()));
+        let calltrace = Calltrace::new(&db, &*reader);
+        let trace = CoreTrace::default();
+        let mut expr_loader = ExprLoader::new(trace.clone());
+        let step_lines_loader = StepLinesLoader::new(&db, &mut expr_loader, &*reader);
+        let replay: Box<dyn Replay> = if trace_kind == TraceKind::DB {
+            Box::new(DbReplay::new(db.clone(), Arc::clone(&reader)))
+        } else {
+            Box::new(RRDispatcher::new(&ct_rr_args.name, 0, ct_rr_args.clone()))
+        };
         // let sender = sender::Sender::new();
         let mut handler = Handler {
             trace_kind,
@@ -499,13 +503,11 @@ impl Handler {
             // The GUI uses auto_collapsing=true and handles expand/collapse
             // interactively, so it does not need this.
             let max_depth = if args.auto_collapsing { None } else { Some(args.depth) };
-            // TODO(Phase 4): calltrace.jump_to_with_depth takes &Db; migrate to &dyn TraceReader
             self.calltrace
-                .jump_to_with_depth(self.step_id, args.auto_collapsing, max_depth, &self.db);
+                .jump_to_with_depth(self.step_id, args.auto_collapsing, max_depth, &self.db, &*self.reader);
         }
-        // TODO(Phase 4): calltrace.load_lines takes &Db; migrate to &dyn TraceReader
         self.calltrace
-            .load_lines(args.start_call_line_index, args.height, &self.db, &mut self.expr_loader)
+            .load_lines(args.start_call_line_index, args.height, &self.db, &mut self.expr_loader, &*self.reader)
     }
 
     fn calc_total_calls(&mut self) -> usize {
@@ -568,8 +570,7 @@ impl Handler {
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
         let mut flow_replay: Box<dyn Replay> = if self.trace_kind == TraceKind::DB {
-            // TODO(Phase 4): DbReplay needs full Db; revisit when Replay is refactored
-            Box::new(DbReplay::new(self.db.clone()))
+            Box::new(DbReplay::new(self.db.clone(), Arc::clone(&self.reader)))
         } else {
             Box::new(RRDispatcher::new("flow", self.load_flow_index, self.ct_rr_args.clone()))
         };
@@ -1629,8 +1630,7 @@ impl Handler {
     }
 
     pub fn search_program(&mut self, query: String, _task: Task) -> Result<(), Box<dyn Error>> {
-        // TODO(Phase 4): ProgramSearchTool::new takes &Db; migrate to &dyn TraceReader
-        let program_search_tool = ProgramSearchTool::new(&self.db);
+        let program_search_tool = ProgramSearchTool::new(&self.db, &*self.reader);
         let _results = program_search_tool.search(&query, &mut self.expr_loader)?;
         // TODO: send with DAP
         // self.send_event((
@@ -2172,9 +2172,8 @@ impl Handler {
 
                 stack_frames
             } else {
-                // TODO(Phase 4): calltrace.load_callstack takes &Db; migrate to &dyn TraceReader
                 self.calltrace
-                    .load_callstack(self.step_id, &self.db)
+                    .load_callstack(self.step_id, &self.db, &*self.reader)
                     .iter()
                     .map(|call_record| {
                         // expanded children count not relevant in raw callstack

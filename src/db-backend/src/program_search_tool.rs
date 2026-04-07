@@ -7,9 +7,14 @@ use log::warn;
 use crate::db::Db;
 use crate::expr_loader::ExprLoader;
 use crate::task::{CodeSnippet, CommandPanelResult, Location};
+use crate::trace_reader::TraceReader;
 
 pub struct ProgramSearchTool<'a> {
     db: &'a Db,
+    /// Read-only trace access, prepared for future migration away from
+    /// direct `Db` field usage.
+    #[allow(dead_code)]
+    reader: &'a dyn TraceReader,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -25,8 +30,8 @@ pub enum ProgramQueryNode {
 }
 
 impl<'a> ProgramSearchTool<'a> {
-    pub fn new(db: &'a Db) -> Self {
-        ProgramSearchTool { db }
+    pub fn new(db: &'a Db, reader: &'a dyn TraceReader) -> Self {
+        ProgramSearchTool { db, reader }
     }
 
     pub fn search(&self, query: &str, expr_loader: &mut ExprLoader) -> Result<Vec<CommandPanelResult>, Box<dyn Error>> {

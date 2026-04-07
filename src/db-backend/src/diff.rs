@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::error::Error;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use codetracer_trace_types::FunctionId;
 use log::info;
@@ -10,6 +11,7 @@ use serde_repr::*;
 
 use crate::db::{Db, DbReplay};
 use crate::flow_preloader::FlowPreloader;
+use crate::in_memory_trace_reader::InMemoryTraceReader;
 use crate::task::{FlowUpdate, TraceKind};
 use crate::trace_processor::{load_trace_data, load_trace_metadata, TraceProcessor};
 
@@ -145,7 +147,8 @@ pub fn index_diff(diff: Diff, trace_folder: &Path) -> Result<(), Box<dyn Error>>
 
     info!("diff_lines {diff_lines:?}");
     let mut flow_preloader = FlowPreloader::new();
-    let mut replay = DbReplay::new(Box::new(db.clone()));
+    let reader: Arc<dyn crate::trace_reader::TraceReader> = Arc::new(InMemoryTraceReader::new(db.clone()));
+    let mut replay = DbReplay::new(Box::new(db.clone()), reader);
     let flow_update = match flow_preloader.load_diff_flow(diff_lines, &db, TraceKind::DB, &mut replay) {
         Ok(flow_update_direct) => flow_update_direct,
         Err(_e) => FlowUpdate::error("load diff flow error: {e:?}"),

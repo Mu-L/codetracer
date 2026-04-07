@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::vec::Vec;
 
@@ -16,6 +17,7 @@ use crate::distinct_vec::DistinctVec;
 use crate::expr_loader::ExprLoader;
 use crate::lang::Lang;
 use crate::replay::Replay;
+use crate::trace_reader::TraceReader;
 use crate::task::{
     Action, Breakpoint, Call, CallArg, CallLine, CoreTrace, CtLoadLocalsArguments, Events, HistoryResultWithRecord,
     LoadHistoryArg, Location, ProgramEvent, RRTicks, VariableWithRecord, NO_ADDRESS, NO_INDEX, NO_PATH, NO_POSITION,
@@ -862,6 +864,11 @@ pub struct DbReplay {
     //   or we can leave it like this for now and expect that the new format
     //   will deal with that?
     pub db: Box<Db>,
+    /// Shared, read-only access to trace data via the [`TraceReader`]
+    /// abstraction.  Used for simple lookups (steps, calls, paths, etc.)
+    /// while `self.db` is retained for complex methods that mutate state
+    /// or rely on Db-specific helpers (e.g. `to_call`, `to_ct_value`).
+    pub reader: Arc<dyn TraceReader>,
     pub step_id: StepId,
     pub call_key: CallKey,
     pub breakpoint_list: Vec<HashMap<usize, Breakpoint>>,
@@ -869,11 +876,12 @@ pub struct DbReplay {
 }
 
 impl DbReplay {
-    pub fn new(db: Box<Db>) -> DbReplay {
+    pub fn new(db: Box<Db>, reader: Arc<dyn TraceReader>) -> DbReplay {
         let mut breakpoint_list: Vec<HashMap<usize, Breakpoint>> = Default::default();
         breakpoint_list.resize_with(db.paths.len(), HashMap::new);
         DbReplay {
             db,
+            reader,
             step_id: StepId(0),
             call_key: CallKey(0),
             breakpoint_list,
@@ -1321,8 +1329,8 @@ impl DbReplay {
         None
     }
 
-    fn id_to_name(&self, variable_id: VariableId) -> &String {
-        &self.db.variable_names[variable_id]
+    fn id_to_name(&self, variable_id: VariableId) -> &str {
+        self.reader.variable_name(variable_id).unwrap_or("<unknown>")
     }
 }
 
@@ -1331,7 +1339,7 @@ impl Replay for DbReplay {
         info!("load_location: db replay");
         // Event-only traces (e.g. Stylus) have no steps — return a default location
         // so the DAP server can still initialize and serve event data.
-        if self.db.steps.is_empty() {
+        if self.reader.step_count() == 0 {
             info!("  no steps in trace, returning default location");
             return Ok(Location::default());
         }
@@ -1344,7 +1352,7 @@ impl Replay for DbReplay {
 
     fn run_to_entry(&mut self) -> Result<(), Box<dyn Error>> {
         // For event-only traces (no steps), keep step_id at the default.
-        if !self.db.steps.is_empty() {
+        if self.reader.step_count() > 0 {
             self.step_id_jump(StepId(0));
         }
         Ok(())
@@ -1355,7 +1363,7 @@ impl Replay for DbReplay {
         let mut first_events: Vec<ProgramEvent> = vec![];
         let mut contents: String = "".to_string();
 
-        for (i, event_record) in self.db.events.iter().enumerate() {
+        for (i, event_record) in self.reader.events().iter().enumerate() {
             let mut event = self.to_program_event(event_record, i);
             event.content = event_record.content.to_string();
             events.push(event.clone());
@@ -1459,7 +1467,7 @@ impl Replay for DbReplay {
     }
 
     fn load_step_events(&mut self, step_id: StepId, exact: bool) -> Vec<DbRecordEvent> {
-        self.db.load_step_events(step_id, exact)
+        self.reader.load_step_events(step_id, exact)
     }
 
     fn load_callstack(&mut self) -> Result<Vec<CallLine>, Box<dyn Error>> {
@@ -1598,7 +1606,7 @@ impl Replay for DbReplay {
 
     fn delete_breakpoints(&mut self) -> Result<bool, Box<dyn Error>> {
         self.breakpoint_list.clear();
-        self.breakpoint_list.resize_with(self.db.paths.len(), HashMap::new);
+        self.breakpoint_list.resize_with(self.reader.path_count(), HashMap::new);
         Ok(true)
     }
 
