@@ -3022,7 +3022,7 @@ proc flowLoopValue*(
       style=style
     )
   ):
-    span(class = &"flow-loop-value-name", style=style):
+    span(class = &"ct-omniscience-loop", style=style):
       span(class = &"flow-parallel-loop-iteration-start"): text "iteration "
       textarea(class = &"flow-loop-textarea",
         value = $(iteration),
@@ -3050,7 +3050,8 @@ proc backLoopControlButton(self: FlowComponent, step: FlowStep, style: VStyle): 
 
   result = buildHtml(
     button(
-      class = "flow-loop-button backward",
+      class = "ct-button-image-sm-secondary ct-button-no-border",
+      id = "backward-loop",
       style = style,
       disabled = toDisabled(iteration-1 < 0),
       onclick = proc =
@@ -3069,7 +3070,8 @@ proc nextLoopControlButton(self: FlowComponent, step: FlowStep, style: VStyle): 
 
   result = buildHtml(
     button(
-      class = "flow-loop-button forward",
+      class = "ct-button-image-sm-secondary ct-button-no-border",
+      id = "forward-loop",
       style = style,
       disabled = toDisabled(maxIterations == iteration),
       onclick = proc =
@@ -3096,7 +3098,7 @@ proc makeLoopLine(
   let vNode = buildHtml(
     tdiv(
       id = &"flow-multiline-value-{step.position}-{step.stepCount}",
-      class = "flow-multiline-value-container"
+      class = "ct-flex ct-p-0"
     )
   ):
     if step.rrTicks != -1:

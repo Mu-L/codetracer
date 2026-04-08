@@ -382,12 +382,6 @@
       &:hover
         background-color: PRIMARY_BASE
 
-    &.backward
-      background-image: url('../../public/resources/shared/omniscience_backward_dark.svg')
-
-    &.forward
-      background-image: url('../../public/resources/shared/omniscience_forward_dark.svg')
-
   .flow-parallel-value
     display: inline-flex
     padding-right: 0
@@ -409,6 +403,18 @@
     display: flex
     border-radius: 0.125em
     box-sizing: border-box
+    white-space: nowrap
+
+  .ct-omniscience-loop
+    display: flex
+    padding: 0em 0.25em
+    margin-left: 0.5em
+    margin-right: 0.5em
+    justify-content: center
+    align-items: center
+    border-radius: 0.25rem
+    border: 0.12em solid color-editor-surface-tertiary
+    background: color-editor-surface-primary
     white-space: nowrap
 
   .flow-loop-value-name
@@ -451,11 +457,11 @@
 
   .flow-parallel-loop-iteration-end
     padding-left: 0.1875em
-    border-left: 0.0625em solid SECONDARY_BASE
+    // border-left: 0.0625em solid SECONDARY_BASE
 
   .flow-parallel-loop-iteration-start
     padding-right: 0.3125em
-    border-right: 0.0625em solid SECONDARY_BASE
+    // border-right: 0.0625em solid SECONDARY_BASE
 
   .flow-multiline-value-pointer
     width: 0.0625em
@@ -848,7 +854,7 @@
     padding-right: 0.15em
     text-align: right
     white-space: nowrap
-    overflow: hidden
+    // overflow: hidden
     cursor: default
 //font-weight: bold
 

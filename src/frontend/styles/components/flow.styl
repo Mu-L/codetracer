@@ -219,7 +219,7 @@
   border-color: FLOW_PARALLEL_SLIDER_COLOR !important
   border-width: 1px !important
   position: fixed !important
-  font-size: 0.9em
+  font-size: inherit
   height: 2px !important
   if IS_EXTENSION
     transform: translate(0px, 8px)
@@ -233,23 +233,24 @@
     height: 2px !important
     background-color: NOUI_SLIDER_BACKGROUND_COLOR
 
+  .noUi-touch-area
+    height: calc(100% + 1em) !important
+    width: calc(100% + 1em) !important
+    transform: translate(-0.5em, -0.5em) !important
+
   .noUi-handle
-    width: 1.5ch !important
-    height: 1.5ch !important
-    background-color: NOUI_SLIDER_HANDLER_BACKGROUND
-    // border: 1px solid NOUI_SLIDER_HANDLER_BORDER
-    right: -0.7ch !important
-    top: -0.65ch !important
-    background-image: NOUI_SLIDER_HANDLER_IMAGE
-    background-position: center
-    background-size: 0.5ch 0.5ch
-    background-repeat: no-repeat
-    border-radius: 100px
-    outline: 2px solid NOUI_SLIDER_HANDLER_BORDER
+    border-radius: 1em
+    // border: 0.012em solid color-ui-surface-panel
+    background: color-editor-action-tertiary
+    width: 0.23em !important
+    height: 0.9em !important
+    top: -0.4em !important
+    right: -0.2em !important
+
     if IS_EXTENSION
       transform: translate(620px, -4px)
   .noUi-connect
-    background: transparent
+    background: color-editor-action-primary
   .noUi-tooltip
     position: absolute
     font-size: 12px !important
