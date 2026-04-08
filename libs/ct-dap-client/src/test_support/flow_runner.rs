@@ -200,21 +200,28 @@ pub struct FlowTestRunner {
 impl FlowTestRunner {
     /// Spawn db-backend, run DAP init sequence with the given RR trace folder.
     pub fn new(db_backend_bin: &Path, rr_trace_dir: &Path) -> Result<Self, BoxError> {
+        let t0 = std::time::Instant::now();
         let (launch_folder, wrapper) = prepare_trace_folder(rr_trace_dir)?;
         let ct_rr_worker_exe = find_ct_rr_support()?;
 
         let mut client = DapStdioClient::spawn(db_backend_bin)?;
+        eprintln!("[flow-runner] spawn: {:.1}s", t0.elapsed().as_secs_f64());
 
         let _caps = client.initialize()?;
+        eprintln!("[flow-runner] initialize: {:.1}s", t0.elapsed().as_secs_f64());
 
         client.launch(LaunchRequestArguments {
             trace_folder: Some(launch_folder),
             ct_rr_worker_exe: Some(ct_rr_worker_exe),
             ..Default::default()
         })?;
+        eprintln!("[flow-runner] launch: {:.1}s", t0.elapsed().as_secs_f64());
 
         client.configuration_done()?;
+        eprintln!("[flow-runner] configurationDone: {:.1}s", t0.elapsed().as_secs_f64());
+
         client.wait_for_stopped(Duration::from_secs(60))?;
+        eprintln!("[flow-runner] stopped: {:.1}s", t0.elapsed().as_secs_f64());
 
         Ok(FlowTestRunner {
             client,

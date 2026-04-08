@@ -163,20 +163,74 @@ impl DapStdioClient {
 
     /// Wait for a `stopped` event (emitted after configurationDone + runToEntry).
     pub fn wait_for_stopped(&mut self, timeout: Duration) -> Result<(), BoxError> {
-        match self.recv_event("stopped", timeout) {
-            Ok(_) => Ok(()),
-            Err(e) => {
+        let start = std::time::Instant::now();
+        let deadline = start + timeout;
+        let mut received_events: Vec<String> = Vec::new();
+
+        loop {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
                 let stderr = self.recent_stderr(20);
-                if stderr.is_empty() {
-                    Err(e)
+                let elapsed = start.elapsed().as_secs_f64();
+                let mut msg = format!(
+                    "Timeout after {:.1}s waiting for event 'stopped'",
+                    elapsed
+                );
+                if !received_events.is_empty() {
+                    msg.push_str(&format!(
+                        "\n  Events received while waiting: {:?}",
+                        received_events
+                    ));
                 } else {
-                    Err(format!(
-                        "{}\n  db-backend stderr (last {} lines):\n    {}",
-                        e,
+                    msg.push_str("\n  No events received from db-backend");
+                }
+                if !stderr.is_empty() {
+                    msg.push_str(&format!(
+                        "\n  db-backend stderr (last {} lines):\n    {}",
                         stderr.len(),
                         stderr.join("\n    ")
-                    )
-                    .into())
+                    ));
+                }
+                // Check if db-backend process is still alive
+                if let Some(status) = self.child.try_wait().ok().flatten() {
+                    msg.push_str(&format!(
+                        "\n  db-backend process EXITED with: {}",
+                        status
+                    ));
+                } else {
+                    msg.push_str("\n  db-backend process is still running");
+                }
+                return Err(msg.into());
+            }
+            match self.rx.recv_timeout(remaining) {
+                Ok(Ok(DapMessage::Event(e))) => {
+                    if e.event == "stopped" {
+                        return Ok(());
+                    }
+                    eprintln!(
+                        "[wait_for_stopped] received event '{}' at {:.1}s",
+                        e.event,
+                        start.elapsed().as_secs_f64()
+                    );
+                    received_events.push(e.event);
+                }
+                Ok(Ok(DapMessage::Response(r))) => {
+                    received_events
+                        .push(format!("response(seq={}, cmd={})", r.request_seq, r.command));
+                }
+                Ok(Ok(other)) => {
+                    received_events.push(format!("{:?}", other));
+                }
+                Ok(Err(e)) => {
+                    return Err(format!(
+                        "Reader error while waiting for 'stopped': {}\n  elapsed: {:.1}s\n  events so far: {:?}",
+                        e,
+                        start.elapsed().as_secs_f64(),
+                        received_events
+                    ).into());
+                }
+                Err(_) => {
+                    // recv_timeout expired, loop will check deadline
                 }
             }
         }
