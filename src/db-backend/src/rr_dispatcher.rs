@@ -148,6 +148,7 @@ impl CtRRWorker {
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
             if let Ok(stream) = UnixStream::connect(&socket_path) {
+                stream.set_read_timeout(Some(Duration::from_secs(10)))?;
                 self.stream = Some(stream);
                 eprintln!("[rr-worker] socket connected");
                 return Ok(());
@@ -383,7 +384,13 @@ impl CtRRWorker {
         debug!("wait to read");
 
         let mut reader = BufReader::new(self.stream.as_mut().expect("valid receiving stream"));
-        reader.read_line(&mut res)?; // TODO: more robust reading/read all
+        reader.read_line(&mut res).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut {
+                format!("run_query timed out (10s) waiting for worker response to: {raw_json}")
+            } else {
+                format!("run_query IO error: {e}")
+            }
+        })?;
 
         res = String::from(res.trim()); // trim newlines/whitespace!
 
