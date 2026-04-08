@@ -6,9 +6,7 @@ use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::thread;
-use std::time::Duration;
-#[cfg(windows)]
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 #[cfg(windows)]
 use std::net::TcpStream;
@@ -141,39 +139,36 @@ impl CtRRWorker {
 
     #[cfg(unix)]
     fn setup_worker_sockets(&mut self) -> Result<(), Box<dyn Error>> {
-        // assuming that the ct rr worker creates the sockets!
-        // code copied and adapted from `connect_socket_with_backend_and_loop` in ct-rr-worker
-        //   which is itself copied/adapted/written from/based on https://emmanuelbosquet.com/2022/whatsaunixsocket/
-
         let run_id = std::process::id() as usize;
-
-        // let tmp_path: PathBuf = { CODETRACER_PATHS.lock()?.tmp_path.clone() };
-        // let run_dir = run_dir_for(&tmp_path, run_id)?;
-        // // remove_dir_all(&run_dir)?;
-        // create_dir_all(&run_dir)?;
-
         let socket_path = ct_rr_worker_socket_path("", &self.name, self.index, run_id)?;
 
-        // for a while it was enabled because of some problems with socket setup
-        //   but i think we resolved them with fixing another deadlock sender bug
-        //   and maybe it wasn't connected to waiting here
-        // i might be wrong, so leaving this for a reminder; sleeping is flakey in most cases though
-        thread::sleep(Duration::from_millis(800));
-
         info!("try to connect to worker with socket in {}", socket_path.display());
+
+        let deadline = Instant::now() + Duration::from_secs(30);
         loop {
             if let Ok(stream) = UnixStream::connect(&socket_path) {
                 self.stream = Some(stream);
                 info!("stream is now setup");
-                break;
+                return Ok(());
             }
-            thread::sleep(Duration::from_millis(1));
-            // TODO: handle different kinds of errors
 
-            // TODO: after some retries, assume a problem and return an error?
+            if Instant::now() >= deadline {
+                return Err(format!(
+                    "timeout after 30s waiting for worker socket at {}",
+                    socket_path.display()
+                )
+                .into());
+            }
+
+            // Check if the worker process is still alive.
+            if let Some(ref mut child) = self.process {
+                if let Some(status) = child.try_wait()? {
+                    return Err(format!("worker process exited with {} before creating socket", status).into());
+                }
+            }
+
+            thread::sleep(Duration::from_millis(10));
         }
-
-        Ok(())
     }
 
     #[cfg(windows)]
