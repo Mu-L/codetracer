@@ -58,7 +58,7 @@ impl TracepointTestRunner {
         client.configuration_done()?;
 
         // Wait for the initial stopped event (run-to-entry)
-        client.wait_for_stopped(Duration::from_secs(60))?;
+        client.wait_for_stopped(Duration::from_secs(10))?;
 
         Ok(TracepointTestRunner {
             client,

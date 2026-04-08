@@ -118,6 +118,7 @@ impl CtRRWorker {
             .spawn()?;
 
         let worker_pid = ct_worker.id();
+        eprintln!("[rr-worker] spawned worker pid={}", worker_pid);
         self.process = Some(ct_worker);
         if let Err(err) = self.setup_worker_sockets() {
             if let Some(child) = self.process.as_mut() {
@@ -142,19 +143,19 @@ impl CtRRWorker {
         let run_id = std::process::id() as usize;
         let socket_path = ct_rr_worker_socket_path("", &self.name, self.index, run_id)?;
 
-        info!("try to connect to worker with socket in {}", socket_path.display());
+        eprintln!("[rr-worker] connecting to socket {}", socket_path.display());
 
-        let deadline = Instant::now() + Duration::from_secs(30);
+        let deadline = Instant::now() + Duration::from_secs(10);
         loop {
             if let Ok(stream) = UnixStream::connect(&socket_path) {
                 self.stream = Some(stream);
-                info!("stream is now setup");
+                eprintln!("[rr-worker] socket connected");
                 return Ok(());
             }
 
             if Instant::now() >= deadline {
                 return Err(format!(
-                    "timeout after 30s waiting for worker socket at {}",
+                    "timeout after 10s waiting for worker socket at {}",
                     socket_path.display()
                 )
                 .into());
@@ -475,11 +476,14 @@ impl RRDispatcher {
     pub fn ensure_active_stable(&mut self) -> Result<(), Box<dyn Error>> {
         // start stable process if not active, store fields, setup ipc? store in stable
         if !self.stable.active {
+            eprintln!("[rr-dispatcher] starting worker for '{}'", self.name);
             let res = self.stable.start();
             if let Err(e) = res {
+                eprintln!("[rr-dispatcher] worker start FAILED: {:?}", e);
                 error!("can't start ct rr worker for {}! error is {:?}", self.name, e);
                 return Err(e);
             }
+            eprintln!("[rr-dispatcher] worker started successfully");
         }
         // check again:
         if !self.stable.active {

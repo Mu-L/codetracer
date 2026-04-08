@@ -132,7 +132,7 @@ impl DapStdioClient {
             }),
         )?;
 
-        let resp = self.recv_response(Duration::from_secs(30))?;
+        let resp = self.recv_response(Duration::from_secs(10))?;
         if !resp.success {
             return Err(format!("initialize failed: {:?}", resp.message).into());
         }
@@ -144,7 +144,7 @@ impl DapStdioClient {
     /// Send launch request with the given arguments.
     pub fn launch(&mut self, args: LaunchRequestArguments) -> Result<(), BoxError> {
         self.send_request("launch", serde_json::to_value(&args)?)?;
-        let resp = self.recv_response(Duration::from_secs(30))?;
+        let resp = self.recv_response(Duration::from_secs(10))?;
         if !resp.success {
             return Err(format!("launch failed: {:?}", resp.message).into());
         }
@@ -154,7 +154,7 @@ impl DapStdioClient {
     /// Send configurationDone request.
     pub fn configuration_done(&mut self) -> Result<(), BoxError> {
         self.send_request("configurationDone", json!({}))?;
-        let resp = self.recv_response(Duration::from_secs(30))?;
+        let resp = self.recv_response(Duration::from_secs(10))?;
         if !resp.success {
             return Err(format!("configurationDone failed: {:?}", resp.message).into());
         }
@@ -248,7 +248,7 @@ impl DapStdioClient {
                 "breakpoints": breakpoints,
             }),
         )?;
-        let resp = self.recv_response(Duration::from_secs(30))?;
+        let resp = self.recv_response(Duration::from_secs(10))?;
         if !resp.success {
             return Err(format!("setBreakpoints failed: {:?}", resp.message).into());
         }
@@ -268,7 +268,7 @@ impl DapStdioClient {
     /// belonging to this `continue` request.
     pub fn dap_continue(&mut self) -> Result<MoveState, BoxError> {
         self.send_request("continue", json!({"threadId": 1}))?;
-        self.wait_for_stopped(Duration::from_secs(60))?;
+        self.wait_for_stopped(Duration::from_secs(10))?;
         let event = self.recv_event("ct/complete-move", Duration::from_secs(10))?;
         let state: MoveState = serde_json::from_value(event.body)?;
         // Consume the trailing response sent by the step handler
@@ -288,7 +288,7 @@ impl DapStdioClient {
         // TTD flow computation in CDB mode spawns a new CDB process per
         // operation (step, load_location, load_value), so the flow loop
         // for even a small function can take several minutes.
-        let event = self.recv_event("ct/updated-flow", Duration::from_secs(300))?;
+        let event = self.recv_event("ct/updated-flow", Duration::from_secs(10))?;
         Ok(event.body)
     }
 
@@ -306,7 +306,7 @@ impl DapStdioClient {
         self.send_request("ct/run-tracepoints", serde_json::to_value(&args)?)?;
 
         // Wait for the aggregate results event (skips intermediate trace update events)
-        let event = self.recv_event("ct/tracepoint-results", Duration::from_secs(120))?;
+        let event = self.recv_event("ct/tracepoint-results", Duration::from_secs(10))?;
         let results: TracepointResultsAggregate = serde_json::from_value(event.body)?;
         Ok(results)
     }
@@ -316,7 +316,7 @@ impl DapStdioClient {
     /// Load terminal output.
     pub fn load_terminal(&mut self) -> Result<Vec<ProgramEvent>, BoxError> {
         self.send_request("ct/load-terminal", json!({}))?;
-        let event = self.recv_event("ct/loaded-terminal", Duration::from_secs(30))?;
+        let event = self.recv_event("ct/loaded-terminal", Duration::from_secs(10))?;
         let events: Vec<ProgramEvent> = serde_json::from_value(event.body)?;
         Ok(events)
     }
@@ -334,7 +334,7 @@ impl DapStdioClient {
                 "threadId": 1,
             }),
         )?;
-        let resp = self.recv_response(Duration::from_secs(30))?;
+        let resp = self.recv_response(Duration::from_secs(10))?;
         if !resp.success {
             return Err(format!("stackTrace failed: {:?}", resp.message).into());
         }
@@ -379,7 +379,7 @@ impl DapStdioClient {
     /// standard DAP command names that the stdio-based server expects.
     pub fn dap_step(&mut self, command: &str) -> Result<MoveState, BoxError> {
         self.send_request(command, json!({"threadId": 1}))?;
-        self.wait_for_stopped(Duration::from_secs(60))?;
+        self.wait_for_stopped(Duration::from_secs(10))?;
         let event = self.recv_event("ct/complete-move", Duration::from_secs(10))?;
         let state: MoveState = serde_json::from_value(event.body)?;
         // Consume the trailing response sent by the step handler.

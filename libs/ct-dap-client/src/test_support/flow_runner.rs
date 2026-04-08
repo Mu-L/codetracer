@@ -220,7 +220,7 @@ impl FlowTestRunner {
         client.configuration_done()?;
         eprintln!("[flow-runner] configurationDone: {:.1}s", t0.elapsed().as_secs_f64());
 
-        client.wait_for_stopped(Duration::from_secs(60))?;
+        client.wait_for_stopped(Duration::from_secs(10))?;
         eprintln!("[flow-runner] stopped: {:.1}s", t0.elapsed().as_secs_f64());
 
         Ok(FlowTestRunner {
@@ -246,7 +246,7 @@ impl FlowTestRunner {
         })?;
 
         client.configuration_done()?;
-        client.wait_for_stopped(Duration::from_secs(60))?;
+        client.wait_for_stopped(Duration::from_secs(10))?;
 
         Ok(FlowTestRunner {
             client,
