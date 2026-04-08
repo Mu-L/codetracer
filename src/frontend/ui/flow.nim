@@ -3095,6 +3095,8 @@ proc makeLoopLine(
     (StyleAttr.width, cstring("fit-content"))
   )
 
+  let bStyle = style()
+
   let vNode = buildHtml(
     tdiv(
       id = &"flow-multiline-value-{step.position}-{step.stepCount}",
@@ -3102,9 +3104,9 @@ proc makeLoopLine(
     )
   ):
     if step.rrTicks != -1:
-      backLoopControlButton(self, step, style)
+      backLoopControlButton(self, step, bStyle)
       flowLoopValue(self, step, allIterations, style)
-      nextLoopControlButton(self, step, style)
+      nextLoopControlButton(self, step, bStyle)
 
     # self.redraw()
 

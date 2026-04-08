@@ -1986,10 +1986,11 @@ method onEnter*(self: EditorViewComponent) {.async.} =
   elif self.data.ui.readOnly:
     let line = editor.getLine()
     let code = self.traces[line].monacoEditor.getValue()
-    let lineCount = code.split("\n").len() + 1
+    let lineCount = code.split("\n").len()
+    let lineHeight = cast[int](self.traces[line].monacoEditor.getOption(LINE_HEIGHT))
 
     self.traces[line].lineCount = lineCount
-    self.traces[line].expandWithEnter(lineCount * (data.ui.fontSize + 5))
+    self.traces[line].expandWithEnter(lineCount * lineHeight)
     self.traces[line].monacoEditor.insertTextAtCurrentPosition("\n")
 
     discard setTimeout(proc() =

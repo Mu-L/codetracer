@@ -16,11 +16,9 @@ using UiTests.Tests;
 
 public static class NoirSpaceShipTests
 {
-    /// <summary>
-    /// Navigates via call trace to open shield.nr editor tab.
-    /// This is needed because shield.nr is not open by default - only main.nr is.
-    /// </summary>
-    private static async Task<EditorPane> NavigateToShieldEditorAsync(LayoutPage layout)
+    private const double CallTraceOverlayAlignmentTolerancePx = 1.5;
+
+    private static async Task<CallTracePane> PrepareCalculateDamageCalltraceAsync(LayoutPage layout)
     {
         var callTrace = (await layout.CallTraceTabsAsync()).First();
         await callTrace.TabButton().ClickAsync();
@@ -30,16 +28,50 @@ public static class NoirSpaceShipTests
         await eventLog.TabButton().ClickAsync();
         var firstRow = await eventLog.RowByIndexAsync(1, forceReload: true);
         await firstRow.ClickAsync();
+        await callTrace.TabButton().ClickAsync();
+        callTrace.InvalidateEntries();
 
-        var statusReportEntry = await callTrace.FindEntryAsync("status_report", forceReload: true)
-            ?? throw new Exception("Unable to locate status_report entry in call trace.");
+        var statusReportEntry = await RequireCallTraceEntryAsync(callTrace, "status_report");
         await statusReportEntry.ActivateAsync();
         await statusReportEntry.ExpandChildrenAsync();
         callTrace.InvalidateEntries();
 
-        var calculateDamageEntry = await callTrace.FindEntryAsync("calculate_damage", forceReload: true)
-            ?? throw new Exception("Unable to locate calculate_damage entry in call trace.");
+        var calculateDamageEntry = await RequireCallTraceEntryAsync(callTrace, "calculate_damage");
         await calculateDamageEntry.ActivateAsync();
+        return callTrace;
+    }
+
+    private static async Task<int> RootFontSizeAsync(IPage page) =>
+        await page.EvaluateAsync<int>(
+            "() => Math.round(Number.parseFloat(window.getComputedStyle(document.documentElement).fontSize || '16'))");
+
+    private static Task SetRootFontSizeAsync(IPage page, int fontSize) =>
+        page.EvaluateAsync(
+            @"(fontSize) => {
+                document.documentElement.style.fontSize = `${fontSize}px`;
+                window.dispatchEvent(new Event('resize'));
+            }",
+            fontSize);
+
+    private static Task AssertOverlayAlignedAsync(CallTracePane callTrace, string functionName, string phase) =>
+        RetryHelpers.RetryAsync(async () =>
+        {
+            var alignment = await callTrace.MeasureOverlayAlignmentAsync(functionName);
+            if (alignment.DeltaX > CallTraceOverlayAlignmentTolerancePx)
+            {
+                throw new Exception(
+                    $"Call trace overlay misaligned during {phase} for '{functionName}' " +
+                    $"(delta={alignment.DeltaX:0.###}, marker={alignment.MarkerCenterX:0.###}, overlay={alignment.OverlayX:0.###}).");
+            }
+        }, maxAttempts: 20, delayMs: 200);
+
+    /// <summary>
+    /// Navigates via call trace to open shield.nr editor tab.
+    /// This is needed because shield.nr is not open by default - only main.nr is.
+    /// </summary>
+    private static async Task<EditorPane> NavigateToShieldEditorAsync(LayoutPage layout)
+    {
+        await PrepareCalculateDamageCalltraceAsync(layout);
 
         var shieldEditor = (await layout.EditorTabsAsync(true))
             .FirstOrDefault(e => e.TabButtonText.Contains("shield.nr", StringComparison.OrdinalIgnoreCase))
@@ -76,30 +108,8 @@ public static class NoirSpaceShipTests
         await layout.WaitForAllComponentsLoadedAsync();
         DebugLogger.Log("All components loaded");
 
-        var callTrace = (await layout.CallTraceTabsAsync()).First();
-        DebugLogger.Log("Call trace tab acquired; focusing call trace");
-        await callTrace.TabButton().ClickAsync();
-        callTrace.InvalidateEntries();
-
-        var eventLog = (await layout.EventLogTabsAsync()).First();
-        DebugLogger.Log("Opening event log tab");
-        await eventLog.TabButton().ClickAsync();
-        var firstRow = await eventLog.RowByIndexAsync(1, forceReload: true);
-        DebugLogger.Log("Clicking first event log row");
-        await firstRow.ClickAsync();
-
-        var statusReportEntry = await callTrace.FindEntryAsync("status_report", forceReload: true)
-            ?? throw new Exception("Unable to locate status_report entry in call trace.");
-        DebugLogger.Log("Activating status_report entry");
-        await statusReportEntry.ActivateAsync();
-        DebugLogger.Log("Expanding status_report children");
-        await statusReportEntry.ExpandChildrenAsync();
-        callTrace.InvalidateEntries();
-
-        var calculateDamageEntry = await callTrace.FindEntryAsync("calculate_damage", forceReload: true)
-            ?? throw new Exception("Unable to locate calculate_damage entry in call trace.");
-        DebugLogger.Log("Activating calculate_damage entry");
-        await calculateDamageEntry.ActivateAsync();
+        DebugLogger.Log("Preparing calculate_damage call trace state");
+        await PrepareCalculateDamageCalltraceAsync(layout);
 
         var shieldEditor = (await layout.EditorTabsAsync(true))
             .FirstOrDefault(e => e.TabButtonText.Contains("shield.nr", StringComparison.OrdinalIgnoreCase))
@@ -144,6 +154,31 @@ public static class NoirSpaceShipTests
 
         await layout.NextButton().ClickAsync();
         await layout.ReverseNextButton().ClickAsync();
+    }
+
+    public static async Task CallTraceSvgOverlayTracksZoom(IPage page)
+    {
+        var layout = new LayoutPage(page);
+        await layout.WaitForAllComponentsLoadedAsync();
+
+        var callTrace = await PrepareCalculateDamageCalltraceAsync(layout);
+
+        await AssertOverlayAlignedAsync(callTrace, "status_report", "baseline");
+        await AssertOverlayAlignedAsync(callTrace, "calculate_damage", "baseline");
+
+        var originalFontSize = await RootFontSizeAsync(page);
+        var zoomedFontSize = originalFontSize + 6;
+
+        try
+        {
+            await SetRootFontSizeAsync(page, zoomedFontSize);
+            await AssertOverlayAlignedAsync(callTrace, "status_report", $"zoomed to {zoomedFontSize}px");
+            await AssertOverlayAlignedAsync(callTrace, "calculate_damage", $"zoomed to {zoomedFontSize}px");
+        }
+        finally
+        {
+            await SetRootFontSizeAsync(page, originalFontSize);
+        }
     }
 
     public static async Task LoopIterationSliderTracksRemainingShield(IPage page)

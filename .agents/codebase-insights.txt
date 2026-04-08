@@ -51,6 +51,7 @@
 - `Infrastructure/CodetracerLauncher.RecordProgramAsync` accepts Noir directories as well as Ruby/Python files, matching `ct record` semantics; when `Web.DefaultTraceDirectory` is unset it falls back to `~/.local/share/codetracer`.
 - `trace_index.ensureDB` enables SQLite WAL mode and a 60s busy timeout so parallel `ct record` processes wait on locks instead of failing with “database is locked”.
 - Scratchpad entries are sourced from multiple panes via `InternalAddToScratchpad`: calltrace arguments, flow before/after values, trace table rows, editor trace results, and value tooltips/context menus all emit that event, so UI tests should cover each surface explicitly.
+- Calltrace SVG overlay geometry should be derived from live DOM marker positions (`.toggle-call` / marker icons), not from the historical `CALL_HEIGHT_PX` / indent constants; root-font-size zoom and `em`-based calltrace styling otherwise desynchronize the overlay path from the visible tree.
 - Most panes use the global `#context-menu-container` element for menu actions, but the filesystem tree relies on jstree's `#vakata-contextmenu`, so page objects/tests need to open the correct container.
 - launch ui-tests commands through `direnv exec .` (or an equivalent `nix shell`) so the flake-provided dotnet toolchain and Playwright node runtime land on PATH; invoking `dotnet` directly from `bash -lc` skips direnv hooks.
 - The default `appsettings.json` only wires Noir scenarios; to exercise ProgramAgnostic tests, supply a custom config overriding `Scenarios` and pass it via `--config=/abs/path`.

@@ -41,6 +41,12 @@ internal sealed class TestRegistry : ITestRegistry
 
         Register(
             new UiTestDescriptor(
+                "NoirSpaceShip.CallTraceSvgOverlayTracksZoom",
+                "Noir Space Ship / Call Trace SVG Overlay Tracks Zoom",
+                async context => await NoirSpaceShipTests.CallTraceSvgOverlayTracksZoom(context.Page)));
+
+        Register(
+            new UiTestDescriptor(
                 "NoirSpaceShip.LoopIterationSliderTracksRemainingShield",
                 "Noir Space Ship / Loop Slider Tracks Remaining Shield",
                 async context => await NoirSpaceShipTests.LoopIterationSliderTracksRemainingShield(context.Page)));

@@ -10,11 +10,23 @@ let
   RUN_TRACE_MESSAGE: cstring = "Press Ctrl+Enter to run the trace."
   NO_RESULTS_MESSAGE: cstring = "No results. Line was not reached (or errors while evaluating logs)."
 
+const
+  TRACE_EDITOR_EXTRA_HEIGHT_PX = 20
+  TRACE_VIEWZONE_EXTRA_HEIGHT_PX = 16
+  TRACE_COLLAPSED_RESULTS_EXTRA_PX = 15
+  TRACE_MIN_RESULTS_HEIGHT_PX = 36
+  TRACE_MENU_MIN_HEIGHT_PX = 36
+  TRACE_FOOTER_MIN_HEIGHT_PX = 18
+  TRACE_RESULTS_VISIBLE_ROWS = 10
+
 proc getCurrentMonacoTheme(editor: MonacoEditor): cstring {.importjs:"#._themeService._theme.themeName".}
 proc toggleTrace*(editorUI: EditorViewComponent, name: cstring, line: int)
 proc closeTrace*(self: TraceComponent)
 proc resizeTraceHandler*(self: TraceComponent)
 proc refreshTraceTableLayout*(self: TraceComponent)
+proc refreshTraceComponentLayout*(self: TraceComponent)
+proc getConfiguration*(editor: MonacoEditor): MonacoEditorConfig
+proc traceBoundingClientRect(node: js): HTMLBoundingRect {.importjs:"#.getBoundingClientRect()".}
 
 when defined(ctInExtension):
   var tracepointComponentMapping* {.exportc.}: JsAssoc[cstring, JsAssoc[int, TraceComponent]] = JsAssoc[cstring, JsAssoc[int, TraceComponent]]{}
@@ -41,6 +53,112 @@ proc calcTraceWidth(self: TraceComponent) =
   let minimapWidth = editorLayout.minimapWidth
 
   self.traceWidth = editorWidth - minimapWidth - contentLeft - 8
+
+proc traceMeasuredNodeHeight(node: Node): int =
+  if node.isNil:
+    return 0
+
+  let rect = traceBoundingClientRect(node.toJs)
+  result = cast[int](rect.height)
+
+  if result == 0:
+    result = node.toJs.clientHeight.to(int)
+
+proc traceEditorLineHeight(self: TraceComponent): int =
+  if not self.monacoEditor.isNil:
+    result = cast[int](self.monacoEditor.getOption(LINE_HEIGHT))
+  else:
+    result = self.data.ui.fontSize + 5
+
+proc traceEditorContentHeight(self: TraceComponent): int =
+  self.lineCount * self.traceEditorLineHeight()
+
+proc traceEditorHeight(self: TraceComponent): int =
+  self.traceEditorContentHeight() + TRACE_EDITOR_EXTRA_HEIGHT_PX
+
+proc collapsedTraceResultsHeight(self: TraceComponent): int =
+  max(self.traceEditorLineHeight() + TRACE_COLLAPSED_RESULTS_EXTRA_PX, TRACE_MIN_RESULTS_HEIGHT_PX)
+
+proc expandedTraceResultsHeight(self: TraceComponent): int =
+  max(self.traceEditorLineHeight() * TRACE_RESULTS_VISIBLE_ROWS, self.collapsedTraceResultsHeight())
+
+proc traceMenuHeight(self: TraceComponent): int =
+  let traceMain = document.getElementById(cstring(fmt"trace-{self.id}"))
+  if traceMain.isNil:
+    return TRACE_MENU_MIN_HEIGHT_PX
+
+  let traceMenu = cast[Node](traceMain.findNodeInElement(".trace-menu"))
+  if traceMenu.isNil:
+    return TRACE_MENU_MIN_HEIGHT_PX
+
+  result = max(traceMeasuredNodeHeight(traceMenu), TRACE_MENU_MIN_HEIGHT_PX)
+
+proc traceFooterHeight(self: TraceComponent): int =
+  if self.chart.isNil or self.chart.viewKind != ViewTable:
+    return 0
+
+  if self.dataTable.isNil or self.dataTable.footerDom.isNil:
+    return TRACE_FOOTER_MIN_HEIGHT_PX
+
+  result = max(traceMeasuredNodeHeight(cast[Node](self.dataTable.footerDom)), TRACE_FOOTER_MIN_HEIGHT_PX)
+
+proc traceResultsPanelHeight(self: TraceComponent): int =
+  self.resultsHeight + self.traceMenuHeight() + self.traceFooterHeight()
+
+proc usesExpandedTraceResults(self: TraceComponent): bool =
+  let collapsedHeight = self.collapsedTraceResultsHeight()
+  self.isRan or self.isLoading or
+    not self.dataTable.context.isNil or
+    self.tracepoint.tracepointError != cstring"" or
+    self.resultsHeight > collapsedHeight
+
+proc syncTraceResultsHeight(self: TraceComponent) =
+  if self.usesExpandedTraceResults():
+    self.resultsHeight = self.expandedTraceResultsHeight()
+  else:
+    self.resultsHeight = self.collapsedTraceResultsHeight()
+
+proc traceViewZoneHeight(self: TraceComponent): int =
+  self.traceEditorHeight() + self.traceResultsPanelHeight() + TRACE_VIEWZONE_EXTRA_HEIGHT_PX
+
+proc focusTraceEditor(self: TraceComponent) =
+  if self.monacoEditor.isNil:
+    return
+
+  discard setTimeout(proc() =
+    self.monacoEditor.focus()
+    self.monacoEditor.toJs.getDomNode().querySelector("textarea").focus(),
+    1
+  )
+
+proc focusTraceEditorAfterLayout(self: TraceComponent, delay: int = 0) =
+  discard setTimeout(proc() =
+    self.data.ui.activeFocus = self
+    self.focusTraceEditor()
+  , delay)
+
+proc shouldRestoreTraceEditorFocus(self: TraceComponent): bool =
+  if self.monacoEditor.isNil:
+    return false
+
+  self.monacoEditor.hasTextFocus() or self.data.ui.activeFocus == self
+
+proc applyTraceDomLayout(self: TraceComponent) =
+  let traceMain = document.getElementById(cstring(fmt"trace-{self.id}"))
+  if traceMain.isNil:
+    return
+
+  self.editorUI.monacoEditor.config = getConfiguration(self.editorUI.monacoEditor)
+  self.calcTraceWidth()
+  traceMain.style.width = cstring(fmt"{self.traceWidth}px")
+
+  let editorTextarea = jq(cstring(fmt"#trace-{self.id} .editor-textarea"))
+  if not editorTextarea.isNil:
+    editorTextarea.style.height = cstring(fmt"{self.traceEditorHeight()}px")
+
+  let editorTraces = jq(cstring(fmt"#trace-{self.id} .editor-traces"))
+  if not editorTraces.isNil:
+    editorTraces.style.height = cstring(fmt"{self.traceResultsPanelHeight()}px")
 
 # proc traceMainStyle(self: TraceComponent): VStyle =
 #   self.editorUI.monacoEditor.config = getConfiguration(self.editorUI.monacoEditor)
@@ -130,6 +248,11 @@ proc getConfiguration*(editor: MonacoEditor): MonacoEditorConfig =
       minimapLeft: layoutInfo.minimap.minimapLeft))
 
 proc updateViewZoneHeight(self: TraceComponent, newHeight: int) =
+  if self.viewZone.isNil:
+    return
+
+  let shouldRestoreFocus = self.shouldRestoreTraceEditorFocus()
+
   self.editorUI.monacoEditor.changeViewZones do (view: js):
     view.removeZone(self.zoneId)
 
@@ -137,21 +260,9 @@ proc updateViewZoneHeight(self: TraceComponent, newHeight: int) =
 
   self.editorUI.monacoEditor.changeViewZones do (view: js):
     self.zoneId = cast[int](view.addZone(self.viewZone))
-  self.editorUI.monacoEditor.config = getConfiguration(self.editorUI.monacoEditor)
-  let traceMain = kdom.document.getElementById(cstring(fmt"trace-{self.id}"))
-  let editor = self.editorUI.monacoEditor
-  let editorLayout = editor.config.layoutInfo
-  let editorWidth = editorLayout.width
-  let contentLeft = editorLayout.contentLeft
-  let minimapWidth = editorLayout.minimapWidth
-  self.traceWidth = editorWidth - minimapWidth - contentLeft - 8
-  traceMain.style.width = cstring(fmt"{self.traceWidth}px")
-  self.resultsHeight = 210
-  jq(cstring(fmt"#trace-{self.id} .editor-traces")).style.height = cstring(fmt"{self.resultsHeight}px")
-  discard setTimeout(proc() =
-    self.monacoEditor.toJs.getDomNode().querySelector("textarea").focus(),
-    1
-  )
+  self.applyTraceDomLayout()
+  if shouldRestoreFocus:
+    self.focusTraceEditorAfterLayout()
 
 proc convertTracepointEventToProgramEvent(tracepointEvent: Stop): ProgramEvent =
   var res: cstring
@@ -200,8 +311,9 @@ proc runTracepoints*(data: Data) {.exportc.} =
     let code = trace.monacoEditor.getValue()
 
     if code != "" and not trace.isDisabled: # and trace.isChanged
-      if trace.resultsHeight == 36:
-        trace.updateViewZoneHeight(cast[int](trace.viewZone.heightInPx) + 180)
+      if trace.resultsHeight <= trace.collapsedTraceResultsHeight():
+        trace.resultsHeight = trace.expandedTraceResultsHeight()
+        trace.updateViewZoneHeight(trace.traceViewZoneHeight())
         data.ui.activeFocus = trace
 
       trace.isRan = true
@@ -395,24 +507,23 @@ proc renderTableResults(
 
       # resize data table to fit container
       self.refreshTraceTableLayout()
+      discard setTimeout(proc() =
+        self.refreshTraceTableLayout()
+      , 0)
 
       # add event listener for scrolling to update table footer
       let scrollBodyDom = jq(cstring(fmt"#chart-table-{self.id} .dt-scroll-body"))
 
-      # add wheel event handler for nested scrollable element (table content)
+      # keep editor-level wheel handling from stealing nested table scrolling
       scrollBodyDom.toJs.addEventListener(cstring"wheel", proc(ev: Event, tg: VNode) =
         ev.stopPropagation()
         self.dataTable.inputFieldChange = false
-        discard setTimeout(proc() =
-          self.dataTable.updateTableRows()
-          self.redraw(),
-          100
-        )
-        discard setTimeout(proc() =
-          self.dataTable.updateTableFooter()
-          self.redraw(),
-          100
-        )
+      )
+
+      scrollBodyDom.toJs.addEventListener(cstring"scroll", proc(ev: Event, tg: VNode) =
+        self.dataTable.inputFieldChange = false
+        self.dataTable.updateTableRows(redraw = false)
+        self.dataTable.updateTableFooter()
       )
 
       proc toProgramEvent(self: TraceComponent, datatableRow: js): ProgramEvent =
@@ -453,22 +564,15 @@ proc renderTableResults(
     else:
       return
 
-    let denseWrapper = cstring(fmt"#trace-table-{self.id}_wrapper")
-
-    cast[Node](jq(denseWrapper)).findNodeInElement(".dt-scroll-body")
-        .addEventListener(cstring"wheel", proc(ev: Event) =
-          ev.stopPropagation()
-          self.dataTable.updateTableRows()
-          self.dataTable.updateTableFooter())
-
 proc enableIcon(self: TraceComponent) =
   let iconDom =
     cast[Element](jq(cstring(&"#trace-{self.id} .trace-disable")))
 
   if not iconDom.isNil:
     iconDom.innerHtml = "Disable"
+
+  if self.inExtension:
     self.redrawForExtension()
-    self.data.redraw()
 
 proc disableIcon(self: TraceComponent) =
   let iconDom =
@@ -476,8 +580,9 @@ proc disableIcon(self: TraceComponent) =
 
   if not iconDom.isNil:
     iconDom.innerHtml = "Enable"
+
+  if self.inExtension:
     self.redrawForExtension()
-    self.data.redraw()
 
 proc showSelectedChart(self: TraceComponent) =
   hideDomElement(self.chartTableDom)
@@ -721,6 +826,10 @@ proc getTracepointInfo(trace: TraceComponent): Tracepoint =
     trace.isChanged = false
     trace.isUpdating = true
     trace.error = nil
+    trace.syncTraceResultsHeight()
+    if trace.expanded and not trace.viewZone.isNil:
+      trace.updateViewZoneHeight(trace.traceViewZoneHeight())
+      trace.refreshTraceTableLayout()
 
   return result
 
@@ -825,27 +934,7 @@ func traceLine(line: int): cstring =
 # const RESULT_HEIGHT = 10
 
 proc expandWithEnter*(self: TraceComponent, newHeight: int) =
-  self.editorUI.monacoEditor.changeViewZones do (view: js):
-    view.removeZone(self.zoneId)
-  self.viewZone.heightInPx = newHeight + self.resultsHeight + 16
-
-  self.editorUI.monacoEditor.changeViewZones do (view: js):
-    self.zoneId = cast[int](view.addZone(self.viewZone))
-
-  discard setTimeout(proc() =
-    self.monacoEditor.toJs.getDomNode().querySelector("textarea").focus(),
-    1
-  )
-  self.editorUI.monacoEditor.config = getConfiguration(self.editorUI.monacoEditor)
-  let traceMain = kdom.document.getElementById(cstring(fmt"trace-{self.id}"))
-  let editor = self.editorUI.monacoEditor
-  let editorLayout = editor.config.layoutInfo
-  let editorWidth = editorLayout.width
-  let contentLeft = editorLayout.contentLeft
-  let minimapWidth = editorLayout.minimapWidth
-  self.traceWidth = editorWidth - minimapWidth - contentLeft - 8
-  traceMain.style.width = cstring(fmt"{self.traceWidth}px")
-  jq(cstring(fmt"#trace-{self.id} .editor-textarea")).style.height = cstring(fmt"{self.lineCount * (data.ui.fontSize + 5)}px")
+  self.updateViewZoneHeight(newHeight + TRACE_EDITOR_EXTRA_HEIGHT_PX + self.traceResultsPanelHeight() + TRACE_VIEWZONE_EXTRA_HEIGHT_PX)
 
 # proc traceErrorView(self: TraceComponent): VNode =
 #   buildHtml(
@@ -895,10 +984,7 @@ proc ensureMonacoEditor(self: TraceComponent) =
     )
 
     # focus trace monaco editor text area after delay
-    discard setTimeout(proc() =
-      self.monacoEditor.toJs.getDomNode().querySelector("textarea").focus(),
-      1
-    )
+    self.focusTraceEditor()
 
     # add trace monaco editor to the register
     # TODO: Find a better way when using extension
@@ -913,12 +999,17 @@ proc ensureMonacoEditor(self: TraceComponent) =
       self.saveSource()
 
       let code = self.monacoEditor.getValue()
-      let lineCount = code.split("\n").len() + 1
+      let lineCount = code.split("\n").len()
 
       if self.lineCount != lineCount:
         self.lineCount = lineCount
         if not self.inExtension:
-          self.expandWithEnter(lineCount*(data.ui.fontSize + 5))
+          self.expandWithEnter(self.traceEditorContentHeight())
+
+      discard setTimeout(proc() =
+        if not self.monacoEditor.isNil and not self.monacoEditor.hasTextFocus():
+          self.focusTraceEditor()
+      , 0)
     )
 
 proc resizeEditorHandler(self: TraceComponent) =
@@ -997,7 +1088,7 @@ method render*(self: TraceComponent): VNode =
       tdiv(class = "editor-info"):
         tdiv(
           class = cstring(fmt"editor-textarea editor-textarea-width-{$self.editorWidth}"),
-          style = style(StyleAttr.height, cstring(fmt"{self.lineCount * (data.ui.fontSize + 5) + 20}px"))
+          style = style(StyleAttr.height, cstring(fmt"{self.traceEditorHeight()}px"))
         ):
           tdiv(class = "trace-disabled-overlay tracepoint-overlay hidden"):
             tdiv(class = "trace-overlay"):
@@ -1040,8 +1131,24 @@ proc resizeTraceHandler*(self: TraceComponent) =
   if traceMain.isNil:
     return
 
-  self.calcTraceWidth()
-  traceMain.style.width = cstring(fmt"{self.traceWidth}px")
+  self.syncTraceResultsHeight()
+  self.applyTraceDomLayout()
+
+proc refreshTraceComponentLayout*(self: TraceComponent) =
+  self.syncTraceResultsHeight()
+
+  if self.expanded and not self.viewZone.isNil:
+    self.updateViewZoneHeight(self.traceViewZoneHeight())
+  else:
+    self.applyTraceDomLayout()
+
+  self.refreshTraceTableLayout()
+  discard setTimeout(proc() =
+    self.refreshTraceTableLayout()
+  , 0)
+  discard setTimeout(proc() =
+    self.refreshTraceTableLayout()
+  , 50)
 
 proc refreshTraceTableLayout*(self: TraceComponent) =
   if self.dataTable.isNil or self.dataTable.context.isNil:
@@ -1052,13 +1159,14 @@ proc refreshTraceTableLayout*(self: TraceComponent) =
 
 proc togglePoint*(trace: TraceComponent) =
   if trace.viewZone.isNil:
+    trace.syncTraceResultsHeight()
     # create trace base dom Node
     let traceNode = vnodeToDom(traceBase(trace), kxi)
 
     # config new view zone in monaco editor
     trace.viewZone = js{
       afterLineNumber: line,
-      heightInPx: 90,
+      heightInPx: trace.traceViewZoneHeight(),
       domNode: traceNode
     }
 
@@ -1115,8 +1223,8 @@ proc togglePoint*(trace: TraceComponent) =
     trace.dataTable.footerDom =
       cast[Element](trace.chartTableDom.findNodeInElement(".data-tables-footer"))
     discard setTimeout(proc =
-      trace.resizeTraceHandler()
-      trace.refreshTraceTableLayout()
+      trace.refreshTraceComponentLayout()
+      trace.focusTraceEditorAfterLayout()
     , 0)
 
     trace.chartLineDom =
@@ -1152,6 +1260,7 @@ proc togglePoint*(trace: TraceComponent) =
 
     # set trace to expanded
     trace.expanded = true
+    trace.focusTraceEditorAfterLayout()
 
 proc toggleTrace*(editorUI: EditorViewComponent, name: cstring, line: int) =
   let newTime = now()
@@ -1192,13 +1301,14 @@ proc toggleTrace*(editorUI: EditorViewComponent, name: cstring, line: int) =
   editorUI.monacoEditor.revealLineInCenterIfOutsideViewport(line, Immediate)
 
   if trace.viewZone.isNil:
+    trace.syncTraceResultsHeight()
     # create trace base dom Node
     let traceNode = vnodeToDom(traceBase(trace), kxi)
 
     # config new view zone in monaco editor
     trace.viewZone = js{
       afterLineNumber: line,
-      heightInPx: 90,
+      heightInPx: trace.traceViewZoneHeight(),
       domNode: traceNode
     }
 
@@ -1255,8 +1365,8 @@ proc toggleTrace*(editorUI: EditorViewComponent, name: cstring, line: int) =
     trace.dataTable.footerDom =
       cast[Element](trace.chartTableDom.findNodeInElement(".data-tables-footer"))
     discard setTimeout(proc =
-      trace.resizeTraceHandler()
-      trace.refreshTraceTableLayout()
+      trace.refreshTraceComponentLayout()
+      trace.focusTraceEditorAfterLayout()
     , 0)
 
     trace.chartLineDom =
@@ -1292,6 +1402,7 @@ proc toggleTrace*(editorUI: EditorViewComponent, name: cstring, line: int) =
 
     # set trace to expanded
     trace.expanded = true
+    trace.focusTraceEditorAfterLayout()
 
     return
 
@@ -1299,11 +1410,16 @@ proc toggleTrace*(editorUI: EditorViewComponent, name: cstring, line: int) =
   if not trace.expanded:
     # expand the trace
     trace.expanded = true
+    trace.syncTraceResultsHeight()
+    trace.viewZone.heightInPx = trace.traceViewZoneHeight()
 
     tabInfo.monacoEditor.changeViewZones do (view: js):
       trace.zoneId = cast[int](view.addZone(trace.viewZone))
 
-    discard setTimeout(proc = resizeEditorHandler(editorUI.traces[line]),100)
+    discard setTimeout(proc =
+      resizeEditorHandler(editorUI.traces[line])
+      trace.focusTraceEditorAfterLayout()
+    , 100)
   else:
     # shrink the trace and sace its source
     trace.expanded = false

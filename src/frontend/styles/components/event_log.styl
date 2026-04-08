@@ -145,10 +145,12 @@
   if !IS_EXTENSION
     width: 150px !important
   list-style-type: none
-  padding-left: 8px
+  padding-left: 0.5em
   position: relative
   display: flex
   flex-direction: row
+  margin-bottom: 0.5em !important
+  margin-top: 0.5em !important
 
   .dropdown-list-item
     width: inherit
@@ -157,7 +159,13 @@
     else
       align-items: normal
     justify-content: start
-    padding-left: 20px
+    // padding-left: 20px
+  .dropdown-list-tag
+    margin-right: 0.5em
+
+  .dropdown-list-kind
+    .dropdown-list-item
+      margin-right: 0.5em
 
 .toggle-buttons
   display: flex
