@@ -400,6 +400,8 @@ impl ExprLoader {
                 Lang::Bash
             } else if extension == "zsh" {
                 Lang::Zsh
+            } else if extension == "d" || extension == "di" {
+                Lang::D
             } else if extension == "sol" {
                 Lang::Solidity
             } else {

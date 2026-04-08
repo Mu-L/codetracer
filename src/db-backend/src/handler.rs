@@ -1361,10 +1361,15 @@ impl Handler {
 
                 self.replay.jump_to(StepId(0))?;
 
+                // Whether we need a Continue to reach the next breakpoint,
+                // or have already landed on a new location via a Next step.
+                let mut need_continue = true;
+
                 loop {
-                    if !self.replay.step(Action::Continue, true)? {
+                    if need_continue && !self.replay.step(Action::Continue, true)? {
                         break;
                     }
+                    need_continue = true;
 
                     let current_step_id = self.replay.current_step_id();
                     let location = self.replay.load_location(&mut self.expr_loader)?;
@@ -1407,6 +1412,37 @@ impl Handler {
                             }
 
                             *visit_entry = visit_index;
+
+                            // Step past the current source line to skip any
+                            // remaining sub-breakpoint addresses. GDB/LLDB can
+                            // resolve a single source-line breakpoint to
+                            // multiple addresses (e.g. macro expansion), and
+                            // without this, each address triggers a separate
+                            // Continue stop, duplicating tracepoint results.
+                            // Loop `next` until the source line actually
+                            // changes, since `next` may stop at another
+                            // sub-breakpoint address on the same line.
+                            let mut program_ended = false;
+                            for _ in 0..16 {
+                                if !self.replay.step(Action::Next, true).unwrap_or(false) {
+                                    program_ended = true;
+                                    break;
+                                }
+                                let next_loc = self.replay.load_location(&mut self.expr_loader)?;
+                                if next_loc.path != path || next_loc.line as usize != line {
+                                    break;
+                                }
+                            }
+                            if program_ended {
+                                break;
+                            }
+                            // We've landed on a new line after stepping past
+                            // sub-breakpoints. Check it for tracepoints before
+                            // doing Continue — GDB's Continue skips breakpoints
+                            // at the current PC, so we'd miss adjacent-line
+                            // tracepoints if we didn't check here.
+                            need_continue = false;
+                            continue;
                         }
                     }
                 }
