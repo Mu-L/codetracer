@@ -78,7 +78,7 @@ method register*(self: FlowComponent, api: MediatorWithSubscribers) =
   self.api = api
   api.subscribe(CtCompleteMove, proc(kind: CtEventKind, response: MoveState, sub: Subscriber) =
     self.location = response.location
-    api.emit(CtLoadFlow, self.location)
+    api.emit(CtLoadFlow, CtLoadFlowArguments(flowMode: FlowMode.Call, location: self.location))
     self.redraw()
   )
   api.subscribe(CtUpdatedFlow, proc(kind: CtEventKind, response: FlowUpdate, sub: Subscriber) =
@@ -3365,15 +3365,14 @@ proc makeSliderDom(self: FlowComponent, position: int): Node =
              style = style)
 
     dom = vnodeToDom(vNode, KaraxInstance())
-  else:
-    let domCheck = cast[Node](jq(&"flow-loop-slider-{position}"))
-    if domCheck.isNil:
-      let childVNode = buildHtml(tdiv(class = "flow-loop-slider",
-        id = &"flow-loop-slider-{position}",
-        style = style)): text ""
-      let childDom = vnodeToDom(childVNode, KaraxInstance())
+  let domCheck = cast[Node](jq(&"flow-loop-slider-{position}"))
+  if domCheck.isNil:
+    let childVNode = buildHtml(tdiv(class = "flow-loop-slider",
+      id = &"flow-loop-slider-{position}",
+      style = style)): text ""
+    let childDom = vnodeToDom(childVNode, KaraxInstance())
 
-      dom.appendChild(childDom)
+    dom.appendChild(childDom)
 
   self.flowLoops[position].sliderDom = dom.childNodes[0]
 
@@ -3383,7 +3382,7 @@ proc addSliderWidget(self: FlowComponent, position:int) =
   let id = &"flow-slider-widget-{position}"
   let dom = makeSliderDom(self, position)
 
-  self.flowLoops[position].flowDom = dom
+  self.flowLoops[position].flowDom.appendChild(dom)
 
 proc resizeEditorHandler(self:FlowComponent, position: int) =
   # get new monaco editor config

@@ -1211,7 +1211,7 @@ proc loadFlow*(self: EditorViewComponent, flowMode: FlowMode, location: types.Lo
   self.flow.valueMode = BeforeValueMode
 
   let taskId = genTaskId(LoadFlow)
-  self.api.emit(CtLoadFlow, CtLoadFlowArguments(flowMode: flowMode, location: self.location))
+  self.api.emit(CtLoadFlow, CtLoadFlowArguments(flowMode: flowMode, location: location))
   cdebug "start load-flow", taskId
 
 proc createMonacoEditor*(selector: cstring, options: MonacoEditorOptions): MonacoEditor =
