@@ -788,16 +788,18 @@ proc toggleTraceState*(self: TraceComponent) =
   self.editorUI.updateLineNumbersOnly()
 
 proc closeHamburger(self: TraceComponent) =
-  deactivateDomElement(self.hamburgerButton)
+  # deactivateDomElement(self.hamburgerButton)
+  self.toggleState = false
   hideDomElement(self.hamburgerDropdownList)
   self.hamburgerButton.blur()
 
 proc openHamburger(self: TraceComponent) =
-  activateDomElement(self.hamburgerButton)
+  # activateDomElement(self.hamburgerButton)
+  self.toggleState = true
   showDomElement(self.hamburgerDropdownList)
 
 proc toggleHamburger(self: TraceComponent) =
-  if self.hamburgerButton.isActive():
+  if self.toggleState:
     self.closeHamburger()
   else:
     self.openHamburger()
@@ -834,7 +836,7 @@ proc getTracepointInfo(trace: TraceComponent): Tracepoint =
   return result
 
 proc tracepointSearchValue(self: TraceComponent): cstring =
-  let searchInput = jqFind("#tracepoint-" & $self.id & "-search")
+  let searchInput = jqFind("#trace-input-" & $self.id)
   if searchInput.isNil or searchInput.toJs.length.to(int) == 0:
     return cstring""
 
@@ -865,30 +867,30 @@ proc traceMenuView(self: TraceComponent): VNode =
       )
 
     tdiv(class = "trace-buttons-container"):
-      tdiv(
-        class = "run-trace-button",
+      button(
+        class = "ct-button-image-md-tertiary",
+        id = "trace-run-button",
         onclick = proc() =
-          self.api.emit(InternalTraceMapUpdate, self.getTracepointInfo())
-          self.refreshTrace()
-          self.api.emit(CtRunTraceSession, SourceLocation(path: self.name))
-          # runTracepoints(self.data)
+          # self.api.emit(InternalTraceMapUpdate, self.getTracepointInfo())
+          # self.refreshTrace()
+          # self.api.emit(CtRunTraceSession, SourceLocation(path: self.name))
+          runTracepoints(self.data)
       ):
-        tdiv(class = "trace-run-button-svg")
         tdiv(class="custom-tooltip"):
           text "Run tracepoints (Ctrl+Enter)"
 
       switchChartKindView(self.chart)
 
       tdiv(class = "hamburger-dropdown-container"):
-        tdiv(
-          class = "hamburger-dropdown",
+        button(
+          class = "ct-button-image-md-tertiary",
+          id = "hamburger-dropdown",
           tabindex = "0",
           onclick = proc (e: Event, et: VNode) =
             self.toggleHamburger(),
           onblur = proc (e: Event, et: VNode) =
             self.closeHamburger()
-        ):
-          tdiv(class="trace-hamburger-svg")
+        )
         tdiv(
           class = "dropdown-list hidden",
           onmousedown = proc (ev: Event, et: VNode) = ev.preventDefault()
@@ -1192,7 +1194,7 @@ proc togglePoint*(trace: TraceComponent) =
       ))
     trace.hamburgerButton =
       cast[Element](jq(
-        cstring(&"#trace-{trace.id} .hamburger-dropdown")
+        cstring(&"#trace-{trace.id} #hamburger-dropdown")
       ))
     trace.hamburgerDropdownList =
       cast[Element](jq(

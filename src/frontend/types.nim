@@ -1005,6 +1005,7 @@ type
     traceViewDom*:          kdom.Element
     lineCount*:             int
     resultsHeight*:         int
+    toggleState*:           bool
 
     chart*:         ChartComponent
     tracepoint*:    Tracepoint

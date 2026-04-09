@@ -863,7 +863,7 @@ proc eventLogCategoryButtonView(self: EventLogComponent, event: EventDropDownBox
     let checkBoxName = local($tag & "-checkbox")
     let checkBoxState = self.checkIndeterminateCheckbox(tag)
     let isChecked = checkBoxState[0]
-    let isIndeterminate = checkBoxState[1] == "checkmark-indeterminate"
+    let isIndeterminate = checkBoxState[1] == "indeterminate-checkmark"
 
     let checkmarkState =
       if isIndeterminate:
