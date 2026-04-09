@@ -335,6 +335,12 @@ fn setup(
     let is_ttd_run_trace = trace_path
         .extension()
         .is_some_and(|ext| ext == std::ffi::OsStr::new("run"));
+    // MCR traces (.ct files) are handled by ct-rr-support replay-worker,
+    // not by the DB trace reader. Skip DB metadata loading for them.
+    let is_mcr_trace = trace_folder.is_file()
+        && trace_folder
+            .extension()
+            .is_some_and(|ext| ext == std::ffi::OsStr::new("ct"));
     let trace_file_format = if trace_file.extension() == Some(std::ffi::OsStr::new("json")) {
         codetracer_trace_reader::TraceEventsFileFormat::Json
     } else {
@@ -342,7 +348,7 @@ fn setup(
     };
     // duration code copied from
     // https://rust-lang-nursery.github.io/rust-cookbook/datetime/duration.html
-    if !is_ttd_run_trace {
+    if !is_ttd_run_trace && !is_mcr_trace {
         if let (Ok(meta), Ok(trace)) = (
             load_trace_metadata(&metadata_path),
             load_trace_data(&trace_path, trace_file_format),
@@ -395,7 +401,29 @@ fn setup(
 }
 
 fn resolve_replay_trace_path(trace_folder: &Path, trace_file: &Path) -> Option<PathBuf> {
+    // MCR traces: if trace_folder itself is a .ct file, use it directly.
+    // The ct-dap-client test runner passes the .ct file path as trace_folder
+    // for MCR traces. ct-rr-support detects .ct files and routes them to
+    // the MCR debugserver.
+    if trace_folder.is_file()
+        && trace_folder
+            .extension()
+            .is_some_and(|ext| ext == std::ffi::OsStr::new("ct"))
+    {
+        return Some(trace_folder.to_path_buf());
+    }
+
     let explicit_trace_path = trace_folder.join(trace_file);
+
+    // MCR traces in a directory: check if trace_file resolves to a .ct file
+    if explicit_trace_path
+        .extension()
+        .is_some_and(|ext| ext == std::ffi::OsStr::new("ct"))
+        && explicit_trace_path.exists()
+    {
+        return Some(explicit_trace_path);
+    }
+
     if explicit_trace_path
         .extension()
         .is_some_and(|ext| ext == std::ffi::OsStr::new("run"))
