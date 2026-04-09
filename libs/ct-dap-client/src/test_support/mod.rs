@@ -24,7 +24,7 @@ type BoxError = Box<dyn std::error::Error + Send + Sync>;
 pub(crate) fn prepare_trace_folder(
     rr_trace_dir: &Path,
 ) -> Result<(PathBuf, Option<PathBuf>), BoxError> {
-    // Case 0 (Windows TTD): if the path is a .run file, use the parent dir.
+    // Case 0a (Windows TTD): if the path is a .run file, use the parent dir.
     // db-backend discovers .run files by scanning the trace folder.
     if rr_trace_dir.extension().and_then(|e| e.to_str()) == Some("run")
         && rr_trace_dir.is_file()
@@ -32,6 +32,15 @@ pub(crate) fn prepare_trace_folder(
         if let Some(parent) = rr_trace_dir.parent() {
             return Ok((parent.to_path_buf(), None));
         }
+    }
+
+    // Case 0b (MCR): if the path is a .ct file, pass it directly as the trace path.
+    // db-backend detects .ct files by extension or CTFS magic bytes and routes
+    // them to ct-rr-support which spawns ct-mcr debugserver.
+    if rr_trace_dir.extension().and_then(|e| e.to_str()) == Some("ct")
+        && rr_trace_dir.is_file()
+    {
+        return Ok((rr_trace_dir.to_path_buf(), None));
     }
 
     // Case 1: parent/rr == rr_trace_dir (uncached layout)

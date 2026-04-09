@@ -58,7 +58,9 @@ impl TracepointTestRunner {
         client.configuration_done()?;
 
         // Wait for the initial stopped event (run-to-entry)
-        client.wait_for_stopped(Duration::from_secs(60))?;
+        // MCR's debugserver needs extra time: LLDB setup (~20s on first connect)
+        // plus the MCR READMEM round-trips for symbol resolution.
+        client.wait_for_stopped(Duration::from_secs(120))?;
 
         Ok(TracepointTestRunner {
             client,
