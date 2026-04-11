@@ -58,7 +58,21 @@ const AFTER_INITIAL_READS_EVENT_INDEX: array[Lang, int] = [
   0, # C++ wasm
   0, # Small
   0, # Python(db)
-  0  # Unknown
+  0, # Unknown
+  0, # Bash
+  0, # Zsh
+  0, # Solidity
+  0, # MASM/Miden
+  0, # Sway
+  0, # Move
+  0, # PolkaVM
+  0, # Cairo
+  0, # Circom
+  0, # Leo
+  0, # Tolk
+  0, # Aiken
+  0, # Cadence
+  0  # Solana
 ]
 
 proc jumpToAllEventsOnce*(filePath: cstring, fileName: cstring, lang: Lang): Future[void] {.async.} =

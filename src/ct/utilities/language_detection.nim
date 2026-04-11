@@ -25,6 +25,16 @@ proc isWasmCargoProject(folder: string): bool =
 proc detectFolderLang(folder: string): Lang =
   if fileExists(folder / "Nargo.toml"):
     LangNoir
+  elif fileExists(folder / "Scarb.toml"):
+    LangCairo
+  elif fileExists(folder / "aiken.toml"):
+    LangAiken
+  elif fileExists(folder / "Move.toml"):
+    LangMove
+  elif fileExists(folder / "Forc.toml"):
+    LangSway
+  elif fileExists(folder / "foundry.toml"):
+    LangSolidity
   elif fileExists(folder / "Cargo.toml"):
     if isWasmCargoProject(folder):
       LangRustWasm
@@ -34,8 +44,21 @@ proc detectFolderLang(folder: string): Lang =
     LangLean
   elif fileExists(folder / "shard.yml"):
     LangCrystal
+  elif fileExists(folder / "program.json"):
+    # Leo projects typically have a program.json at the root
+    LangLeo
   else:
-    # TODO: rust/ruby/others?
+    # Check for projects identifiable by file extensions in the folder
+    for kind, path in walkDir(folder):
+      if kind == pcFile:
+        let ext = path.splitFile()[2]
+        case ext
+        of ".masm": return LangMasm
+        of ".circom": return LangCircom
+        of ".leo": return LangLeo
+        of ".sol": return LangSolidity
+        of ".tolk": return LangTolk
+        else: discard
     LangUnknown
 
 
@@ -57,6 +80,16 @@ const LANGS = {
   "small": LangSmall,
   "wasm": LangRustWasm, # TODO: can be Cpp or other as well, maybe pass
     # explicitly or check trace/other debug info?
+  "sol": LangSolidity,
+  "masm": LangMasm,
+  "sw": LangSway,
+  "move": LangMove,
+  "cairo": LangCairo,
+  "circom": LangCircom,
+  "leo": LangLeo,
+  "tolk": LangTolk,
+  "ak": LangAiken,
+  "cdc": LangCadence,
 }.toTable()
 
 const WASM_LANGS = {

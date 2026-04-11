@@ -30,6 +30,16 @@ proc toLang*(lang: cstring): Lang =
     nr: LangNoir,
     small: LangSmall,
     noir: LangNoir,
+    sol: LangSolidity,
+    masm: LangMasm,
+    sw: LangSway,
+    move: LangMove,
+    cairo: LangCairo,
+    circom: LangCircom,
+    leo: LangLeo,
+    tolk: LangTolk,
+    ak: LangAiken,
+    cdc: LangCadence,
   }
   if langs.hasKey(lang):
     result = langs[lang]
@@ -60,7 +70,21 @@ proc toJsLang*(lang: Lang): cstring =
     cstring"rust", cstring"cpp",
     cstring"small",
     cstring"python",
-    cstring"unknown"
+    cstring"unknown",
+    cstring"bash",
+    cstring"zsh",
+    cstring"solidity",
+    cstring"masm",
+    cstring"sway",
+    cstring"move",
+    cstring"polkavm",
+    cstring"cairo",
+    cstring"circom",
+    cstring"leo",
+    cstring"tolk",
+    cstring"aiken",
+    cstring"cadence",
+    cstring"solana"
   ]
   result = langs[lang]
 
@@ -72,7 +96,10 @@ proc toSet(names: seq[cstring]): JsAssoc[cstring, bool] =
 let SUPPORTED_LANGS* = @[
   LangC, LangCpp, LangRust, LangNim, LangGo,
   LangPascal, LangFortran, LangD, LangCrystal, LangLean, LangAda,
-  LangRubyDb, LangNoir, LangRustWasm, LangCppWasm, LangSmall
+  LangRubyDb, LangNoir, LangRustWasm, LangCppWasm, LangSmall,
+  LangSolidity, LangMasm, LangSway, LangMove, LangPolkavm,
+  LangCairo, LangCircom, LangLeo, LangTolk, LangAiken, LangCadence,
+  LangSolana
 ]
 
 let RESERVED_NAMES*: array[Lang, JsAssoc[cstring, bool]] = [
@@ -105,7 +132,21 @@ let RESERVED_NAMES*: array[Lang, JsAssoc[cstring, bool]] = [
   toSet(@[]),  # LangCppWasm
   toSet(@[]),  # LangSmall
   toSet(@[]),  # LangPythonDb
-  toSet(@[])   # LangUnknown
+  toSet(@[]),  # LangUnknown
+  toSet(@[]),  # LangBash
+  toSet(@[]),  # LangZsh
+  toSet(@[]),  # LangSolidity
+  toSet(@[]),  # LangMasm
+  toSet(@[]),  # LangSway
+  toSet(@[]),  # LangMove
+  toSet(@[]),  # LangPolkavm
+  toSet(@[]),  # LangCairo
+  toSet(@[]),  # LangCircom
+  toSet(@[]),  # LangLeo
+  toSet(@[]),  # LangTolk
+  toSet(@[]),  # LangAiken
+  toSet(@[]),  # LangCadence
+  toSet(@[])   # LangSolana
 ]
 
 proc getExtension*(lang: Lang): cstring =
@@ -133,7 +174,21 @@ proc getExtension*(lang: Lang): cstring =
     "cpp",    # LangCppWasm
     "small",  # LangSmall
     "py",     # LangPythonDb
-    ""        # LangUnknown
+    "",       # LangUnknown
+    "sh",     # LangBash
+    "zsh",    # LangZsh
+    "sol",    # LangSolidity
+    "masm",   # LangMasm
+    "sw",     # LangSway
+    "move",   # LangMove
+    "",       # LangPolkavm (folder-based)
+    "cairo",  # LangCairo
+    "circom", # LangCircom
+    "leo",    # LangLeo
+    "tolk",   # LangTolk
+    "ak",     # LangAiken
+    "cdc",    # LangCadence
+    ""        # LangSolana (folder-based)
   ]
   result = cstring(extensions[lang])
 
@@ -167,6 +222,16 @@ proc fromPath*(path: cstring): Lang =
     "s": LangAsm,
     "nr": LangNoir,
     "small": LangSmall,
+    "sol": LangSolidity,
+    "masm": LangMasm,
+    "sw": LangSway,
+    "move": LangMove,
+    "cairo": LangCairo,
+    "circom": LangCircom,
+    "leo": LangLeo,
+    "tolk": LangTolk,
+    "ak": LangAiken,
+    "cdc": LangCadence,
   };
   if not extensions.hasKey(ext):
     LangUnknown

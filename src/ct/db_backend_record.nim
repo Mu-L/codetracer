@@ -133,6 +133,11 @@ proc recordDb(
       else:
         recorderArgs.add(program)
       startArgs = recorderArgs
+    of LangMasm, LangMove, LangSolana, LangSway, LangCairo, LangCircom,
+       LangLeo, LangPolkavm, LangTolk, LangAiken, LangCadence, LangSolidity:
+      # All blockchain/VM recorders use the same interface:
+      #   <recorder-binary> --out-dir <traceFolder> <program>
+      startArgs = @["--out-dir", traceFolder, program]
     else:
       echo fmt"error: lang {lang} not supported for recordDb"
       quit(1)
@@ -291,6 +296,27 @@ proc record(
       else:
         vmPath = noirExe
       return recordDb(lang, vmPath, executable, args, backend, outputFolder, stylusTrace, traceId)
+    elif lang in {LangMasm, LangMove, LangSolana, LangSway, LangCairo, LangCircom,
+                   LangLeo, LangPolkavm, LangTolk, LangAiken, LangCadence, LangSolidity}:
+      # Blockchain/VM recorders: each has a dedicated external binary
+      let recorderExe = case lang
+        of LangMasm: midenRecorderExe
+        of LangMove: moveRecorderExe
+        of LangSolana: solanaRecorderExe
+        of LangSway: fuelRecorderExe
+        of LangCairo: cairoRecorderExe
+        of LangCircom: circomRecorderExe
+        of LangLeo: leoRecorderExe
+        of LangPolkavm: polkavmRecorderExe
+        of LangTolk: tonRecorderExe
+        of LangAiken: cardanoRecorderExe
+        of LangCadence: flowRecorderExe
+        of LangSolidity: evmRecorderExe
+        else: "" # unreachable
+      if recorderExe.len == 0:
+        echo fmt"error: recorder binary not found for {lang}. Set the corresponding CODETRACER_*_RECORDER_PATH env var or ensure the binary is on PATH."
+        quit(1)
+      return recordDb(lang, recorderExe, executable, args, backend, outputFolder, stylusTrace, traceId)
     elif lang == LangSmall:
       return recordDb(LangSmall, smallExe, executable, args, backend, outputFolder, stylusTrace, traceId)
     elif lang == LangPythonDb:

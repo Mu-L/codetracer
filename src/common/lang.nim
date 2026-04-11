@@ -37,6 +37,23 @@ proc toLang*(lang: string): Lang =
     "rustwasm": LangRustWasm,
     "cpp-wasm": LangCppWasm,
     "cppwasm": LangCppWasm,
+    "sol": LangSolidity,
+    "solidity": LangSolidity,
+    "masm": LangMasm,
+    "miden": LangMasm,
+    "sw": LangSway,
+    "sway": LangSway,
+    "move": LangMove,
+    "polkavm": LangPolkavm,
+    "cairo": LangCairo,
+    "circom": LangCircom,
+    "leo": LangLeo,
+    "tolk": LangTolk,
+    "ak": LangAiken,
+    "aiken": LangAiken,
+    "cdc": LangCadence,
+    "cadence": LangCadence,
+    "solana": LangSolana,
   }.toTable()
   if langs.hasKey(lang.toLowerAscii):
     result = langs[lang.toLowerAscii]
@@ -49,7 +66,10 @@ proc toLang*(lang: cstring): Lang =
 let SUPPORTED_LANGS* = @[
   LangC, LangCpp, LangRust, LangNim, LangGo,
   LangPascal, LangFortran, LangD, LangCrystal, LangLean, LangAda,
-  LangRubyDb, LangNoir, LangSmall
+  LangRubyDb, LangNoir, LangSmall,
+  LangSolidity, LangMasm, LangSway, LangMove, LangPolkavm,
+  LangCairo, LangCircom, LangLeo, LangTolk, LangAiken, LangCadence,
+  LangSolana
 ]
 
 proc getExtension*(lang: Lang): string =
@@ -77,7 +97,21 @@ proc getExtension*(lang: Lang): string =
     "cpp",    # LangCppWasm
     "small",  # LangSmall
     "py",     # LangPythonDb
-    ""        # LangUnknown
+    "",       # LangUnknown
+    "sh",     # LangBash
+    "zsh",    # LangZsh
+    "sol",    # LangSolidity
+    "masm",   # LangMasm
+    "sw",     # LangSway
+    "move",   # LangMove
+    "",       # LangPolkavm (folder-based)
+    "cairo",  # LangCairo
+    "circom", # LangCircom
+    "leo",    # LangLeo
+    "tolk",   # LangTolk
+    "ak",     # LangAiken
+    "cdc",    # LangCadence
+    ""        # LangSolana (folder-based)
   ]
   result = extensions[lang]
 

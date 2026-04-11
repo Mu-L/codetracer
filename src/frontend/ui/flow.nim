@@ -427,7 +427,21 @@ let KEYWORDS: array[Lang, JsAssoc[cstring, bool]] = [
   emptyKeywords,  # LangCppWasm
   emptyKeywords,  # LangSmall
   emptyKeywords,  # LangPythonDb
-  emptyKeywords   # LangUnknown
+  emptyKeywords,  # LangUnknown
+  emptyKeywords,  # LangBash
+  emptyKeywords,  # LangZsh
+  emptyKeywords,  # LangSolidity
+  emptyKeywords,  # LangMasm
+  emptyKeywords,  # LangSway
+  emptyKeywords,  # LangMove
+  emptyKeywords,  # LangPolkavm
+  emptyKeywords,  # LangCairo
+  emptyKeywords,  # LangCircom
+  emptyKeywords,  # LangLeo
+  emptyKeywords,  # LangTolk
+  emptyKeywords,  # LangAiken
+  emptyKeywords,  # LangCadence
+  emptyKeywords   # LangSolana
 ]
 
 func isSymbol(c: char, lang: Lang): bool =

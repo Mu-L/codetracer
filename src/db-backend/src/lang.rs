@@ -73,6 +73,8 @@ pub enum Lang {
     Aiken,
     /// Cadence/Flow (Flow smart contracts)
     Cadence,
+    /// Solana (Solana programs/smart contracts)
+    Solana,
 }
 
 pub fn lang_from_context(path: &Path, trace_kind: TraceKind) -> Lang {

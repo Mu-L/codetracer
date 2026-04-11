@@ -138,6 +138,32 @@ let
       findTool("nargo"))
   wazeroExe* = env.get("CODETRACER_WASM_VM_PATH",
     when not defined(js): findTool("wazero") else: codetracerPrefix / "bin" / "wazero")
+  # Blockchain/VM recorder binaries — looked up from env vars with fallback to PATH
+  cairoRecorderExe* = env.get("CODETRACER_CAIRO_RECORDER_PATH",
+    when not defined(js): findTool("codetracer-cairo-recorder") else: codetracerPrefix / "bin" / "codetracer-cairo-recorder")
+  midenRecorderExe* = env.get("CODETRACER_MIDEN_RECORDER_PATH",
+    when not defined(js): findTool("codetracer-miden-recorder") else: codetracerPrefix / "bin" / "codetracer-miden-recorder")
+  moveRecorderExe* = env.get("CODETRACER_MOVE_RECORDER_PATH",
+    when not defined(js): findTool("codetracer-move-recorder") else: codetracerPrefix / "bin" / "codetracer-move-recorder")
+  solanaRecorderExe* = env.get("CODETRACER_SOLANA_RECORDER_PATH",
+    when not defined(js): findTool("codetracer-solana-recorder") else: codetracerPrefix / "bin" / "codetracer-solana-recorder")
+  fuelRecorderExe* = env.get("CODETRACER_FUEL_RECORDER_PATH",
+    when not defined(js): findTool("codetracer-fuel-recorder") else: codetracerPrefix / "bin" / "codetracer-fuel-recorder")
+  circomRecorderExe* = env.get("CODETRACER_CIRCOM_RECORDER_PATH",
+    when not defined(js): findTool("codetracer-circom-recorder") else: codetracerPrefix / "bin" / "codetracer-circom-recorder")
+  leoRecorderExe* = env.get("CODETRACER_LEO_RECORDER_PATH",
+    when not defined(js): findTool("codetracer-leo-recorder") else: codetracerPrefix / "bin" / "codetracer-leo-recorder")
+  polkavmRecorderExe* = env.get("CODETRACER_POLKAVM_RECORDER_PATH",
+    when not defined(js): findTool("codetracer-polkavm-recorder") else: codetracerPrefix / "bin" / "codetracer-polkavm-recorder")
+  tonRecorderExe* = env.get("CODETRACER_TON_RECORDER_PATH",
+    when not defined(js): findTool("codetracer-ton-recorder") else: codetracerPrefix / "bin" / "codetracer-ton-recorder")
+  cardanoRecorderExe* = env.get("CODETRACER_CARDANO_RECORDER_PATH",
+    when not defined(js): findTool("codetracer-cardano-recorder") else: codetracerPrefix / "bin" / "codetracer-cardano-recorder")
+  flowRecorderExe* = env.get("CODETRACER_FLOW_RECORDER_PATH",
+    when not defined(js): findTool("codetracer-flow-recorder") else: codetracerPrefix / "bin" / "codetracer-flow-recorder")
+  evmRecorderExe* = env.get("CODETRACER_EVM_RECORDER_PATH",
+    when not defined(js): findTool("codetracer-evm-recorder") else: codetracerPrefix / "bin" / "codetracer-evm-recorder")
+
   dbBackendExe* = codetracerPrefix / "bin" / "db-backend"
   backendManagerExe* = codetracerPrefix / "bin" / "backend-manager"
   virtualizationLayersExe* = codetracerPrefix / "bin" / "virtualization-layers"
