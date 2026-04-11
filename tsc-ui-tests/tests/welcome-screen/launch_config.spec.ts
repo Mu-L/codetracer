@@ -169,6 +169,10 @@ test.describe("Launch Configuration Menu", () => {
 test.describe("Launch Configuration Recording", () => {
   test.use({ launchMode: "edit", editFolderPath: examplesFolder });
 
+  // TODO(skipped): Ruby recording via launch configuration is skipped.
+  //   The test clicks "Ruby: Fibonacci" in the launch config menu and expects a trace to be produced.
+  //   Hypothesis: The Ruby recorder may not be fully integrated into the launch config workflow,
+  //   or recording Ruby programs requires additional setup (e.g. Ruby interpreter in PATH).
   test.skip("Recording Ruby: Fibonacci produces a trace", async ({ ctPage }) => {
     await ctPage.waitForSelector(".lm_goldenlayout", { timeout: 15000 });
 

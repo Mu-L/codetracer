@@ -62,6 +62,12 @@ const fuelPipelineAvailable = fuelRecorderAvailable;
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
+// TODO(failing): All 8 UI tests fail with "Unexpected last line of ct record: error: recorder exited with 2 for LangSway".
+//   The recorder binary (codetracer-fuel-recorder) is on PATH and detected correctly, so the skip guard passes,
+//   but `ct record` fails because the Sway/Fuel toolchain (forc compiler) is not in the codetracer dev shell --
+//   it is only available in codetracer-fuel-recorder's own dev shell.
+//   Hypothesis: The test fixture needs to run `ct record` inside `direnv exec ../codetracer-fuel-recorder`
+//   so the Sway compiler is on PATH, or the recorder binary should be self-contained (bundling its toolchain).
 test.describe("sway_example — basic layout", () => {
   // Skip the entire suite when the Fuel recorder pipeline is absent.
   // Remove this guard once `ct record <path>.sw` is integrated.

@@ -65,6 +65,12 @@ const cadencePipelineAvailable = cadenceRecorderAvailable && cadenceTestProgram 
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
+// TODO(skipped): All 8 UI tests skipped because cadencePipelineAvailable is false.
+//   The codetracer-cadence-recorder binary is detected, but resolveRecorderTestProgram("cadence",
+//   "cadence/flow_test.cdc") likely returns null because the test program file does not exist
+//   at the expected path in the sibling repo.
+//   Hypothesis: Verify the test program exists at codetracer-flow-recorder/test-programs/cadence/flow_test.cdc
+//   or check if the Cadence recorder binary does not pass the --version check.
 test.describe("cadence_example — basic layout", () => {
   test.skip(
     !cadencePipelineAvailable,

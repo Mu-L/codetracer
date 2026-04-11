@@ -62,6 +62,12 @@ const midenPipelineAvailable = midenRecorderAvailable;
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
+// TODO(failing): All 8 UI tests fail with "Unexpected last line of ct record: error: recorder exited with 2 for LangMasm".
+//   The recorder binary (codetracer-miden-recorder) is on PATH and detected correctly, so the skip guard passes,
+//   but `ct record` fails because the Miden toolchain is not in the codetracer dev shell --
+//   it is only available in codetracer-miden-recorder's own dev shell.
+//   Hypothesis: The test fixture needs to run `ct record` inside `direnv exec ../codetracer-miden-recorder`
+//   so the Miden assembler is on PATH, or the recorder binary should be self-contained (bundling its toolchain).
 test.describe("masm_example — basic layout", () => {
   // Skip the entire suite when the Miden recorder pipeline is absent.
   // Remove this guard once `ct record <path>.masm` is integrated.

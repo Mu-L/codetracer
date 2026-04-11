@@ -134,6 +134,10 @@ test.describe("NoirSpaceShip", () => {
   test.describe.configure({ retries: 2 });
   test.use({ sourcePath: "noir_space_ship/", launchMode: "trace" });
 
+  // TODO(failing): expect(mainNrTab).toBeDefined() fails -- Received: undefined.
+  //   The layout.editorTabs() call does not find a tab with tabButtonText === "src/main.nr".
+  //   Hypothesis: The tab text format may have changed (e.g. just "main.nr" without the "src/" prefix),
+  //   or the trace load did not open the file in the editor. Check editorTabs() text matching logic.
   test("editor loaded main.nr file", async ({ ctPage }) => {
     const layout = new LayoutPage(ctPage);
     await layout.waitForAllComponentsLoaded();
@@ -210,6 +214,13 @@ test.describe("NoirSpaceShip", () => {
     await layout.reverseNextButton().click();
   });
 
+  // TODO(failing): TimeoutError waiting for `.flow-parallel-value-name` or `.flow-loop-value-name`
+  //   with text 'regeneration' to become visible (5000ms timeout).
+  //   Loop-local variables (regeneration, damage, remaining_shield) are not rendered in the flow
+  //   visualization. The static analysis extracts them but DbReplay cannot evaluate them at the
+  //   breakpoint scope because they are loop-scoped.
+  //   Hypothesis: The noir db-backend's variable lookup needs to handle loop-scoped variables
+  //   differently, perhaps by expanding the scope query to include enclosing loop blocks.
   test("loop iteration slider tracks remaining shield", async ({ ctPage }) => {
     let traceStep = 0;
     function trace(message: string): void {
@@ -321,6 +332,10 @@ test.describe("NoirSpaceShip", () => {
     trace("LoopIterationSliderTracksRemainingShield completed");
   });
 
+  // TODO(failing): Same root cause as "loop iteration slider tracks remaining shield" --
+  //   TimeoutError waiting for flow value 'regeneration' to become visible.
+  //   Loop-scoped variables are not rendered in the flow visualization.
+  //   Hypothesis: Needs loop-scoped variable support in the noir db-backend.
   test("simple loop iteration jump", async ({ ctPage }) => {
     const layout = new LayoutPage(ctPage);
     await layout.waitForAllComponentsLoaded();
@@ -358,6 +373,10 @@ test.describe("NoirSpaceShip", () => {
     );
   });
 
+  // TODO(failing): Flaky -- expect(rows.length).toBeGreaterThanOrEqual(2) sometimes gets 0 rows.
+  //   The event log eventElements(true) returns an empty array when the event log has not finished
+  //   populating. Passes on retry when ct record completes faster.
+  //   Hypothesis: Needs a retry/waitFor around the eventElements() call to handle slow trace loads.
   test("event log jump highlights active row", async ({ ctPage }) => {
     const layout = new LayoutPage(ctPage);
     await layout.waitForAllComponentsLoaded();
@@ -375,6 +394,13 @@ test.describe("NoirSpaceShip", () => {
     await retry(() => firstRow.isHighlighted());
   });
 
+  // TODO(failing): page.evaluate throws "TypeError: Cannot read properties of null (reading 'style')"
+  //   in updateViewZoneHeight at ui.js:33276 -- traceMain DOM element is null.
+  //   This happens when runTracepoints() is called but the trace log view zone DOM node
+  //   has not been created yet or was disposed.
+  //   Hypothesis: The trace log panel's view zone lifecycle has a race condition -- the Nim-compiled
+  //   frontend code in trace.nim (line 148) accesses traceMain.style before the element is mounted.
+  //   Perhaps a null check or deferred initialization is needed in updateViewZoneHeight.
   test("trace log records damage regeneration", async ({ ctPage }) => {
     const layout = new LayoutPage(ctPage);
     await layout.waitForAllComponentsLoaded();
@@ -531,6 +557,10 @@ test.describe("NoirSpaceShip", () => {
     expect(foundNonEmpty).toBe(true);
   });
 
+  // TODO(failing): Same root cause as "trace log records damage regeneration" --
+  //   page.evaluate throws "TypeError: Cannot read properties of null (reading 'style')"
+  //   in updateViewZoneHeight. The trace log view zone DOM element (traceMain) is null.
+  //   Hypothesis: Needs null guard in updateViewZoneHeight in trace.nim.
   test("scratchpad compare iterations", async ({ ctPage }) => {
     const layout = new LayoutPage(ctPage);
     await layout.waitForAllComponentsLoaded();
@@ -643,6 +673,10 @@ test.describe("NoirSpaceShip", () => {
     );
   });
 
+  // TODO(failing): Same root cause as "trace log records damage regeneration" --
+  //   page.evaluate throws "TypeError: Cannot read properties of null (reading 'style')"
+  //   in updateViewZoneHeight. The trace log view zone DOM element (traceMain) is null.
+  //   Hypothesis: Needs null guard in updateViewZoneHeight in trace.nim.
   test("trace log disable button should flip state", async ({ ctPage }) => {
     const layout = new LayoutPage(ctPage);
     await layout.waitForAllComponentsLoaded();
@@ -702,6 +736,10 @@ test.describe("NoirSpaceShip", () => {
     );
   });
 
+  // TODO(failing): Same root cause as "trace log records damage regeneration" --
+  //   page.evaluate throws "TypeError: Cannot read properties of null (reading 'style')"
+  //   in updateViewZoneHeight. The trace log view zone DOM element (traceMain) is null.
+  //   Hypothesis: Needs null guard in updateViewZoneHeight in trace.nim.
   test("exhaustive scratchpad additions", async ({ ctPage }) => {
     const layout = new LayoutPage(ctPage);
     await layout.waitForAllComponentsLoaded();
@@ -975,6 +1013,10 @@ test.describe("NoirSpaceShip", () => {
     expect(actual).toEqual(expected);
   });
 
+  // TODO(failing): Same root cause as "trace log records damage regeneration" --
+  //   page.evaluate throws "TypeError: Cannot read properties of null (reading 'style')"
+  //   in updateViewZoneHeight. The trace log view zone DOM element (traceMain) is null.
+  //   Hypothesis: Needs null guard in updateViewZoneHeight in trace.nim.
   test("trace log context menu options", async ({ ctPage }) => {
     const layout = new LayoutPage(ctPage);
     await layout.waitForAllComponentsLoaded();
@@ -1083,6 +1125,11 @@ test.describe("NoirSpaceShip", () => {
     expect(hasScratchpadOption).toBe(true);
   });
 
+  // TODO(failing): expect(events.length).toBeGreaterThan(0) fails -- Received: 0.
+  //   The event log tab's eventElements() returns an empty array. On retry, ct record times out
+  //   with ETIMEDOUT, suggesting the noir trace recording is slow or the event log DOM is not populated.
+  //   Hypothesis: The event log table for noir traces may require a longer wait, or the event log
+  //   filtering/rendering has a bug where events are not shown even though the trace loaded.
   test("jump to all events", async ({ ctPage }) => {
     const layout = new LayoutPage(ctPage);
     await layout.waitForAllComponentsLoaded();
@@ -1138,6 +1185,10 @@ test.describe("NoirSpaceShip", () => {
     }
   });
 
+  // TODO(failing): Same root cause as "trace log records damage regeneration" --
+  //   page.evaluate throws "TypeError: Cannot read properties of null (reading 'style')"
+  //   in updateViewZoneHeight. The trace log view zone DOM element (traceMain) is null.
+  //   Hypothesis: Needs null guard in updateViewZoneHeight in trace.nim.
   test("create simple tracepoint", async ({ ctPage }) => {
     await createSimpleTracePoint(ctPage);
   });

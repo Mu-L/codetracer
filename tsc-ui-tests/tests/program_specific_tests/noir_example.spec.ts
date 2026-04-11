@@ -55,9 +55,10 @@ test.describe("noir example — state and navigation", () => {
     await expect(statePanel.codeStateLine()).toContainText("17 | ");
   });
 
-  // The noir DB-based debugger does not expose local variables in the state
-  // panel when running in browser mode.  Re-enable once nargo trace support
-  // includes variable inspection.
+  // TODO(skipped): The noir DB-based debugger does not expose local variables in the state
+  //   panel when running in browser mode. Variables x, y are expected but not present.
+  //   Hypothesis: nargo trace output does not include variable inspection data in browser mode.
+  //   Re-enable once nargo trace support includes variable inspection.
   test.fixme("state panel supports integer values", async ({ ctPage }) => {
     // await readyOnEntry(ctPage);
     const statePanel = new StatePanel(ctPage);
@@ -70,13 +71,16 @@ test.describe("noir example — state and navigation", () => {
     expect(values.y.typeText).toBe("Field");
   });
 
-  // Debug movement (continue/next) does not work for noir traces in browser
-  // mode because the backend does not implement the `.test-movement` counter
-  // that clickContinue()/clickNext() relies on.
+  // TODO(skipped): Debug movement (continue/next) does not work for noir traces in browser mode.
+  //   The backend does not implement the `.test-movement` counter that the test helpers rely on.
+  //   Hypothesis: The noir db-backend needs to emit a movement counter (or CtCompleteMove event)
+  //   after each continue/next operation so the test can detect when the step has completed.
   test.fixme("continue", async () => {
     // Requires debug movement counter support in noir backend.
   });
 
+  // TODO(skipped): Same as "continue" above -- debug movement counter not implemented for noir.
+  //   Hypothesis: Needs CtCompleteMove event support in the noir db-backend.
   test.fixme("next", async () => {
     // Requires debug movement counter support in noir backend.
   });

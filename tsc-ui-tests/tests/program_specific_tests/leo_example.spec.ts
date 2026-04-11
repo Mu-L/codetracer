@@ -65,6 +65,12 @@ const leoPipelineAvailable = leoRecorderAvailable && leoTestProgram !== null;
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
+// TODO(failing): All 8 UI tests fail with "Unexpected last line of ct record: error: recorder exited with 2 for LangLeo".
+//   The recorder binary (codetracer-leo-recorder) is on PATH and detected correctly, so the skip guard passes,
+//   but `ct record` fails because the Leo toolchain (leo compiler) is not in the codetracer dev shell --
+//   it is only available in codetracer-leo-recorder's own dev shell.
+//   Hypothesis: The test fixture needs to run `ct record` inside `direnv exec ../codetracer-leo-recorder`
+//   so the Leo compiler is on PATH, or the recorder binary should be self-contained (bundling its toolchain).
 test.describe("leo_example — basic layout", () => {
   test.skip(
     !leoPipelineAvailable,

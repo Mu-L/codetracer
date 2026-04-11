@@ -59,8 +59,10 @@ test.describe("ProgramAgnostic", () => {
     expect(await eventLog.isVisible()).toBe(true);
   });
 
-  // Skipped: command palette doesn't find "Mac Classic Theme" command —
-  // theme switching via command palette not implemented or commands named differently.
+  // TODO(skipped): Command palette does not find "Mac Classic Theme" command.
+  //   Theme switching via command palette is either not implemented or the command names differ.
+  //   Hypothesis: The command palette may use different command names (e.g. "Theme: Mac Classic")
+  //   or theme switching may only be available through settings, not the command palette.
   test.skip("command palette switch theme updates styles", async ({ ctPage }) => {
     const layout = new LayoutPage(ctPage);
     await layout.waitForAllComponentsLoaded();
@@ -90,7 +92,10 @@ test.describe("ProgramAgnostic", () => {
     });
   });
 
-  // Skipped: `:sym` command in command palette doesn't produce matching results.
+  // TODO(skipped): `:sym` command in command palette does not produce matching results.
+  //   Symbol search for "iterate_asteroids" returns no matches.
+  //   Hypothesis: The `:sym` command may not be wired up in the current build, or the noir
+  //   trace does not expose symbol information to the command palette search.
   test.skip("command palette find symbol uses fuzzy search", async ({ ctPage }) => {
     const layout = new LayoutPage(ctPage);
     await layout.waitForAllComponentsLoaded();
@@ -111,8 +116,10 @@ test.describe("ProgramAgnostic", () => {
     });
   });
 
-  // Skipped: operationStatus() doesn't show "busy" text after clicking Next.
-  // Debugger busy/ready state display may not be implemented.
+  // TODO(skipped): operationStatus() does not show "busy" text after clicking Next.
+  //   The debugger busy/ready state display is not implemented in the UI.
+  //   Hypothesis: The frontend does not update the operationStatus element text when
+  //   a debug step is in progress. Needs a "busy" indicator in the status area.
   test.skip(
     "debugger controls step buttons reflect busy state",
     async ({ ctPage }) => {
@@ -134,8 +141,10 @@ test.describe("ProgramAgnostic", () => {
     },
   );
 
-  // Skipped: event log rowCount() returns 0 — event log data table
-  // population doesn't work for noir_space_ship traces.
+  // TODO(skipped): event log rowCount() returns 0 for noir_space_ship traces.
+  //   The data table population does not work -- baselineCount is 0 so the filter test is meaningless.
+  //   Hypothesis: The event log footer row count is populated via a different code path for
+  //   DB-based (noir) traces that is not working. Likely the same issue as the WASM event count bug.
   test.skip("event log filter trace vs recorded", async ({ ctPage }) => {
     const layout = new LayoutPage(ctPage);
     await layout.waitForAllComponentsLoaded();
@@ -159,6 +168,11 @@ test.describe("ProgramAgnostic", () => {
     expect(traceCount).toBeLessThanOrEqual(recordedCount);
   });
 
+  // TODO(skipped): Editor shortcuts (Ctrl+F8, Ctrl+F11) may not be wired up.
+  //   The test expects Ctrl+F8 to toggle a breakpoint and Ctrl+F11 to step into,
+  //   but the keyboard shortcuts may not be registered in the current frontend build.
+  //   Hypothesis: These shortcuts are either not implemented or use different key bindings.
+  //   Check the frontend keybinding registration in the Nim source.
   test.skip("editor shortcuts ctrl+f8 ctrl+f11", async ({ ctPage }) => {
     const layout = new LayoutPage(ctPage);
     await layout.waitForAllComponentsLoaded();

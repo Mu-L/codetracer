@@ -65,6 +65,12 @@ const cairoPipelineAvailable = cairoRecorderAvailable && cairoTestProgram !== nu
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
+// TODO(failing): All 8 UI tests fail with "Unexpected last line of ct record: error: recorder exited with 2 for LangCairo".
+//   The recorder binary (codetracer-cairo-recorder) is on PATH and detected correctly, so the skip guard passes,
+//   but `ct record` fails because the Cairo toolchain (scarb/cairo compiler) is not in the codetracer dev shell --
+//   it is only available in codetracer-cairo-recorder's own dev shell.
+//   Hypothesis: The test fixture needs to run `ct record` inside `direnv exec ../codetracer-cairo-recorder`
+//   so the Cairo compiler is on PATH, or the recorder binary should be self-contained (bundling its toolchain).
 test.describe("cairo_example — basic layout", () => {
   test.skip(
     !cairoPipelineAvailable,

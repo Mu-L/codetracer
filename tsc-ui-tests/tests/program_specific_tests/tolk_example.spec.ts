@@ -65,6 +65,12 @@ const tolkPipelineAvailable = tolkRecorderAvailable && tolkTestProgram !== null;
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
+// TODO(skipped): All 8 UI tests skipped because tolkPipelineAvailable is false.
+//   The codetracer-tolk-recorder binary is not detected (codetracer-ton-recorder sibling is present
+//   but the binary name may differ), or resolveRecorderTestProgram("tolk", "tolk/flow_test.tolk")
+//   returns null because the test program does not exist at the expected path.
+//   Hypothesis: Check if the binary is named `codetracer-ton-recorder` instead of
+//   `codetracer-tolk-recorder`, or verify the test program path in the sibling repo.
 test.describe("tolk_example — basic layout", () => {
   test.skip(
     !tolkPipelineAvailable,

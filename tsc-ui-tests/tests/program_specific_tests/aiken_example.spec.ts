@@ -65,6 +65,12 @@ const aikenPipelineAvailable = aikenRecorderAvailable && aikenTestProgram !== nu
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
+// TODO(skipped): All 8 UI tests skipped because aikenPipelineAvailable is false.
+//   The codetracer-aiken-recorder binary is detected, but resolveRecorderTestProgram("aiken",
+//   "aiken/flow_test.ak") likely returns null because the test program file does not exist
+//   at the expected path in the sibling repo.
+//   Hypothesis: Verify the test program exists at codetracer-cardano-recorder/test-programs/aiken/flow_test.ak
+//   or check if the Aiken recorder binary does not pass the --version check.
 test.describe("aiken_example — basic layout", () => {
   test.skip(
     !aikenPipelineAvailable,

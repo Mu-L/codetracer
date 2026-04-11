@@ -65,6 +65,12 @@ const jsPipelineAvailable = jsRecorderAvailable && jsTestProgram !== null;
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
+// TODO(skipped): All 8 UI tests skipped because jsPipelineAvailable is false.
+//   The codetracer-js-recorder binary is detected as a sibling, but the test program
+//   resolution (resolveRecorderTestProgram("js", "js/flow_test.js")) likely fails because
+//   the test program path does not exist in the sibling repo's expected location.
+//   Hypothesis: Verify the test program exists at codetracer-js-recorder/test-programs/js/flow_test.js
+//   or update the path passed to resolveRecorderTestProgram().
 test.describe("js_example — basic layout", () => {
   test.skip(
     !jsPipelineAvailable,

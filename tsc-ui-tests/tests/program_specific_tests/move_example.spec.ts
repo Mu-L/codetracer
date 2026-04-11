@@ -62,6 +62,12 @@ const movePipelineAvailable = moveRecorderAvailable;
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
+// TODO(failing): All 8 UI tests fail with "Unexpected last line of ct record: error: recorder exited with 2 for LangMove".
+//   The recorder binary (codetracer-move-recorder) is on PATH and detected correctly, so the skip guard passes,
+//   but `ct record` fails because the Move toolchain is not in the codetracer dev shell --
+//   it is only available in codetracer-move-recorder's own dev shell.
+//   Hypothesis: The test fixture needs to run `ct record` inside `direnv exec ../codetracer-move-recorder`
+//   so the Move compiler is on PATH, or the recorder binary should be self-contained (bundling its toolchain).
 test.describe("move_example — basic layout", () => {
   // Skip the entire suite when the Move recorder pipeline is absent.
   // Remove this guard once `ct record <path>.move` is integrated.

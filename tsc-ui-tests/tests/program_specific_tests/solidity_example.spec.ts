@@ -78,6 +78,11 @@ const evmPipelineAvailable = solcAvailable && evmRecorderAvailable;
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
+// TODO(skipped): All 8 UI tests skipped because evmPipelineAvailable is false.
+//   Requires both `solc` (Solidity compiler) and `codetracer-evm-recorder` on PATH.
+//   The codetracer-evm-recorder sibling is present but solc is likely not in the codetracer dev shell.
+//   Hypothesis: Add solc to the codetracer nix dev shell, or run these tests inside
+//   `direnv exec ../codetracer-evm-recorder` where solc is available.
 test.describe("solidity_example — basic layout", () => {
   // Skip the entire suite when the EVM recorder pipeline is absent.
   // Remove this guard once `ct record <path>.sol` is integrated.

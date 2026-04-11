@@ -65,6 +65,12 @@ const circomPipelineAvailable = circomRecorderAvailable && circomTestProgram !==
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
+// TODO(failing): All 8 UI tests fail with "Unexpected last line of ct record: error: recorder exited with 2 for LangCircom".
+//   The recorder binary (codetracer-circom-recorder) is on PATH and detected correctly, so the skip guard passes,
+//   but `ct record` fails because the Circom toolchain (circom compiler) is not in the codetracer dev shell --
+//   it is only available in codetracer-circom-recorder's own dev shell.
+//   Hypothesis: The test fixture needs to run `ct record` inside `direnv exec ../codetracer-circom-recorder`
+//   so the Circom compiler is on PATH, or the recorder binary should be self-contained (bundling its toolchain).
 test.describe("circom_example — basic layout", () => {
   test.skip(
     !circomPipelineAvailable,

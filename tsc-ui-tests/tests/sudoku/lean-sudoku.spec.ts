@@ -14,6 +14,12 @@ import * as helpers from "../../lib/language-smoke-test-helpers";
  * The build+record+DAP-connect pipeline works — see
  * src/db-backend/tests/lean_flow_integration.rs for headless tests.
  */
+// TODO(skipped): All 5 tests skipped. Lean compiles to C but the generated C code has no #line
+//   directives, so DWARF debug info maps to .c files, not .lean source files. Source-level
+//   breakpoints and stepping do not work. Upstream issue: leanprover/lean4#12921.
+//   Tracking: https://github.com/metacraft-labs/codetracer/issues/535
+//   Hypothesis: This is blocked on upstream Lean compiler changes. Once lean4 adds #line
+//   directives to generated C code, DWARF will map back to .lean files and these tests can be enabled.
 test.describe("LeanSudoku", () => {
   test.fixme(true, "Lean C codegen lacks #line directives — no source-level debugging (codetracer#535)");
   test.use({ sourcePath: "lean_sudoku_solver/Main.lean", launchMode: "trace" });

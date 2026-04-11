@@ -338,6 +338,12 @@ test.describe("test_acp_deepreview_extension", () => {
 
   // -- Live IPC tests (require Electron with M9 compiled in) -----------------
 
+  // TODO(skipped): Skipped when CODETRACER_AGENTIC_E2E != "1". These tests require the agentic
+  //   coding feature to be compiled into the Electron build (M9 milestone). In CI and default
+  //   dev environments the feature flag is off so these are skipped by design.
+  //   Hypothesis: Enable by setting CODETRACER_AGENTIC_E2E=1 before running tests.
+  //   Some internal tests may also fail because DOM elements for the agent workspace are not
+  //   rendered when the feature is disabled at compile time.
   test.describe("live IPC", () => {
     test.skip(
       !agenticFeatureEnabled,
@@ -482,6 +488,12 @@ test.describe("test_workspace_view_switching", () => {
 
   // -- Live IPC tests (require Electron with M9 compiled in) -----------------
 
+  // TODO(skipped): Skipped when CODETRACER_AGENTIC_E2E != "1". These tests require the agentic
+  //   coding feature to be compiled into the Electron build (M9 milestone). In CI and default
+  //   dev environments the feature flag is off so these are skipped by design.
+  //   Hypothesis: Enable by setting CODETRACER_AGENTIC_E2E=1 before running tests.
+  //   Some internal tests may also fail because DOM elements for the agent workspace are not
+  //   rendered when the feature is disabled at compile time.
   test.describe("live IPC", () => {
     test.skip(
       !agenticFeatureEnabled,
@@ -705,6 +717,12 @@ test.describe("test_caption_bar_progress", () => {
 
   // -- Live IPC tests (require Electron with M9 compiled in) -----------------
 
+  // TODO(skipped): Skipped when CODETRACER_AGENTIC_E2E != "1". These tests require the agentic
+  //   coding feature to be compiled into the Electron build (M9 milestone). In CI and default
+  //   dev environments the feature flag is off so these are skipped by design.
+  //   Hypothesis: Enable by setting CODETRACER_AGENTIC_E2E=1 before running tests.
+  //   Some internal tests may also fail because DOM elements for the agent workspace are not
+  //   rendered when the feature is disabled at compile time.
   test.describe("live IPC", () => {
     test.skip(
       !agenticFeatureEnabled,
@@ -970,6 +988,12 @@ test.describe("test_activity_pane_deepreview", () => {
 
   // -- Live IPC tests (require Electron with M9 compiled in) -----------------
 
+  // TODO(skipped): Skipped when CODETRACER_AGENTIC_E2E != "1". These tests require the agentic
+  //   coding feature to be compiled into the Electron build (M9 milestone). In CI and default
+  //   dev environments the feature flag is off so these are skipped by design.
+  //   Hypothesis: Enable by setting CODETRACER_AGENTIC_E2E=1 before running tests.
+  //   Some internal tests may also fail because DOM elements for the agent workspace are not
+  //   rendered when the feature is disabled at compile time.
   test.describe("live IPC", () => {
     test.skip(
       !agenticFeatureEnabled,
@@ -1333,6 +1357,12 @@ test.describe("test_realtime_collection", () => {
 
   // -- Live IPC tests (require Electron with M9 compiled in) -----------------
 
+  // TODO(skipped): Skipped when CODETRACER_AGENTIC_E2E != "1". These tests require the agentic
+  //   coding feature to be compiled into the Electron build (M9 milestone). In CI and default
+  //   dev environments the feature flag is off so these are skipped by design.
+  //   Hypothesis: Enable by setting CODETRACER_AGENTIC_E2E=1 before running tests.
+  //   Some internal tests may also fail because DOM elements for the agent workspace are not
+  //   rendered when the feature is disabled at compile time.
   test.describe("live IPC", () => {
     test.skip(
       !agenticFeatureEnabled,

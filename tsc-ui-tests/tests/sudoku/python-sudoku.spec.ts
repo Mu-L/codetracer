@@ -12,6 +12,13 @@ import * as helpers from "../../lib/language-smoke-test-helpers";
  *
  * Port of ui-tests/Tests/ProgramSpecific/PythonSudokuTests.cs
  */
+// TODO(failing): All 5 tests fail with "ct record failed: error=undefined; status=1".
+//   stdout: "error: Python module `codetracer_python_recorder` is not installed for interpreter:
+//   /home/zahary/metacraft/codetracer/.python-recorder-venv/bin/python"
+//   The Python recorder venv exists but does not have codetracer_python_recorder installed.
+//   Hypothesis: The venv was created before the pure-Python recorder fix was applied and its
+//   direnv cache is stale. Rebuilding the venv with `python -m pip install codetracer_python_recorder`
+//   or refreshing the direnv cache (`direnv reload` in the codetracer dir) should fix this.
 test.describe("PythonSudoku", () => {
   test.use({ sourcePath: "py_sudoku_solver/main.py", launchMode: "trace" });
 

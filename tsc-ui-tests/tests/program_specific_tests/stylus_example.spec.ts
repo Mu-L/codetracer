@@ -83,6 +83,12 @@ const stylusPipelineAvailable = hasStylusPipeline();
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
+// TODO(skipped): All 8 UI tests skipped because stylusPipelineAvailable is false.
+//   Stylus tracing requires Foundry (cast), cargo-stylus, AND a running Arbitrum devnode.
+//   The `cast chain-id --rpc-url http://localhost:8547` check fails because no devnode is running.
+//   Hypothesis: These tests can only run in an environment with the full Stylus infrastructure
+//   (devnode + deployed contract). Consider a CI workflow that starts a devnode before running tests,
+//   or provide pre-recorded trace fixtures.
 test.describe("stylus_example — basic layout", () => {
   // Stylus tests require a running devnode, deployed contract, and recorded
   // transactions. Skip unless the full pipeline is available and a trace
