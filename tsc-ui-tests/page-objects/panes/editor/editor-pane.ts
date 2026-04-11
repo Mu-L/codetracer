@@ -112,13 +112,10 @@ export class EditorPane {
 
     // Strategy 2: Match by ID suffix. The Nim frontend generates IDs like
     // `flow-{mode}-value-box-{i}-{stepCount}-{name}`, so we can match
-    // elements whose ID ends with `-{valueName}`.
+    // elements whose ID ends with `-{valueName}` and has a value-box class.
+    // Use a broad class pattern since the mode prefix varies (parallel, inline, multiline).
     const idSuffixLocator = this.root.locator(
-      [
-        `[id$="-${valueName}"].flow-parallel-value-box`,
-        `[id$="-${valueName}"].flow-inline-value-box`,
-        `[id$="-${valueName}"].flow-multiline-value-box`,
-      ].join(", "),
+      `[id$="-${valueName}"][class*="value-box"]`,
     ).first();
 
     return siblingLocator.or(idSuffixLocator);

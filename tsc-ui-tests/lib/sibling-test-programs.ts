@@ -63,9 +63,19 @@ export function findRecorderRepo(recorderName: string): string | null {
   }
 
   // Tier 1: Environment variable.
+  // The env var may point to either a repo directory or a binary inside
+  // target/release/. When it's a file, resolve to the repo root by
+  // walking up past target/release/.
   const envValue = process.env[entry.envVar] ?? "";
   if (envValue.length > 0 && fs.existsSync(envValue)) {
-    return envValue;
+    if (fs.statSync(envValue).isDirectory()) {
+      return envValue;
+    }
+    // Binary path like <repo>/target/release/<binary> — go up to <repo>
+    const repoDir = path.resolve(envValue, "..", "..", "..");
+    if (fs.existsSync(path.join(repoDir, "test-programs"))) {
+      return repoDir;
+    }
   }
 
   // Tier 2: Relative path from workspace root.
