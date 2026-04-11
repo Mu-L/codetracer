@@ -2433,15 +2433,9 @@ mod tests {
     }
 
     // pass size to produce multiline multiple log(expr) to log on a step
-    // NOTE: ignored — this test has unbounded memory growth in the tracepoint
-    // interpreter evaluation loop. It was never run in CI (present since the
-    // initial open-source release with size=10000). The two similar tests below
-    // (test_tracepoint_in_loop, test_big_number_tracepoints) are also #[ignore].
-    // TODO: investigate and fix the memory leak in evaluate_tracepoint/handle_trace_steps.
     #[test]
-    #[ignore]
     fn test_multile_tracepoints_with_multiline_logs() -> Result<(), Box<dyn Error>> {
-        let size: usize = 10;
+        let size: usize = 10000;
         let db: Db = setup_db();
         let (sender, _r) = mpsc::channel(); // for now just artificial sender; not received
         let mut handler: Handler = Handler::new(TraceKind::DB, CtRRArgs::default(), Box::new(db));

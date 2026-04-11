@@ -1152,21 +1152,25 @@ impl DbReplay {
         } else {
             self.step_id.0 as usize
         };
-        self.step_id = StepId(self.single_step_line(step_index, forward) as i64);
-        Ok(true)
+        let new_index = self.single_step_line(step_index, forward);
+        let moved = new_index != step_index;
+        self.step_id = StepId(new_index as i64);
+        Ok(moved)
     }
 
     fn step_out(&mut self, forward: bool) -> Result<bool, Box<dyn Error>> {
+        let old_step_id = self.step_id;
         (self.step_id, _) = self.db.step_out_step_id_relative_to(self.step_id, forward);
-        Ok(true)
+        Ok(self.step_id != old_step_id)
     }
 
     fn next(&mut self, forward: bool) -> Result<bool, Box<dyn Error>> {
         let step_to_different_line = true; // which is better/should be let the user configure it?
-        (self.step_id, _) = self
+        let moved;
+        (self.step_id, moved) = self
             .db
             .next_step_id_relative_to(self.step_id, forward, step_to_different_line);
-        Ok(true)
+        Ok(moved)
     }
 
     // returns if it has hit any breakpoints
