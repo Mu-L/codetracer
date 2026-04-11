@@ -50,6 +50,29 @@ pub enum Lang {
     // expr_loader tree-sitter support.  Ordinals 24+ are internal only.
     Bash,
     Zsh,
+    // EVM/Solidity support (ordinal 26, internal only — not in the Nim frontend enum).
+    Solidity,
+    // Blockchain VM languages (ordinals 27+, internal only — not in the Nim frontend enum).
+    /// Miden MASM assembly (Polygon Miden zkVM)
+    Masm,
+    /// FuelVM Sway language
+    Sway,
+    /// Sui/Aptos Move language
+    Move,
+    /// PolkaVM RISC-V (Polkadot smart contracts)
+    PolkaVM,
+    /// Cairo/StarkNet (zero-knowledge smart contracts)
+    Cairo,
+    /// Circom (zero-knowledge circuits)
+    Circom,
+    /// Leo/Aleo (zero-knowledge smart contracts)
+    Leo,
+    /// Tolk/TON (TON smart contracts)
+    Tolk,
+    /// Aiken/Cardano (Cardano validators)
+    Aiken,
+    /// Cadence/Flow (Flow smart contracts)
+    Cadence,
 }
 
 pub fn lang_from_context(path: &Path, trace_kind: TraceKind) -> Lang {
@@ -78,6 +101,17 @@ pub fn lang_from_context(path: &Path, trace_kind: TraceKind) -> Lang {
         "js" | "mjs" | "cjs" => Lang::Javascript,
         "lua" => Lang::Lua,
         "s" | "asm" => Lang::Asm,
+        "sol" => Lang::Solidity,
+        "masm" => Lang::Masm,
+        "sw" => Lang::Sway,
+        "move" => Lang::Move,
+        "polkavm" => Lang::PolkaVM,
+        "cairo" => Lang::Cairo,
+        "circom" => Lang::Circom,
+        "leo" => Lang::Leo,
+        "tolk" => Lang::Tolk,
+        "ak" => Lang::Aiken,
+        "cdc" => Lang::Cadence,
         _ => Lang::Unknown,
     }
 }

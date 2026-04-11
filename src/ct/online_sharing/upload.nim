@@ -9,32 +9,53 @@ import ../../common/[ config, paths ]
 import ../cli/interactive_replay
 import ../codetracerconf
 import ../trace/shell
-import remote
+import remote_config, api_client, file_transfer, tenant_resolver
 
 proc uploadFile(
   traceZipPath: string,
   org: Option[string],
+  token: Option[string] = none(string),
+  baseUrl: Option[string] = none(string),
 ): UploadedInfo {.raises: [KeyError, Exception].} =
-
+  ## Uploads a trace zip file to the CI platform using the native API client.
+  ## Returns an UploadedInfo with the exit code and file ID.
   result = UploadedInfo(exitCode: 0)
   try:
-    var args = @["upload", traceZipPath]
-    if org.isSome:
-      args.add("-org")
-      args.add(org.get)
-    result.exitCode = runCtRemote(args)
+    let remoteConf = initRemoteConfig()
+    let bearerToken = remoteConf.getBearerToken(token.get(""))
+    let resolvedBaseUrl = remoteConf.resolveBaseRemoteUrl(baseUrl.get(""))
+
+    var client = initApiClient(resolvedBaseUrl)
+    defer: client.close()
+
+    # Resolve the target tenant/organization.
+    let defaultOrg = remoteConf.readConfigValue(DefaultOrganizationKey)
+    let orgSlug = resolveTenantValueOrSlug(defaultOrg, org.get(""))
+    let (tenantId, resolvedSlug) = resolveTenantId(client, orgSlug, bearerToken)
+
+    # Request a presigned upload URL from the server.
+    let fileSize = getFileSize(traceZipPath)
+    let fileName = extractFilename(traceZipPath)
+    let uploadResp = client.requestTraceUploadUrl(
+      tenantId, fileName, "application/zip", fileSize, bearerToken)
+
+    # Upload the file to the presigned URL.
+    let etag = putFile(uploadResp.uploadUrl, traceZipPath)
+
+    # Confirm the upload with the ETag.
+    client.confirmTraceUpload(uploadResp.traceId, etag, bearerToken)
+
+    result.fileId = uploadResp.traceId
+
+    let replayUrl = fmt"{resolvedBaseUrl}/{resolvedSlug}/replay/confirm/{uploadResp.traceId}"
+    echo "File uploaded successfully."
+    echo "File ID: " & uploadResp.traceId
+    echo "You can run the replay in the browser from here:"
+    echo "  " & replayUrl
+
   except CatchableError as e:
     echo "error: uploadFile exception: ", e.msg
-
-  # TODO: for now ct-remote outputs the info
-  #   for integration with welcome-screen we might eventually
-  #   get json and process it here again in the future
-
-  # return UploadedInfo(
-  #   fileId: fileId,
-  #   controlId: controlId,
-  #   storedUntilEpochSeconds: storedUntilEpochSeconds
-  # )
+    result.exitCode = 1
 
 
 proc onProgress(ratio, start: int, message: string, lastPercentSent: ref int): proc(progressPercent: int) =
@@ -45,7 +66,9 @@ proc onProgress(ratio, start: int, message: string, lastPercentSent: ref int): p
       logUpdate(scaled, message)
 
 
-proc uploadTrace*(trace: Trace, org: Option[string]): UploadedInfo =
+proc uploadTrace*(trace: Trace, org: Option[string],
+    token: Option[string] = none(string),
+    baseUrl: Option[string] = none(string)): UploadedInfo =
   # try to generate a unique path, so even if we don't remove it/clean it up
   #   it's not easy to clash with it on a next upload
   # https://nim-lang.org/docs/oids.html
@@ -59,12 +82,7 @@ proc uploadTrace*(trace: Trace, org: Option[string]): UploadedInfo =
   zipFolder(trace.outputFolder, outputZip, onProgress = onProgress(ratio = 33, start = 0, "Zipping files..", lastPercentSent))
   var uploadInfo = UploadedInfo()
   try:
-    uploadInfo = uploadFile(outputZip, org)
-
-    # TODO: after we have link and welcome screen integration again
-    #   for now just leave the output to ct-remote: we quit directly in uploadFile for now
-    # uploadInfo.downloadKey = trace.program & "//" & uploadInfo.fileId & "//" & key.mapIt((it.uint64).toHex(2)).join("")
-    # updateField(trace.id, "remoteShareDownloadKey", uploadInfo.downloadKey, false)
+    uploadInfo = uploadFile(outputZip, org, token, baseUrl)
   except CatchableError as e:
     echo "uploadTrace error: ", e.msg
     uploadInfo.exitCode = 1
@@ -85,6 +103,8 @@ proc uploadCommand*(
   traceFolderArg: Option[string],
   interactive: bool,
   uploadOrg: Option[string],
+  uploadToken: Option[string] = none(string),
+  uploadBaseUrl: Option[string] = none(string),
 ) =
   let config: Config = loadConfig(folder=getCurrentDir(), inTest=false)
 
@@ -105,7 +125,7 @@ proc uploadCommand*(
     quit(1)
 
   try:
-    uploadInfo = uploadTrace(trace, uploadOrg)
+    uploadInfo = uploadTrace(trace, uploadOrg, uploadToken, uploadBaseUrl)
   except CatchableError as e:
     echo e.msg
     quit(1)

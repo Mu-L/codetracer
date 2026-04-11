@@ -29,9 +29,9 @@ fn get_noir_project_path() -> PathBuf {
 fn create_noir_flow_config() -> FlowTestConfig {
     let mut expected_values = HashMap::new();
     // Witness: x=10, y=32
-    // calculate_sum: a=10, b=32, sum_val=42, doubled=84, final_result=94
-    expected_values.insert("a".to_string(), 10);
-    expected_values.insert("b".to_string(), 32);
+    // calculate_sum: sum_val=42, doubled=84, final_result=94
+    // Note: Noir inlines function parameters, so `a` and `b` are not
+    // available as trace variables.
     expected_values.insert("sum_val".to_string(), 42);
     expected_values.insert("doubled".to_string(), 84);
     expected_values.insert("final_result".to_string(), 94);
@@ -41,15 +41,10 @@ fn create_noir_flow_config() -> FlowTestConfig {
         // The breakpoint is set on the actual .nr source file.
         source_path: get_noir_project_path(),
         language: Language::Noir,
-        // Line 13: `let sum_val = a + b;` in calculate_sum
-        breakpoint_line: 13,
-        expected_variables: vec![
-            "a".to_string(),
-            "b".to_string(),
-            "sum_val".to_string(),
-            "doubled".to_string(),
-            "final_result".to_string(),
-        ],
+        // Line 27: first println after final_result is computed in calculate_sum;
+        // sum_val, doubled, and final_result are all in scope here.
+        breakpoint_line: 27,
+        expected_variables: vec!["sum_val".to_string(), "doubled".to_string(), "final_result".to_string()],
         // TODO: Noir reuses the Rust tree-sitter grammar, but Noir's `println(...)`
         // is a regular function call (not a macro like Rust's `println!(...)`).
         // The Rust grammar parses it as an identifier, so it currently leaks into

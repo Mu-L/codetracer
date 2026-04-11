@@ -525,11 +525,11 @@ jobs:
           unzip sqlite-amalgamation-3500400.zip
           cp sqlite-amalgamation-3500400/sqlite3.c .
 
-      - name: Install libssl (Linux)
+      - name: Install libssl and libbpf (Linux)
         if: ${{ matrix.target_os == 'linux' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y libssl-dev
+          sudo apt-get install -y libssl-dev libbpf-dev libelf-dev
 
       - name: Install libssl (MacOS)
         if: ${{ matrix.target_os == 'macos' }}
@@ -996,7 +996,7 @@ jobs:
 
   test-ui-tests-rr:
     runs-on: [self-hosted, nixos]
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v5

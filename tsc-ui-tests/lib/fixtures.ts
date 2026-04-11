@@ -214,7 +214,7 @@ export type LaunchMode = "trace" | "welcome" | "edit" | "deepreview";
 interface CodetracerOptions {
   /** Electron (default) or Web (ct host + chromium). */
   deploymentMode: DeploymentMode;
-  /** Relative path under test-programs/ for recording. */
+  /** Path to test program — relative to test-programs/ or absolute (for sibling repos). */
   sourcePath: string;
   /** How to launch CodeTracer. */
   launchMode: LaunchMode;
@@ -561,7 +561,11 @@ async function launchTraceElectron(sourcePath: string, recordingLimit = LIMIT_SM
   setupLdLibraryPath();
   const t0 = Date.now();
 
-  const fullSourcePath = path.join(testProgramsPath, sourcePath);
+  // Support both relative paths (under test-programs/) and absolute paths
+  // (from sibling recorder repos via resolveRecorderTestProgram()).
+  const fullSourcePath = path.isAbsolute(sourcePath)
+    ? sourcePath
+    : path.join(testProgramsPath, sourcePath);
   const { result: traceId, durationMs: recordMs } = await timed(
     "record",
     recordingLimit,
@@ -630,7 +634,11 @@ async function launchTraceWeb(sourcePath: string, recordingLimit = LIMIT_SMALL_R
   setupLdLibraryPath();
   const t0 = Date.now();
 
-  const fullSourcePath = path.join(testProgramsPath, sourcePath);
+  // Support both relative paths (under test-programs/) and absolute paths
+  // (from sibling recorder repos via resolveRecorderTestProgram()).
+  const fullSourcePath = path.isAbsolute(sourcePath)
+    ? sourcePath
+    : path.join(testProgramsPath, sourcePath);
   const { result: traceId, durationMs: recordMs } = await timed(
     "record",
     recordingLimit,

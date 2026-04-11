@@ -102,6 +102,43 @@ pub struct MoveState {
     pub frame_info: FrameInfo,
 }
 
+/// A single stack frame returned by the DAP `stackTrace` response.
+///
+/// Matches the DAP `StackFrame` schema: an `id`, a display `name`
+/// (typically the function name), line/column numbers, and an optional
+/// `source` object containing the file path.
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StackFrameInfo {
+    pub id: i64,
+    pub name: String,
+    #[serde(default)]
+    pub line: i64,
+    #[serde(default)]
+    pub column: i64,
+    #[serde(default)]
+    pub source: Option<StackFrameSource>,
+}
+
+/// Source reference inside a DAP `StackFrame`.
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StackFrameSource {
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub path: Option<String>,
+}
+
+/// Parsed result of a DAP `stackTrace` response.
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StackTraceResult {
+    pub stack_frames: Vec<StackFrameInfo>,
+    #[serde(default)]
+    pub total_frames: Option<i64>,
+}
+
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GoToTicksArguments {

@@ -380,6 +380,7 @@ fn setup(
     }
 
     info!("can't read db metadata or path trace files: try to read as rr trace");
+    eprintln!("[db-backend setup] trying rr trace path");
     if let Some(path) = resolve_replay_trace_path(trace_folder, trace_file) {
         let db = Db::new(&PathBuf::from(""));
         let ct_rr_args = CtRRArgs {
@@ -391,7 +392,9 @@ fn setup(
         let mut handler = Handler::new(TraceKind::RR, ct_rr_args, Box::new(db));
         handler.raw_diff_index = raw_diff_index;
         if for_launch {
+            eprintln!("[db-backend setup] calling run_to_entry");
             handler.run_to_entry(dap::Request::default(), restore_location, sender)?;
+            eprintln!("[db-backend setup] run_to_entry completed");
         }
         handler.initialized = true;
         Ok(handler)

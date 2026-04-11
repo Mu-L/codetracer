@@ -231,6 +231,40 @@ static NODE_NAMES: Lazy<HashMap<Lang, NodeNames>> = Lazy::new(|| {
         },
     );
 
+    // Solidity language support
+    // tree-sitter-solidity node types reference:
+    // https://github.com/JoranHonig/tree-sitter-solidity/blob/master/src/node-types.json
+    //
+    // Key node types used for flow/omniscience analysis:
+    // - `function_definition`: top-level and contract functions (both free functions and methods)
+    // - `constructor_definition`: contract constructors (treated as functions for tracing)
+    // - `if_statement` / `for_statement` / `while_statement` / `do_while_statement`: control flow
+    // - `block_statement`: the `{ ... }` body of functions and control-flow constructs
+    // - `identifier`: simple variable and function name references
+    // - `variable_declaration_statement`: `uint x = ...;` local variable declarations
+    //
+    // Note: Solidity's grammar does NOT have a named `else_clause` node.
+    // The else branch is an inline `seq('else', $.statement)` inside `if_statement`
+    // (see grammar.js:585-597). There is no separately typed else node to match on,
+    // so `else_conditions` is empty.
+    m.insert(
+        Lang::Solidity,
+        NodeNames {
+            if_conditions: vec!["if_statement".to_string()],
+            else_conditions: vec![],
+            loops: vec![
+                "for_statement".to_string(),
+                "while_statement".to_string(),
+                "do_while_statement".to_string(),
+            ],
+            branches_body: vec!["block_statement".to_string()],
+            branches: vec!["block_statement".to_string()],
+            functions: vec!["function_definition".to_string(), "constructor_definition".to_string()],
+            values: vec!["identifier".to_string()],
+            comments: vec!["comment".to_string()],
+        },
+    );
+
     // D language support (tree-sitter-d by gdamore)
     // tree-sitter-d uses a single `identifier` node type for all identifiers
     // (no separate `type_identifier` or `field_identifier` like in C/C++).
@@ -366,6 +400,10 @@ impl ExprLoader {
                 Lang::Bash
             } else if extension == "zsh" {
                 Lang::Zsh
+            } else if extension == "d" || extension == "di" {
+                Lang::D
+            } else if extension == "sol" {
+                Lang::Solidity
             } else {
                 Lang::Unknown
             }
@@ -407,6 +445,8 @@ impl ExprLoader {
             parser.set_language(&tree_sitter_bash::LANGUAGE.into())?;
         } else if lang == Lang::D {
             parser.set_language(&tree_sitter_d::LANGUAGE.into())?;
+        } else if lang == Lang::Solidity {
+            parser.set_language(&tree_sitter_solidity::LANGUAGE.into())?;
         } else {
             // else if lang == Lang::Small {
             //     parser.set_language(&tree_sitter_elisp::LANGUAGE.into())?;

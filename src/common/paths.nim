@@ -115,8 +115,9 @@ else:
 let
   cTraceSourcePath* = codetracerPrefix / "src" / "trace.c"
   consoleExe* = codetracerPrefix / "bin" / "console"
-  # (additional note: it is a workaround for dev/some cases: TODO think more)
-  ctRemoteExe* = codetracerExeDir / "bin" / "ct-remote"
+  # Deprecated: ct-remote is now built into the ct binary natively.
+  # Kept for the "ct remote" escape hatch during migration.
+  ctRemoteExe* {.deprecated: "ct-remote is now built into ct".} = codetracerExeDir / "bin" / "ct-remote"
   # External tools - use findTool (PATH lookup)
   bashExe* = when not defined(js): findTool("bash") else: codetracerPrefix / "bin" / "bash"
   taskProcessExe* = codetracerPrefix / "bin" / "task_process"

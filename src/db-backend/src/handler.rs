@@ -522,11 +522,11 @@ impl Handler {
 
     pub fn load_calltrace_section(
         &mut self,
-        _req: dap::Request,
+        req: dap::Request,
         args: CalltraceLoadArgs,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
-        if self.trace_kind == TraceKind::RR {
+        let update = if self.trace_kind == TraceKind::RR {
             // TODO: calltrace? eventually in the future
             // for now callstack!
 
@@ -534,38 +534,36 @@ impl Handler {
             let callstack_lines = self.replay.load_callstack()?;
             let total_count = callstack_lines.len();
             let position = 0;
-            let update = CallArgsUpdateResults::finished_update_call_lines(
+            CallArgsUpdateResults::finished_update_call_lines(
                 callstack_lines,
                 start_call_line_index,
                 total_count,
                 position,
                 self.calltrace.depth_offset,
-            );
-            let raw_event = self.dap_client.updated_calltrace_event(&update)?;
-            sender.send(raw_event)?;
-            // warn!("load_calltrace_section not implemented for rr");
+            )
         } else {
             let start_call_line_index = args.start_call_line_index;
             let call_lines = self.load_local_calltrace(args)?;
             let total_count = self.calc_total_calls();
             let position = self.calltrace.calc_scroll_position();
-            let update = CallArgsUpdateResults::finished_update_call_lines(
+            CallArgsUpdateResults::finished_update_call_lines(
                 call_lines,
                 start_call_line_index,
                 total_count,
                 position,
                 self.calltrace.depth_offset,
-            );
-            // self.return_task((task, VOID_RESULT.to_string()))?;
-            let raw_event = self.dap_client.updated_calltrace_event(&update)?;
-            sender.send(raw_event)?;
-        }
+            )
+        };
+        let raw_event = self.dap_client.updated_calltrace_event(&update)?;
+        sender.send(raw_event)?;
+        // Include calltrace data in the response body for customRequest().
+        self.respond_dap(req, &update, sender)?;
         Ok(())
     }
 
     pub fn load_flow(
         &mut self,
-        _req: dap::Request,
+        req: dap::Request,
         arg: CtLoadFlowArguments,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
@@ -599,9 +597,11 @@ impl Handler {
             return Err(message.into());
         };
         info!("  flow ready");
-        let raw_event = self.dap_client.updated_flow_event(flow_update)?;
+        let raw_event = self.dap_client.updated_flow_event(flow_update.clone())?;
         sender.send(raw_event)?;
 
+        // Include flow data in the response body for customRequest().
+        self.respond_dap(req, &flow_update, sender)?;
         Ok(())
     }
 
@@ -849,11 +849,23 @@ impl Handler {
             (slice.to_vec(), contents)
         };
 
-        let raw_event = self.dap_client.updated_events(page_events)?;
+        let raw_event = self.dap_client.updated_events(page_events.clone())?;
         sender.send(raw_event)?;
 
-        let raw_event_content = self.dap_client.updated_events_content(page_contents)?;
+        let raw_event_content = self.dap_client.updated_events_content(page_contents.clone())?;
         sender.send(raw_event_content)?;
+
+        // Include event data in the DAP response body so that
+        // `session.customRequest("ct/event-load")` resolves with the data
+        // (VS Code's customRequest returns the response body, not events).
+        self.respond_dap(
+            req,
+            serde_json::json!({
+                "events": page_events,
+                "content": page_contents,
+            }),
+            sender,
+        )?;
 
         Ok(())
     }
@@ -900,7 +912,7 @@ impl Handler {
 
     pub fn calltrace_search(
         &mut self,
-        _req: dap::Request,
+        req: dap::Request,
         arg: CallSearchArg,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
@@ -922,8 +934,10 @@ impl Handler {
             }
         }
 
-        let raw_event = self.dap_client.calltrace_search_event(calls)?;
+        let raw_event = self.dap_client.calltrace_search_event(calls.clone())?;
         sender.send(raw_event)?;
+        // Include search results in the response body for customRequest().
+        self.respond_dap(req, &calls, sender)?;
         Ok(())
     }
 
@@ -933,7 +947,7 @@ impl Handler {
 
     pub fn load_history(
         &mut self,
-        _req: dap::Request,
+        req: dap::Request,
         load_history_arg: LoadHistoryArg,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
@@ -957,10 +971,12 @@ impl Handler {
             .collect();
 
         let history_update = HistoryUpdate::new(load_history_arg.expression.clone(), address, &history_results);
-        let raw_event = self.dap_client.updated_history_event(history_update)?;
+        let raw_event = self.dap_client.updated_history_event(history_update.clone())?;
 
         sender.send(raw_event)?;
 
+        // Include history data in the response body for customRequest().
+        self.respond_dap(req, &history_update, sender)?;
         Ok(())
     }
 
@@ -1367,10 +1383,15 @@ impl Handler {
 
                 self.replay.jump_to(StepId(0))?;
 
+                // Whether we need a Continue to reach the next breakpoint,
+                // or have already landed on a new location via a Next step.
+                let mut need_continue = true;
+
                 loop {
-                    if !self.replay.step(Action::Continue, true)? {
+                    if need_continue && !self.replay.step(Action::Continue, true)? {
                         break;
                     }
+                    need_continue = true;
 
                     let current_step_id = self.replay.current_step_id();
                     let location = self.replay.load_location(&mut self.expr_loader)?;
@@ -1413,6 +1434,37 @@ impl Handler {
                             }
 
                             *visit_entry = visit_index;
+
+                            // Step past the current source line to skip any
+                            // remaining sub-breakpoint addresses. GDB/LLDB can
+                            // resolve a single source-line breakpoint to
+                            // multiple addresses (e.g. macro expansion), and
+                            // without this, each address triggers a separate
+                            // Continue stop, duplicating tracepoint results.
+                            // Loop `next` until the source line actually
+                            // changes, since `next` may stop at another
+                            // sub-breakpoint address on the same line.
+                            let mut program_ended = false;
+                            for _ in 0..16 {
+                                if !self.replay.step(Action::Next, true).unwrap_or(false) {
+                                    program_ended = true;
+                                    break;
+                                }
+                                let next_loc = self.replay.load_location(&mut self.expr_loader)?;
+                                if next_loc.path != path || next_loc.line as usize != line {
+                                    break;
+                                }
+                            }
+                            if program_ended {
+                                break;
+                            }
+                            // We've landed on a new line after stepping past
+                            // sub-breakpoints. Check it for tracepoints before
+                            // doing Continue — GDB's Continue skips breakpoints
+                            // at the current PC, so we'd miss adjacent-line
+                            // tracepoints if we didn't check here.
+                            need_continue = false;
+                            continue;
                         }
                     }
                 }
@@ -1785,7 +1837,7 @@ impl Handler {
 
     pub fn update_table(
         &mut self,
-        _req: dap::Request,
+        req: dap::Request,
         args: UpdateTableArgs,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
@@ -1794,10 +1846,11 @@ impl Handler {
             let trace_event = self.dap_client.tracepoint_locals_event(trace_values)?;
             sender.send(trace_event)?;
         }
-        let raw_event = self
-            .dap_client
-            .updated_table_event(&task::CtUpdatedTableResponseBody { table_update })?;
+        let table_body = task::CtUpdatedTableResponseBody { table_update };
+        let raw_event = self.dap_client.updated_table_event(&table_body)?;
         sender.send(raw_event)?;
+        // Include table data in the response body for customRequest().
+        self.respond_dap(req, &table_body, sender)?;
         Ok(())
     }
 
@@ -1938,9 +1991,11 @@ impl Handler {
             write_events[start..].to_vec()
         };
 
-        let raw_event = self.dap_client.loaded_terminal_event(page)?;
+        let raw_event = self.dap_client.loaded_terminal_event(page.clone())?;
         sender.send(raw_event)?;
 
+        // Include terminal data in the response body for customRequest().
+        self.respond_dap(req, &page, sender)?;
         Ok(())
     }
 

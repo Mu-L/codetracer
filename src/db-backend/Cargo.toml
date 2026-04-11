@@ -73,6 +73,7 @@ tree-sitter-tracepoint = { path = "./tree-sitter-trace/" }
 tree-sitter-go = "0.25.0"
 tree-sitter-javascript = "0.25.0"
 tree-sitter-bash = "0.23.3"
+tree-sitter-solidity = "1.2"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59.0", features = [

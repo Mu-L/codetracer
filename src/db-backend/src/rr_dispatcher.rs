@@ -6,9 +6,7 @@ use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::thread;
-use std::time::Duration;
-#[cfg(windows)]
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 #[cfg(windows)]
 use std::net::TcpStream;
@@ -120,6 +118,7 @@ impl CtRRWorker {
             .spawn()?;
 
         let worker_pid = ct_worker.id();
+        eprintln!("[rr-worker] spawned worker pid={}", worker_pid);
         self.process = Some(ct_worker);
         if let Err(err) = self.setup_worker_sockets() {
             if let Some(child) = self.process.as_mut() {
@@ -141,39 +140,37 @@ impl CtRRWorker {
 
     #[cfg(unix)]
     fn setup_worker_sockets(&mut self) -> Result<(), Box<dyn Error>> {
-        // assuming that the ct rr worker creates the sockets!
-        // code copied and adapted from `connect_socket_with_backend_and_loop` in ct-rr-worker
-        //   which is itself copied/adapted/written from/based on https://emmanuelbosquet.com/2022/whatsaunixsocket/
-
         let run_id = std::process::id() as usize;
-
-        // let tmp_path: PathBuf = { CODETRACER_PATHS.lock()?.tmp_path.clone() };
-        // let run_dir = run_dir_for(&tmp_path, run_id)?;
-        // // remove_dir_all(&run_dir)?;
-        // create_dir_all(&run_dir)?;
-
         let socket_path = ct_rr_worker_socket_path("", &self.name, self.index, run_id)?;
 
-        // for a while it was enabled because of some problems with socket setup
-        //   but i think we resolved them with fixing another deadlock sender bug
-        //   and maybe it wasn't connected to waiting here
-        // i might be wrong, so leaving this for a reminder; sleeping is flakey in most cases though
-        thread::sleep(Duration::from_millis(800));
+        eprintln!("[rr-worker] connecting to socket {}", socket_path.display());
 
-        info!("try to connect to worker with socket in {}", socket_path.display());
+        let deadline = Instant::now() + Duration::from_secs(10);
         loop {
             if let Ok(stream) = UnixStream::connect(&socket_path) {
+                stream.set_read_timeout(Some(Duration::from_secs(10)))?;
                 self.stream = Some(stream);
-                info!("stream is now setup");
-                break;
+                eprintln!("[rr-worker] socket connected");
+                return Ok(());
             }
-            thread::sleep(Duration::from_millis(1));
-            // TODO: handle different kinds of errors
 
-            // TODO: after some retries, assume a problem and return an error?
+            if Instant::now() >= deadline {
+                return Err(format!(
+                    "timeout after 10s waiting for worker socket at {}",
+                    socket_path.display()
+                )
+                .into());
+            }
+
+            // Check if the worker process is still alive.
+            if let Some(ref mut child) = self.process {
+                if let Some(status) = child.try_wait()? {
+                    return Err(format!("worker process exited with {} before creating socket", status).into());
+                }
+            }
+
+            thread::sleep(Duration::from_millis(10));
         }
-
-        Ok(())
     }
 
     #[cfg(windows)]
@@ -387,7 +384,13 @@ impl CtRRWorker {
         debug!("wait to read");
 
         let mut reader = BufReader::new(self.stream.as_mut().expect("valid receiving stream"));
-        reader.read_line(&mut res)?; // TODO: more robust reading/read all
+        reader.read_line(&mut res).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut {
+                format!("run_query timed out (10s) waiting for worker response to: {raw_json}")
+            } else {
+                format!("run_query IO error: {e}")
+            }
+        })?;
 
         res = String::from(res.trim()); // trim newlines/whitespace!
 
@@ -480,11 +483,14 @@ impl RRDispatcher {
     pub fn ensure_active_stable(&mut self) -> Result<(), Box<dyn Error>> {
         // start stable process if not active, store fields, setup ipc? store in stable
         if !self.stable.active {
+            eprintln!("[rr-dispatcher] starting worker for '{}'", self.name);
             let res = self.stable.start();
             if let Err(e) = res {
+                eprintln!("[rr-dispatcher] worker start FAILED: {:?}", e);
                 error!("can't start ct rr worker for {}! error is {:?}", self.name, e);
                 return Err(e);
             }
+            eprintln!("[rr-dispatcher] worker started successfully");
         }
         // check again:
         if !self.stable.active {

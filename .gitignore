@@ -35,6 +35,7 @@ gem_home/
 .direnv/
 result
 result-bin
+result-lib
 result-man
 
 docs/book/book
@@ -250,6 +251,13 @@ test-programs/ada_sudoku_solver/*.ali
 # Cargo.lock for test programs (not published crates)
 test-programs/*/Cargo.lock
 src/db-backend/test-programs/*/Cargo.lock
+
+# Compiled Nim test binaries (built in-tree by `nim c -r`)
+src/ct/ci/bpf_monitor_test
+src/ct/ci/bpf_monitor_native_test
+src/ct/ci/bpf_native_integration_test
+src/ct/ci/bpf_integration_test
+src/ct/ci/bpf_comparison_test
 
 # Temporary .patch file, used to coppy results from codex and applied using git apply <file name>.patch
 *.patch

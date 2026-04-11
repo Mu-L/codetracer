@@ -1,10 +1,13 @@
 import
-  std/[ json, os, osproc, strutils ],
-  ../../common/[ paths, types, intel_fix, install_utils, trace_index ],
+  std/[ json, options, os, osproc, strutils ],
+  ../../common/[ paths, types, intel_fix, install_utils,
+                trace_index, install_progress ],
   ../utilities/[ git ],
   ../cli/[ logging, list, help, build],
-  ../online_sharing/[ upload, download, delete, remote ],
+  ../online_sharing/[ upload, download, delete, remote,
+                      activate_command, check_license_command, remote_config ],
   ../trace/[ replay, record, run, metadata, host, import_command ],
+  ../ci/[ ci_commands ],
   ../codetracerconf,
   ../globals,
   ../stylus/[deploy, record, arb_node_utils],
@@ -12,6 +15,9 @@ import
   electron,
   results,
   json_serialization
+
+when defined(linux):
+  import ../../common/bpf_install
 
 proc unescapeEnvValue(s: string): string =
   ## Unescape common escape sequences in .env file values.
@@ -21,7 +27,7 @@ proc unescapeEnvValue(s: string): string =
   # Strip surrounding quotes if present
   if value.len >= 2:
     if (value[0] == '"' and value[^1] == '"') or
-       (value[0] == '\'' and value[^1] == '\''):
+        (value[0] == '\'' and value[^1] == '\''):
       value = value[1 ..< ^1]
 
   result = newStringOfCap(value.len)
@@ -44,11 +50,17 @@ proc unescapeEnvValue(s: string): string =
       result.add(value[i])
       i += 1
 
-proc loadEnvFiles(envFiles: seq[string], nullSeparated: bool, deleteAfterLoad: bool) =
+proc loadEnvFiles(
+    envFiles: seq[string],
+    nullSeparated: bool,
+    deleteAfterLoad: bool) =
   ## Load environment variables from files in order.
-  ## nullSeparated: if true, entries are separated by null bytes (from 'env -0');
-  ##                if false, entries are newline-separated KEY=VALUE lines with escape sequences.
-  ## deleteAfterLoad: if true, delete the file after loading.
+  ## nullSeparated: if true, entries are separated
+  ## by null bytes (from 'env -0'); if false, entries
+  ## are newline-separated KEY=VALUE lines with
+  ## escape sequences.
+  ## deleteAfterLoad: if true, delete the file after
+  ## loading.
   ## Later files override earlier ones.
   for envFile in envFiles:
     if not fileExists(envFile):
@@ -92,9 +104,13 @@ proc runInitial*(conf: CodetracerConf) =
   # Temporary files are loaded first (and deleted), then persistent files.
   # Later files override earlier ones within each category.
   if conf.tmpEnv0Files.len > 0:
-    loadEnvFiles(conf.tmpEnv0Files, nullSeparated = true, deleteAfterLoad = true)
+    loadEnvFiles(
+      conf.tmpEnv0Files,
+      nullSeparated = true, deleteAfterLoad = true)
   if conf.tmpEnvFiles.len > 0:
-    loadEnvFiles(conf.tmpEnvFiles, nullSeparated = false, deleteAfterLoad = true)
+    loadEnvFiles(
+      conf.tmpEnvFiles,
+      nullSeparated = false, deleteAfterLoad = true)
   if conf.env0Files.len > 0:
     loadEnvFiles(conf.env0Files, nullSeparated = true, deleteAfterLoad = false)
   if conf.envFiles.len > 0:
@@ -113,7 +129,10 @@ proc runInitial*(conf: CodetracerConf) =
           if gitTopLevelResult.isOk:
             gitTopLevelResult.value & "/"
           else:
-            raise newException(ValueError, "no valid git root: " & gitTopLevelResult.error)
+            raise newException(
+              ValueError,
+              "no valid git root: " &
+              gitTopLevelResult.error)
         else:
           codetracerPrefix & "/"
 
@@ -141,16 +160,74 @@ proc runInitial*(conf: CodetracerConf) =
           echo "Failed to create the app location file: " & err.msg
           quit 1
 
+      let reporter = newInstallReporter(conf.installJson)
+
+      # Step 1: PATH setup (all platforms, non-privileged).
       if conf.installCtOnPath:
-        echo "About to install on PATH"
+        reporter.report(stepPath, statusStarted, "Adding ct to PATH")
         let status = installCodetracerOnPath(codetracerExe)
         if status.isErr:
-          echo "Failed to install CodeTracer: " & status.error
+          reporter.report(
+            stepPath, statusFailed,
+            "Failed to install on PATH: " &
+            status.error, fatal = true)
           quit 1
+        reporter.report(stepPath, statusCompleted, "Added ct to PATH")
+      else:
+        reporter.report(stepPath, statusSkipped, "PATH setup skipped")
 
+      # Step 2: Desktop file (Linux only, non-privileged).
       when defined(linux):
         if conf.installCtDesktopFile:
+          reporter.report(stepDesktop, statusStarted, "Installing desktop file")
           installCodetracerDesktopFile(codetracerPrefix, rootDir, codetracerExe)
+          reporter.report(
+            stepDesktop, statusCompleted,
+            "Desktop file installed")
+        else:
+          reporter.report(
+            stepDesktop, statusSkipped,
+            "Desktop file setup skipped")
+
+        # Step 3: BPF capabilities (Linux only, requires sudo).
+        if conf.installBpf:
+          if isNixManagedBpf():
+            reporter.report(
+              stepBpf, statusSkipped,
+              "BPF is managed by the Nix package")
+          else:
+            reporter.report(
+              stepBpf, statusStarted,
+              "Setting up BPF process monitoring")
+            let bpfResult = installBpfSupport()
+            if bpfResult.isErr:
+              reporter.report(
+                stepBpf, statusFailed,
+                "BPF setup failed: " &
+                bpfResult.error)
+            else:
+              reporter.report(
+                stepBpf, statusCompleted,
+                "BPF process monitoring set up")
+        else:
+          reporter.report(stepBpf, statusSkipped, "BPF setup skipped")
+
+      # Step 4: Agent Harbor (all platforms, requires root for Linux).
+      if conf.installAgentHarbor:
+        reporter.report(
+          stepAgentHarbor, statusStarted,
+          "Installing Agent Harbor")
+        let ahResult = installAgentHarbor()
+        if ahResult.isErr:
+          reporter.report(stepAgentHarbor, statusFailed, ahResult.error)
+        else:
+          reporter.report(
+          stepAgentHarbor, statusCompleted,
+          "Agent Harbor installed")
+      else:
+        reporter.report(
+          stepAgentHarbor, statusSkipped,
+          "Agent Harbor installation skipped")
 
       quit(0)
 
@@ -209,13 +286,29 @@ proc runInitial*(conf: CodetracerConf) =
         conf.uploadTraceId,
         conf.uploadTraceFolder,
         replayInteractive,
-        conf.uploadOrg)
+        conf.uploadOrg,
+        conf.uploadToken,
+        conf.uploadBaseUrl)
     of StartupCommand.download:
-      downloadTraceCommand(conf.traceDownloadUrl)
+      downloadTraceCommand(conf.traceDownloadUrl,
+        conf.downloadToken,
+        conf.downloadBaseUrl)
     of StartupCommand.login:
-      loginCommand(conf.loginDefaultOrg)
+      loginCommand(conf.loginDefaultOrg, conf.loginBaseUrl)
     of StartupCommand.`set-default-org`:
       setDefaultOrg(conf.setDefaultOrgName)
+    of StartupCommand.`get-default-org`:
+      getDefaultOrg()
+    of StartupCommand.activate:
+      let rc = initRemoteConfig()
+      activateCommand(rc,
+        conf.activateToken.get(""),
+        conf.activateBaseUrl.get(""))
+    of StartupCommand.`check-license`:
+      let rc = initRemoteConfig()
+      checkLicenseCommand(rc,
+        conf.checkLicenseToken.get(""),
+        conf.checkLicenseBaseUrl.get(""))
     # of StartupCommand.cmdDelete:
     #   deleteTraceCommand(conf.traceId, conf.controlId)
     #   # eventually enable?
@@ -227,7 +320,9 @@ proc runInitial*(conf: CodetracerConf) =
         conf.recordLang, conf.recordOutputFolder,
         conf.recordExportFile, conf.recordStylusTrace,
         conf.recordAddress, conf.recordSocket,
-        conf.recordWithDiff, conf.recordStoreTraceFolderForPid, conf.recordUpload,
+        conf.recordWithDiff,
+        conf.recordStoreTraceFolderForPid,
+        conf.recordUpload,
         conf.recordProgram, conf.recordArgs)
     of StartupCommand.`record-test`:
       recordTest(
@@ -260,6 +355,47 @@ proc runInitial*(conf: CodetracerConf) =
         let transactions = getTrackableTransactions()
         let res = Json.encode(transactions)
         echo res
+    of StartupCommand.ci:
+      let token = resolveToken(conf.ciToken)
+      let baseUrl = resolveBaseUrl(conf.ciBaseUrl)
+      case conf.ciCommand:
+      of CICommand.noCommand:
+        echo "No CI subcommand specified. Use 'ct ci --help' for usage."
+        quit(1)
+      of CICommand.start:
+        ciStartCommand(
+          token, baseUrl,
+          conf.ciStartRepo, conf.ciStartCommit,
+          conf.ciStartBranch, conf.ciStartBaseCommit,
+          conf.ciStartLabel,
+          conf.ciStartMonitorProcesses)
+      of CICommand.attach:
+        ciAttachCommand(token, baseUrl, conf.ciAttachRunId)
+      of CICommand.exec:
+        let exitCode = ciExecCommand(
+          token, baseUrl,
+          conf.ciExecProgram,
+          conf.ciExecArgs, conf.ciExecRecord,
+          conf.ciExecMonitorProcesses)
+        if exitCode != 0:
+          quit(exitCode)
+      of CICommand.finish:
+        ciFinishCommand(token, baseUrl, conf.ciFinishStatus)
+      of CICommand.run:
+        ciRunCommand(
+          token, baseUrl,
+          conf.ciRunRepo, conf.ciRunCommit,
+          conf.ciRunBranch, conf.ciRunBaseCommit,
+          conf.ciRunLabel,
+          conf.ciRunMonitorProcesses,
+          conf.ciRunRecord,
+          conf.ciRunProgram, conf.ciRunArgs)
+      of CICommand.log:
+        ciLogCommand(token, baseUrl, conf.ciLogMessage)
+      of CICommand.status:
+        ciStatusCommand(token, baseUrl)
+      of CICommand.cancel:
+        ciCancelCommand(token, baseUrl)
     of StartupCommand.`index-diff`:
       indexDiff(conf.indexDiffTracePath)
     of StartupCommand.edit:
@@ -287,14 +423,18 @@ proc runInitial*(conf: CodetracerConf) =
     # of StartupCommand.summary:
     #   replaySummary(conf.summaryTraceId, conf.summaryOutputFolder)
     # of StartupCommand.`report-bug`:
-    #   sendBugReportAndLogsCommand(conf.title, conf.description, conf.pid, conf.confirmSend)
+    #   sendBugReportAndLogsCommand(
+    #     conf.title, conf.description,
+    #     conf.pid, conf.confirmSend)
     of StartupCommand.electron:
       # Collect electron debug flags if provided
       var electronArgs: seq[string] = @[]
       if conf.inspect.isSome:
         electronArgs.add("--inspect=" & conf.inspect.get)
       if conf.remoteDebuggingPort.isSome:
-        electronArgs.add("--remote-debugging-port=" & conf.remoteDebuggingPort.get)
+        electronArgs.add(
+          "--remote-debugging-port=" &
+          conf.remoteDebuggingPort.get)
       # conf.electronAppArgs: command-specific restOfArgs (app arguments)
       wrapElectron(electronArgs, conf.electronAppArgs)
     of StartupCommand.`trace-metadata`:

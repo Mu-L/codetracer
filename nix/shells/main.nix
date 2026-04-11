@@ -168,6 +168,11 @@ mkShell {
     toolchainsPkgs.gnat
     toolchainsPkgs.gprbuild
 
+    # BPF process monitoring (used by `just developer-setup` Phase 2)
+    bpftrace
+    libbpf # Userspace BPF library (loading, maps, ring buffers) for native BPF backend
+    bpftools # bpftool for generating vmlinux.h and inspecting BPF objects
+
     # testing shell
     tmux
     vim
@@ -252,6 +257,21 @@ mkShell {
     # gcc.cc.lib ..
     export CT_LD_LIBRARY_PATH="${sqlite.out}/lib/:${pcre.out}/lib:${glib.out}/lib:${openssl.out}/lib:${gcc.cc.lib}/lib:${libzip.out}/lib";
     export CODETRACER_LD_LIBRARY_PATH="$CT_LD_LIBRARY_PATH"
+
+    # LIBRARY_PATH is the standard gcc/ld compile-time library search path
+    # (distinct from LD_LIBRARY_PATH which is for runtime). This ensures that
+    # -lssl, -lcrypto, -lsqlite3, -lpcre, -lzip resolve during linking when
+    # Nim uses --dynlibOverride + --passL instead of runtime dlopen (see
+    # src/Tuprules.tup DYNLIB_OVERRIDE_FLAGS). This is particularly important
+    # for tup builds, which sanitize the environment and strip the Nix
+    # wrapper's NIX_LDFLAGS variable.
+    export LIBRARY_PATH="${openssl.out}/lib:${sqlite.out}/lib:${pcre.out}/lib:${libzip.out}/lib:${libbpf.out}/lib:${elfutils.out}/lib:${zlib.out}/lib''${LIBRARY_PATH:+:$LIBRARY_PATH}";
+
+    # C_INCLUDE_PATH is the standard gcc/cc header search path. Nim invokes
+    # gcc directly (not through Nix's cc-wrapper), so NIX_CFLAGS_COMPILE
+    # -isystem flags are invisible. We export libbpf's include path
+    # explicitly so that #include <bpf/libbpf.h> resolves during tup builds.
+    export C_INCLUDE_PATH="${libbpf}/include''${C_INCLUDE_PATH:+:$C_INCLUDE_PATH}";
 
     export RUST_LOG=info
 

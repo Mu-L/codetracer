@@ -342,6 +342,95 @@ test-nimsuggest:
     exit 1
   fi
 
+# BPF monitor unit tests — exercises JSON parsing, timestamp conversion,
+# and event accumulation without needing bpftrace or root access.
+test-bpf-monitor:
+  nim c -r --hints:off --warnings:off -d:ssl -d:useOpenssl3 --mm:refc --nimcache:/tmp/ct-nim-cache/bpf_monitor_test src/ct/ci/bpf_monitor_test.nim
+
+# BPF integration tests — requires a capabilities-aware bpftrace binary
+# and the bpftrace-collection.bt script from the codetracer-ci sibling repo.
+# Skips gracefully if prerequisites are not met.
+# Run `just developer-setup` first to set up bpftrace capabilities.
+#
+# NOTE: bpftrace 0.24.x has a hardcoded geteuid()==0 check, so these tests
+# require either passwordless sudo or a patched bpftrace build. They will
+# skip with a diagnostic message when the prerequisite is not met.
+test-bpf-integration:
+  nim c -r --hints:off --warnings:off -d:ssl -d:useOpenssl3 --mm:refc --nimcache:/tmp/ct-nim-cache/bpf_integration_test src/ct/ci/bpf_integration_test.nim
+
+# Grant BPF capabilities to the ct binary after (re)compilation.
+# Requires the sudoers rule installed by `just developer-setup`.
+# Silently skips if the sudoers rule is not present or if not on Linux.
+setcap-bpf:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  if [ "$(uname)" != "Linux" ]; then
+    exit 0
+  fi
+  CT_BIN="$(pwd)/src/build-debug/bin/ct"
+  if [ ! -f "$CT_BIN" ]; then
+    exit 0
+  fi
+  # codetracer-setcap is a single-purpose helper installed by the NixOS
+  # developer-bpf module. It runs setcap with hardcoded caps on the ct binary.
+  if ! command -v codetracer-setcap &>/dev/null; then
+    echo "Note: codetracer-setcap not found — run 'just developer-setup' or import the NixOS module." >&2
+    exit 0
+  fi
+  # sudo -n = non-interactive (fails immediately if password is needed).
+  # Resolve to the full Nix store path — sudo matches the sudoers rule
+  # against the real path, not the /run/current-system/sw/bin symlink.
+  SETCAP_REAL="$(readlink -f "$(command -v codetracer-setcap)")"
+  if sudo -n "$SETCAP_REAL" 2>/dev/null; then
+    echo "BPF capabilities set on $CT_BIN"
+  else
+    echo "Note: passwordless setcap not available — run 'just developer-setup' to enable." >&2
+  fi
+
+# Build BPF programs from C source to .bpf.o ELF objects.
+# Requires clang and libbpf headers (both available in the Nix dev shell).
+build-bpf-programs:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  LIBBPF_PATH=$(nix build nixpkgs#libbpf --no-link --print-out-paths 2>/dev/null)
+  mkdir -p src/build-debug/share
+  clang -target bpf -D__TARGET_ARCH_x86 \
+    -I src/bpf-monitor -I "$LIBBPF_PATH/include" \
+    -O2 -g \
+    -c src/bpf-monitor/monitor.bpf.c \
+    -o src/build-debug/share/monitor.bpf.o
+  echo "Built src/build-debug/share/monitor.bpf.o"
+
+# Native BPF monitor unit tests — exercises ring buffer event processing,
+# struct layout verification, and environment deduplication without BPF.
+test-bpf-native:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  LIBBPF_PATH=$(nix build nixpkgs#libbpf --no-link --print-out-paths 2>/dev/null)
+  nim c -r --hints:off --warnings:off -d:ssl -d:useOpenssl3 --mm:refc \
+    --passC:"-I$LIBBPF_PATH/include" \
+    --passL:"-L$LIBBPF_PATH/lib" --passL:"-lbpf" --passL:"-lelf" --passL:"-lz" \
+    --nimcache:/tmp/ct-nim-cache/bpf_monitor_native_test \
+    src/ct/ci/bpf_monitor_native_test.nim
+
+# Native BPF E2E integration tests — drives the ct binary with
+# --monitor-processes and verifies that BPF monitoring starts, captures
+# process events, and reports them to a mock CI backend.
+# Requires: build-once + build-bpf-programs + developer-setup.
+# The test binary does NOT need BPF caps — it spawns the ct binary which
+# already has them from the tup build rule or `just setcap-bpf`.
+test-bpf-native-integration:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  nim c --hints:off --warnings:off --mm:refc \
+    --nimcache:/tmp/ct-nim-cache/bpf_native_integration_test \
+    src/ct/ci/bpf_native_integration_test.nim
+  LD_LIBRARY_PATH="${CT_LD_LIBRARY_PATH:-${CODETRACER_LD_LIBRARY_PATH:-}}" \
+    src/ct/ci/bpf_native_integration_test
+
+# Run all BPF-related tests (unit + native + integration).
+test-bpf: test-bpf-monitor test-bpf-native test-bpf-native-integration test-bpf-integration
+
 # ===========================
 # trace folder helpers
 
@@ -583,6 +672,183 @@ test-stylus-flow:
   cd src/db-backend && cargo nextest run --no-capture --run-ignored all test_stylus_flow_integration
   echo "Stylus flow test passed!"
 
+# Solidity/EVM flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-evm-recorder binary, solc (Solidity compiler), anvil (Foundry)
+# Set CODETRACER_EVM_RECORDER_PATH to override the binary path.
+test-solidity-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Solidity/EVM flow integration test..."
+
+  # Build the evm-recorder if the binary doesn't exist
+  EVM_RECORDER="${CODETRACER_EVM_RECORDER_PATH:-../codetracer-evm-recorder/target/debug/codetracer-evm-recorder}"
+  if [ ! -f "$EVM_RECORDER" ]; then
+    echo "Building codetracer-evm-recorder..."
+    direnv exec ../codetracer-evm-recorder cargo build --manifest-path ../codetracer-evm-recorder/Cargo.toml
+  fi
+  export CODETRACER_EVM_RECORDER_PATH="$(realpath "$EVM_RECORDER")"
+
+  # Use the evm-recorder's dev shell for solc/anvil
+  direnv exec ../codetracer-evm-recorder \
+    cargo nextest run --no-capture --run-ignored all \
+      --manifest-path src/db-backend/Cargo.toml \
+      test_solidity_flow solidity_flow_dap
+  echo "Solidity flow test passed!"
+
+# Miden/MASM flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-miden-recorder binary
+# Set CODETRACER_MIDEN_RECORDER_PATH to override the binary path.
+test-masm-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Miden/MASM flow integration test..."
+  MIDEN_RECORDER="${CODETRACER_MIDEN_RECORDER_PATH:-../codetracer-miden-recorder/target/debug/codetracer-miden-recorder}"
+  if [ -f "$MIDEN_RECORDER" ]; then
+    export CODETRACER_MIDEN_RECORDER_PATH="$(realpath "$MIDEN_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all masm_flow_dap
+  echo "MASM flow test passed!"
+
+# Sway/FuelVM flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-fuel-recorder binary, forc (Fuel compiler)
+# Set CODETRACER_FUEL_RECORDER_PATH to override the binary path.
+test-sway-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Sway/FuelVM flow integration test..."
+  FUEL_RECORDER="${CODETRACER_FUEL_RECORDER_PATH:-../codetracer-fuel-recorder/target/debug/codetracer-fuel-recorder}"
+  if [ -f "$FUEL_RECORDER" ]; then
+    export CODETRACER_FUEL_RECORDER_PATH="$(realpath "$FUEL_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all sway_flow_dap
+  echo "Sway flow test passed!"
+
+# Move/Sui flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-move-recorder binary
+# Set CODETRACER_MOVE_RECORDER_PATH to override the binary path.
+test-move-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Move/Sui flow integration test..."
+  MOVE_RECORDER="${CODETRACER_MOVE_RECORDER_PATH:-../codetracer-move-recorder/target/debug/codetracer-move-recorder}"
+  if [ -f "$MOVE_RECORDER" ]; then
+    export CODETRACER_MOVE_RECORDER_PATH="$(realpath "$MOVE_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all move_flow_dap
+  echo "Move flow test passed!"
+
+# Solana/SBF flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-solana-recorder binary
+# Set CODETRACER_SOLANA_RECORDER_PATH to override the binary path.
+test-solana-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Solana/SBF flow integration test..."
+  SOLANA_RECORDER="${CODETRACER_SOLANA_RECORDER_PATH:-../codetracer-solana-recorder/target/debug/codetracer-solana-recorder}"
+  if [ -f "$SOLANA_RECORDER" ]; then
+    export CODETRACER_SOLANA_RECORDER_PATH="$(realpath "$SOLANA_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all solana_flow_dap
+  echo "Solana flow test passed!"
+
+# PolkaVM flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-polkavm-recorder binary
+# Set CODETRACER_POLKAVM_RECORDER_PATH to override the binary path.
+test-polkavm-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running PolkaVM flow integration test..."
+  POLKAVM_RECORDER="${CODETRACER_POLKAVM_RECORDER_PATH:-../codetracer-polkavm-recorder/target/debug/codetracer-polkavm-recorder}"
+  if [ -f "$POLKAVM_RECORDER" ]; then
+    export CODETRACER_POLKAVM_RECORDER_PATH="$(realpath "$POLKAVM_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all polkavm_flow_dap
+  echo "PolkaVM flow test passed!"
+
+# Cairo/StarkNet flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-cairo-recorder binary
+# Set CODETRACER_CAIRO_RECORDER_PATH to override the binary path.
+test-cairo-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Cairo flow integration test..."
+  CAIRO_RECORDER="${CODETRACER_CAIRO_RECORDER_PATH:-../codetracer-cairo-recorder/target/debug/codetracer-cairo-recorder}"
+  if [ -f "$CAIRO_RECORDER" ]; then
+    export CODETRACER_CAIRO_RECORDER_PATH="$(realpath "$CAIRO_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all cairo_flow_dap
+  echo "Cairo flow test passed!"
+
+# Circom flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-circom-recorder binary, circom compiler
+# Set CODETRACER_CIRCOM_RECORDER_PATH to override the binary path.
+test-circom-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Circom flow integration test..."
+  CIRCOM_RECORDER="${CODETRACER_CIRCOM_RECORDER_PATH:-../codetracer-circom-recorder/target/debug/codetracer-circom-recorder}"
+  if [ -f "$CIRCOM_RECORDER" ]; then
+    export CODETRACER_CIRCOM_RECORDER_PATH="$(realpath "$CIRCOM_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all circom_flow_dap
+  echo "Circom flow test passed!"
+
+# Leo/Aleo flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-leo-recorder binary, leo compiler
+# Set CODETRACER_LEO_RECORDER_PATH to override the binary path.
+test-leo-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Leo flow integration test..."
+  LEO_RECORDER="${CODETRACER_LEO_RECORDER_PATH:-../codetracer-leo-recorder/target/debug/codetracer-leo-recorder}"
+  if [ -f "$LEO_RECORDER" ]; then
+    export CODETRACER_LEO_RECORDER_PATH="$(realpath "$LEO_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all leo_flow_dap
+  echo "Leo flow test passed!"
+
+# Tolk/TON flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-ton-recorder binary
+# Set CODETRACER_TON_RECORDER_PATH to override the binary path.
+test-tolk-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Tolk/TON flow integration test..."
+  TOLK_RECORDER="${CODETRACER_TON_RECORDER_PATH:-../codetracer-ton-recorder/target/debug/codetracer-ton-recorder}"
+  if [ -f "$TOLK_RECORDER" ]; then
+    export CODETRACER_TON_RECORDER_PATH="$(realpath "$TOLK_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all tolk_flow_dap
+  echo "Tolk flow test passed!"
+
+# Aiken/Cardano flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-cardano-recorder binary
+# Set CODETRACER_AIKEN_RECORDER_PATH to override the binary path.
+test-aiken-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Aiken/Cardano flow integration test..."
+  AIKEN_RECORDER="${CODETRACER_AIKEN_RECORDER_PATH:-../codetracer-cardano-recorder/target/debug/codetracer-cardano-recorder}"
+  if [ -f "$AIKEN_RECORDER" ]; then
+    export CODETRACER_AIKEN_RECORDER_PATH="$(realpath "$AIKEN_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all aiken_flow_dap
+  echo "Aiken flow test passed!"
+
+# Cadence/Flow flow/omniscience integration test (DB-based, no rr required)
+# Prerequisites: codetracer-flow-recorder binary, cadence-trace-helper Go binary
+# Set CODETRACER_CADENCE_RECORDER_PATH to override the binary path.
+test-cadence-flow:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running Cadence/Flow flow integration test..."
+  CADENCE_RECORDER="${CODETRACER_CADENCE_RECORDER_PATH:-../codetracer-flow-recorder/target/debug/codetracer-flow-recorder}"
+  if [ -f "$CADENCE_RECORDER" ]; then
+    export CODETRACER_CADENCE_RECORDER_PATH="$(realpath "$CADENCE_RECORDER")"
+  fi
+  cd src/db-backend && cargo nextest run --no-capture --run-ignored all cadence_flow_dap
+  echo "Cadence flow test passed!"
+
 # Full Stylus integration test: recording + trace content verification (requires Arbitrum devnode)
 # This runs Tier 1 (recording) and Tier 2 (trace analysis) together.
 # Set STYLUS_FIXTURE_OUTPUT_DIR to export the trace for VS Code extension UI tests.
@@ -623,6 +889,28 @@ test-flow-all:
   just test-noir-flow
   echo ""
   just test-wasm-flow
+  echo ""
+  just test-masm-flow
+  echo ""
+  just test-sway-flow
+  echo ""
+  just test-move-flow
+  echo ""
+  just test-solana-flow
+  echo ""
+  just test-polkavm-flow
+  echo ""
+  just test-cairo-flow
+  echo ""
+  just test-circom-flow
+  echo ""
+  just test-leo-flow
+  echo ""
+  just test-tolk-flow
+  echo ""
+  just test-aiken-flow
+  echo ""
+  just test-cadence-flow
   echo ""
   echo "╔════════════════════════════════════════════════════════════╗"
   echo "║ All flow integration tests passed!                         ║"
@@ -668,3 +956,20 @@ sync-design-tokens:
     bash scripts/tokens-to-styl.sh \
       ./libs/codetracer-design-system \
       ./src/frontend/styles/generated
+
+# One-time developer machine setup. Configures the local environment for
+# iterative development of CodeTracer, including BPF script development.
+#
+# Sets up:
+# - ct on PATH and .desktop file (non-privileged)
+# - BPF capabilities on a local bpftrace copy so you can run and iterate
+#   on BPF collection scripts without sudo
+#
+# On NixOS, BPF capabilities are managed by security.wrappers (see
+# nix/packages/codetracer-appimage/nixos-module.nix). This target detects
+# NixOS and skips the manual setcap step accordingly.
+#
+# Pass --without-bpf to skip BPF setup:
+#   just developer-setup --without-bpf
+developer-setup *flags:
+  bash scripts/developer-setup.sh {{flags}}

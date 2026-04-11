@@ -791,6 +791,8 @@
             pkgs.libzip
             pkgs.openssl
             pkgs.libuv
+            pkgs.libbpf
+            pkgs.elfutils
             # pkgs.zip
           ];
 
@@ -799,6 +801,10 @@
             ls -al ${staticDeps.outPath}/bin
             echo ${runtimeDeps.outPath}/bin
             ls -al ${runtimeDeps.outPath}/bin
+
+            # Ensure the C compiler can find libbpf headers for BPF backend modules
+            export C_INCLUDE_PATH="${pkgs.libbpf}/include''${C_INCLUDE_PATH:+:$C_INCLUDE_PATH}"
+            export LIBRARY_PATH="${pkgs.libbpf.out}/lib:${pkgs.elfutils.out}/lib''${LIBRARY_PATH:+:$LIBRARY_PATH}"
 
             ${nim-codetracer.out}/bin/nim2 \
               -d:debug -d:asyncBackend=asyncdispatch \
@@ -921,6 +927,20 @@
           name = "all-paths.json";
           text = builtins.toJSON { };
         };
+
+        # AppImage-based package for end-user distribution.
+        # Wraps the pre-built AppImage with desktop integration and bundles
+        # a copy of bpftrace for capabilities-based process monitoring.
+        # Build with: nix build .#codetracer-appimage
+        #
+        # For NixOS systems, use the companion module at
+        # nix/packages/codetracer-appimage/nixos-module.nix to configure
+        # security.wrappers for bpftrace capabilities.
+        codetracer-appimage =
+          let
+            appimageChannelPkgs = inputs.appimage-channel.legacyPackages.${system};
+          in
+          appimageChannelPkgs.callPackage ./codetracer-appimage { };
 
         default = codetracer;
       };

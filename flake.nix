@@ -133,6 +133,23 @@
         inputs.git-hooks-nix.flakeModule
       ];
 
+      # NixOS module for CodeTracer with BPF process monitoring.
+      # Usage in configuration.nix:
+      #   imports = [ codetracer.nixosModules.default ];
+      #   programs.codetracer.enable = true;
+      #   users.users.myuser.extraGroups = [ "codetracer-bpf" ];
+      flake.nixosModules.default = ./nix/packages/codetracer-appimage/nixos-module.nix;
+
+      # NixOS module for developer builds: passwordless setcap on the ct binary.
+      # Usage in your NixOS configuration (e.g. ~/dotfiles):
+      #   imports = [ codetracer.nixosModules.developer-bpf ];
+      #   programs.codetracer.developer-bpf = {
+      #     enable = true;
+      #     user = "myuser";
+      #     repoPath = "/home/myuser/metacraft/codetracer";
+      #   };
+      flake.nixosModules.developer-bpf = ./nix/modules/developer-bpf.nix;
+
       perSystem =
         { system, config, ... }:
         {

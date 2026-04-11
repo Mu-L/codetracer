@@ -4,12 +4,26 @@
 - [Installation](./installation.md)
 
 ## Getting Started
+
 - [Getting Started](./getting_started/overview.md)
-  - [Noir](./getting_started/noir.md)
-  - [Stylus](./getting_started/stylus.md)
-  - [WASM](./getting_started/wasm.md)
-  - [Ruby](./getting_started/ruby.md)
   - [Python](./getting_started/python.md)
+  - [Ruby](./getting_started/ruby.md)
+  - [JavaScript / TypeScript](./getting_started/javascript.md)
+  - [WASM](./getting_started/wasm.md)
+  - [Noir](./getting_started/noir.md)
+  - [Circom](./getting_started/circom.md)
+  - [Miden](./getting_started/miden.md)
+  - [Leo (Aleo)](./getting_started/leo.md)
+  - [Solidity (EVM)](./getting_started/solidity.md)
+  - [Stylus](./getting_started/stylus.md)
+  - [Cairo (StarkNet)](./getting_started/cairo.md)
+  - [Aiken (Cardano)](./getting_started/aiken.md)
+  - [Cadence (Flow)](./getting_started/cadence.md)
+  - [Move (Sui / Aptos)](./getting_started/move.md)
+  - [Solana](./getting_started/solana.md)
+  - [Sway (FuelVM)](./getting_started/sway.md)
+  - [PolkaVM (ink!)](./getting_started/polkavm.md)
+  - [Tolk (TON)](./getting_started/tolk.md)
 
 ## Usage guide
 
@@ -18,6 +32,11 @@
   - [Graphical interface](./usage_guide/gui.md)
   - [Tracepoints](./usage_guide/tracepoints.md)
   - [CodeTracer Shell](./usage_guide/codetracer_shell.md)
+
+## Reference
+
+- [ct CLI Reference](./reference/ct_cli.md)
+- [Recorder CLI Reference](./reference/recorders.md)
 
 ## Building & packaging
 
