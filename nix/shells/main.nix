@@ -357,23 +357,43 @@ mkShell {
     RECORDER_SRC="''${CODETRACER_PYTHON_RECORDER_SRC:-}"
 
     # ==== Python recorder venv setup ====
-    # Build the Rust-backed codetracer_python_recorder module into a venv
-    # so that `ct record` can use it for Python tracing. This is only done
-    # once (cached in .python-recorder-venv/) and re-triggered if the module
-    # becomes un-importable (e.g. after Rust source changes).
+    # Install the pure-Python recorder into a venv so that `ct record` can
+    # use it for Python tracing. We use the pure-Python package (no Rust /
+    # maturin dependency) to avoid requiring maturin in the dev shell.
+    # The venv is cached in .python-recorder-venv/ and re-created only when
+    # the module becomes un-importable (e.g. after source changes).
     RECORDER_VENV="$ROOT_PATH/.python-recorder-venv"
-    if [ -n "$RECORDER_SRC" ] && [ -d "$RECORDER_SRC" ]; then
-      if [ ! -d "$RECORDER_VENV" ] || ! "$RECORDER_VENV/bin/python" -c "import codetracer_python_recorder" 2>/dev/null; then
+    PURE_RECORDER_SRC="''${CODETRACER_PYTHON_PURE_RECORDER_SRC:-}"
+    if [ -n "$PURE_RECORDER_SRC" ] && [ -d "$PURE_RECORDER_SRC" ]; then
+      if [ ! -d "$RECORDER_VENV" ] || ! "$RECORDER_VENV/bin/python" -c "import codetracer_pure_python_recorder" 2>/dev/null; then
         echo "Setting up Python recorder venv (first time or module needs rebuild)..."
         python3 -m venv "$RECORDER_VENV"
-        "$RECORDER_VENV/bin/pip" install --quiet "$RECORDER_SRC" 2>&1 | tail -5
-        if "$RECORDER_VENV/bin/python" -c "import codetracer_python_recorder" 2>/dev/null; then
+        "$RECORDER_VENV/bin/pip" install --quiet "$PURE_RECORDER_SRC" 2>&1 | tail -5
+        if "$RECORDER_VENV/bin/python" -c "import codetracer_pure_python_recorder" 2>/dev/null; then
           echo "Python recorder installed successfully."
         else
-          echo "WARNING: Failed to install codetracer_python_recorder. Python tracing may not work."
+          echo "WARNING: Failed to install codetracer_pure_python_recorder. Python tracing may not work."
         fi
       fi
       export CODETRACER_PYTHON_INTERPRETER="$RECORDER_VENV/bin/python"
+    elif [ -n "$RECORDER_SRC" ] && [ -d "$RECORDER_SRC" ]; then
+      # Fallback: try the Rust-backed recorder (requires maturin).
+      if command -v maturin &>/dev/null; then
+        if [ ! -d "$RECORDER_VENV" ] || ! "$RECORDER_VENV/bin/python" -c "import codetracer_python_recorder" 2>/dev/null; then
+          echo "Setting up Python recorder venv (Rust-backed, first time or module needs rebuild)..."
+          python3 -m venv "$RECORDER_VENV"
+          "$RECORDER_VENV/bin/pip" install --quiet "$RECORDER_SRC" 2>&1 | tail -5
+          if "$RECORDER_VENV/bin/python" -c "import codetracer_python_recorder" 2>/dev/null; then
+            echo "Python recorder installed successfully."
+          else
+            echo "WARNING: Failed to install codetracer_python_recorder. Python tracing may not work."
+          fi
+        fi
+        export CODETRACER_PYTHON_INTERPRETER="$RECORDER_VENV/bin/python"
+      else
+        echo "WARNING: maturin not available; skipping Rust-backed Python recorder install."
+        echo "  The pure-Python recorder was not found either. Python tracing may not work."
+      fi
     fi
 
     figlet "Welcome to CodeTracer"

@@ -57,6 +57,20 @@ _ct_try_workspace_root() {
 		[ -d "$candidate/codetracer-shell-recorders" ] ||
 		[ -d "$candidate/codetracer-wasm-recorder" ] ||
 		[ -d "$candidate/codetracer-native-test-programs" ] ||
+		[ -d "$candidate/codetracer-cairo-recorder" ] ||
+		[ -d "$candidate/codetracer-cardano-recorder" ] ||
+		[ -d "$candidate/codetracer-circom-recorder" ] ||
+		[ -d "$candidate/codetracer-evm-recorder" ] ||
+		[ -d "$candidate/codetracer-flow-recorder" ] ||
+		[ -d "$candidate/codetracer-fuel-recorder" ] ||
+		[ -d "$candidate/codetracer-leo-recorder" ] ||
+		[ -d "$candidate/codetracer-miden-recorder" ] ||
+		[ -d "$candidate/codetracer-move-recorder" ] ||
+		[ -d "$candidate/codetracer-polkavm-recorder" ] ||
+		[ -d "$candidate/codetracer-solana-recorder" ] ||
+		[ -d "$candidate/codetracer-ton-recorder" ] ||
+		[ -d "$candidate/codetracer-native-recorder" ] ||
+		[ -d "$candidate/codetracer-wasmi-recorder" ] ||
 		[ -d "$candidate/noir" ]; then
 		_CT_WORKSPACE_ROOT="$candidate"
 		return 0
@@ -109,6 +123,8 @@ if [ -n "$_CT_WORKSPACE_ROOT" ] && [ -d "$_CT_WORKSPACE_ROOT/codetracer-python-r
 	export CODETRACER_PYTHON_RECORDER_PATH="$_CT_WORKSPACE_ROOT/codetracer-python-recorder/codetracer-pure-python-recorder/src/trace.py"
 	# Also export the source directory for venv setup (used by nix shell hook).
 	export CODETRACER_PYTHON_RECORDER_SRC="$_CT_WORKSPACE_ROOT/codetracer-python-recorder/codetracer-python-recorder"
+	# Export the pure-Python recorder source for venv setup (no maturin needed).
+	export CODETRACER_PYTHON_PURE_RECORDER_SRC="$_CT_WORKSPACE_ROOT/codetracer-python-recorder/codetracer-pure-python-recorder"
 	_ct_detect_summary "codetracer-python-recorder"
 fi
 
@@ -170,6 +186,21 @@ if [ -n "$_CT_WORKSPACE_ROOT" ] && [ -d "$_CT_WORKSPACE_ROOT/codetracer-trace-fo
 	export LD_LIBRARY_PATH="$_CT_WORKSPACE_ROOT/codetracer-trace-format/target/release:${LD_LIBRARY_PATH:-}"
 	_ct_detect_summary "codetracer-trace-format (FFI library available)"
 fi
+
+# --- Blockchain / VM recorder siblings ---
+# Each blockchain recorder builds a binary at target/release/codetracer-<name>-recorder.
+# When present, we export CODETRACER_<NAME>_RECORDER_PATH and prepend to PATH.
+for _ct_bc_name in cairo cardano circom evm flow fuel leo miden move polkavm solana ton native wasmi; do
+	_ct_bc_repo="codetracer-${_ct_bc_name}-recorder"
+	_ct_bc_bin="target/release/codetracer-${_ct_bc_name}-recorder"
+	if [ -n "$_CT_WORKSPACE_ROOT" ] && [ -x "$_CT_WORKSPACE_ROOT/$_ct_bc_repo/$_ct_bc_bin" ]; then
+		_ct_bc_var="CODETRACER_$(echo "$_ct_bc_name" | tr '[:lower:]' '[:upper:]')_RECORDER_PATH"
+		export "$_ct_bc_var"="$_CT_WORKSPACE_ROOT/$_ct_bc_repo/$_ct_bc_bin"
+		export PATH="$_CT_WORKSPACE_ROOT/$_ct_bc_repo/target/release:$PATH"
+		_ct_detect_summary "$_ct_bc_repo (release build)"
+	fi
+done
+unset _ct_bc_name _ct_bc_repo _ct_bc_bin _ct_bc_var
 
 # ---------------------------------------------------------------------------
 # Backward compatibility: derive _PRESENT=1 from non-empty _PATH vars.
