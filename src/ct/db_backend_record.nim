@@ -136,8 +136,8 @@ proc recordDb(
     of LangMasm, LangMove, LangSolana, LangSway, LangCairo, LangCircom,
        LangLeo, LangPolkavm, LangTolk, LangAiken, LangCadence, LangSolidity:
       # All blockchain/VM recorders use the same interface:
-      #   <recorder-binary> --out-dir <traceFolder> <program>
-      startArgs = @["--out-dir", traceFolder, program]
+      #   <recorder-binary> record --out-dir <traceFolder> <program>
+      startArgs = @["record", "--out-dir", traceFolder, program]
     else:
       echo fmt"error: lang {lang} not supported for recordDb"
       quit(1)
