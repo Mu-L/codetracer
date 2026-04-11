@@ -242,13 +242,7 @@ test.describe("NoirSpaceShip", () => {
     await loopControlContainer.waitFor({ state: "visible", timeout: 20_000 });
     trace("Loop control container visible");
 
-    let iterationValueBoxLocator = editor.flowValueElementById(
-      "flow-parallel-value-box-0-6-regeneration",
-    );
-    if ((await iterationValueBoxLocator.count()) === 0) {
-      trace("Loop iteration value box id not found; falling back to name lookup");
-      iterationValueBoxLocator = editor.flowValueElementByName("regeneration");
-    }
+    const iterationValueBoxLocator = editor.flowValueElementByName("regeneration");
 
     const iterationValueBox = iterationValueBoxLocator.first();
     await iterationValueBox.waitFor({ state: "visible", timeout: 5_000 });
@@ -340,15 +334,7 @@ test.describe("NoirSpaceShip", () => {
 
     const shieldEditor = await requireShieldEditor(layout);
 
-    let iterationValueBoxLocator = shieldEditor.flowValueElementById(
-      "flow-parallel-value-box-0-6-regeneration",
-    );
-    if ((await iterationValueBoxLocator.count()) === 0) {
-      debugLogger.log(
-        "SimpleLoopIterationJump: primary regeneration value box id not found; falling back to name lookup.",
-      );
-      iterationValueBoxLocator = shieldEditor.flowValueElementByName("regeneration");
-    }
+    const iterationValueBoxLocator = shieldEditor.flowValueElementByName("regeneration");
 
     const iterationValueBox = iterationValueBoxLocator.first();
     await iterationValueBox.waitFor({ state: "visible", timeout: 5_000 });

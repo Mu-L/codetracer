@@ -6,7 +6,7 @@ import { TraceLogPanel } from "./trace-log-panel";
 import { ContextMenu } from "../../components/context-menu";
 
 const FLOW_VALUE_SELECTOR =
-  ".flow-parallel-value-box, .flow-inline-value-box, .flow-loop-value-box, .flow-multiline-value-box";
+  ".flow-parallel-value-box, .flow-inline-value-box, .flow-multiline-value-box";
 
 /**
  * Page object representing a Monaco editor pane within the layout view.
@@ -98,15 +98,30 @@ export class EditorPane {
   }
 
   flowValueElementByName(valueName: string): Locator {
+    // Strategy 1: Find a visible name label and pick its sibling value box.
+    // Works for normal (non-loop) values where showName=true.
     const nameLocator = this.root
       .locator(".flow-parallel-value-name, .flow-loop-value-name")
       .filter({ hasText: valueName });
 
-    return nameLocator
+    const siblingLocator = nameLocator
       .locator(
-        "xpath=following-sibling::*[contains(@class,'flow-parallel-value-box') or contains(@class,'flow-loop-value-box')]",
+        "xpath=following-sibling::*[contains(@class,'flow-parallel-value-box') or contains(@class,'flow-inline-value-box') or contains(@class,'flow-multiline-value-box')]",
       )
       .first();
+
+    // Strategy 2: Match by ID suffix. The Nim frontend generates IDs like
+    // `flow-{mode}-value-box-{i}-{stepCount}-{name}`, so we can match
+    // elements whose ID ends with `-{valueName}`.
+    const idSuffixLocator = this.root.locator(
+      [
+        `[id$="-${valueName}"].flow-parallel-value-box`,
+        `[id$="-${valueName}"].flow-inline-value-box`,
+        `[id$="-${valueName}"].flow-multiline-value-box`,
+      ].join(", "),
+    ).first();
+
+    return siblingLocator.or(idSuffixLocator);
   }
 
   // ---- Methods ----

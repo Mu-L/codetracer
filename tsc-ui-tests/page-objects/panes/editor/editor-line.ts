@@ -96,7 +96,7 @@ export class EditorLine {
 
   async flowValues(): Promise<FlowValue[]> {
     const selector =
-      ".flow-parallel-value-box, .flow-inline-value-box, .flow-loop-value-box, .flow-multiline-value-box";
+      ".flow-parallel-value-box, .flow-inline-value-box, .flow-multiline-value-box";
     const locators = await this.root.locator(selector).all();
     const menu = new ContextMenu(this.parentPane.root.page()!);
     return locators.map((l) => new FlowValue(l, menu));
