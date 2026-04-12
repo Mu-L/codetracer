@@ -12,9 +12,9 @@ use crate::{
     nim_mangling,
     replay::Replay,
     task::{
-        Action, BranchesTaken, CoreTrace, FlowEvent, FlowMode, FlowStep, FlowUpdate, FlowUpdateState,
-        FlowUpdateStateKind, FlowViewUpdate, Iteration, Location, Loop, LoopId, LoopIterationSteps, Position, RRTicks,
-        StepCount, TraceKind,
+        Action, BranchesTaken, CoreTrace, CtLoadLocalsArguments, FlowEvent, FlowMode, FlowStep, FlowUpdate,
+        FlowUpdateState, FlowUpdateStateKind, FlowViewUpdate, Iteration, Location, Loop, LoopId,
+        LoopIterationSteps, Position, RRTicks, StepCount, TraceKind,
     },
     value::{to_ct_value, Value, ValueRecordWithType},
 };
@@ -846,6 +846,35 @@ impl<'a> CallFlowPreloader<'a> {
             }
 
             flow_view_update.steps.last_mut().unwrap().expr_order = expr_order.clone();
+        } else {
+            // Fallback: when tree-sitter has no grammar for this language (e.g. Cairo,
+            // Circom, Leo, Tolk, MASM), load variable names directly from the trace data.
+            // DB-based traces embed variable names at each step, so we can use load_locals()
+            // instead of the static source analysis.
+            info!("  no tree-sitter var list for line {:?} — trying trace-embedded variables", line);
+            if let Ok(locals) = replay.load_locals(CtLoadLocalsArguments {
+                rr_ticks: 0,
+                count_budget: 100,
+                min_count_limit: 0,
+                lang: self.lang,
+                watch_expressions: vec![],
+                depth_limit: -1, // NO_DEPTH_LIMIT
+            }) {
+                for local in &locals {
+                    let value_name = local.expression.clone();
+                    let ct_value = to_ct_value(&local.value);
+                    flow_view_update
+                        .steps
+                        .last_mut()
+                        .unwrap()
+                        .before_values
+                        .insert(value_name.clone(), ct_value.clone());
+                    variable_map.insert(value_name.clone(), ct_value);
+                    expr_order.push(value_name);
+                }
+                flow_view_update.steps.last_mut().unwrap().expr_order = expr_order.clone();
+                info!("  loaded {} variables from trace data", locals.len());
+            }
         }
 
         if self.last_step_id.0 >= 0 && flow_view_update.steps.len() >= 2 {
