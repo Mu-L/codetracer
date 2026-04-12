@@ -57,6 +57,55 @@ fn safe_canonicalize(path: &Path) -> PathBuf {
     }
 }
 
+/// Derive the repo root directory from a recorder binary path.
+///
+/// Given a path like `.../codetracer-circom-recorder/target/release/codetracer-circom-recorder`,
+/// walks up to find the repo root (the directory containing `.envrc`).
+/// Returns `None` if no `.envrc` is found in any ancestor.
+fn find_recorder_repo_dir(recorder_binary: &Path) -> Option<PathBuf> {
+    let mut dir = recorder_binary.parent();
+    while let Some(d) = dir {
+        if d.join(".envrc").exists() {
+            return Some(d.to_path_buf());
+        }
+        dir = d.parent();
+    }
+    None
+}
+
+/// Run a recorder command, wrapping it with `direnv exec <repo_dir>` when the
+/// recorder lives in a sibling repo that has its own nix dev shell (`.envrc`).
+///
+/// This ensures that language-specific toolchains (e.g. `circom`, `leo`) are on
+/// PATH even when the test is executed from a different repo's dev shell.
+///
+/// If the recorder binary does not live inside a repo with `.envrc`, the command
+/// is executed directly without `direnv exec`.
+fn run_recorder_command(recorder: &Path, args: &[&str]) -> Result<std::process::Output, String> {
+    let repo_dir = find_recorder_repo_dir(recorder);
+
+    let output = if let Some(ref repo_dir) = repo_dir {
+        // Build the full command: direnv exec <repo_dir> <recorder> <args...>
+        let mut cmd = Command::new("direnv");
+        cmd.arg("exec").arg(repo_dir).arg(recorder).args(args);
+        eprintln!(
+            "Running recorder via direnv exec {} {} {}",
+            repo_dir.display(),
+            recorder.display(),
+            args.join(" ")
+        );
+        cmd.output()
+            .map_err(|e| format!("failed to run recorder via direnv: {}", e))?
+    } else {
+        Command::new(recorder)
+            .args(args)
+            .output()
+            .map_err(|e| format!("failed to run recorder: {}", e))?
+    };
+
+    Ok(output)
+}
+
 /// Supported languages for test programs
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Language {
@@ -1820,7 +1869,9 @@ pub fn find_cairo_recorder() -> Option<PathBuf> {
 ///
 /// Search order:
 /// 1. `CODETRACER_CIRCOM_RECORDER_PATH` env var (explicit override)
-/// 2. Sibling repo debug build:
+/// 2. Sibling repo release build:
+///    `../../../codetracer-circom-recorder/target/release/codetracer-circom-recorder`
+/// 3. Sibling repo debug build:
 ///    `../../../codetracer-circom-recorder/target/debug/codetracer-circom-recorder`
 ///
 /// Returns `None` if the recorder binary is not found.
@@ -1837,9 +1888,15 @@ pub fn find_circom_recorder() -> Option<PathBuf> {
     }
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let sibling = manifest_dir.join("../../../codetracer-circom-recorder/target/debug/codetracer-circom-recorder");
-    if sibling.exists() {
-        return Some(safe_canonicalize(&sibling));
+    // Prefer release build (faster execution), fall back to debug.
+    for profile in &["release", "debug"] {
+        let sibling = manifest_dir.join(format!(
+            "../../../codetracer-circom-recorder/target/{}/codetracer-circom-recorder",
+            profile
+        ));
+        if sibling.exists() {
+            return Some(safe_canonicalize(&sibling));
+        }
     }
 
     None
@@ -2119,12 +2176,14 @@ pub fn find_solana_flow_test() -> Option<PathBuf> {
     }
 }
 
-/// Locate the PolkaVM flow test source file from the sibling PolkaVM recorder repo.
+/// Locate the PolkaVM flow test blob from the sibling PolkaVM recorder repo.
 ///
-/// Canonical path: `codetracer-polkavm-recorder/test-programs/rust/flow_test.rs`
+/// Canonical path: `codetracer-polkavm-recorder/test-programs/rust/flow_test.polkavm`
 ///
-/// Note: For PolkaVM, the source is Rust code that must be compiled to a .polkavm
-/// blob by the recorder. The recorder handles compilation internally.
+/// The PolkaVM recorder expects a pre-compiled `.polkavm` blob, not a `.rs` source
+/// file. The blob can be built by running:
+///   `cargo run --example build_flow_test_blob`
+/// inside the `codetracer-polkavm-recorder` repo.
 pub fn find_polkavm_flow_test() -> Option<PathBuf> {
     if let Ok(path) = env::var("CODETRACER_POLKAVM_FLOW_TEST") {
         let p = PathBuf::from(&path);
@@ -2138,9 +2197,18 @@ pub fn find_polkavm_flow_test() -> Option<PathBuf> {
     }
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let path = manifest_dir.join("../../../codetracer-polkavm-recorder/test-programs/rust/flow_test.rs");
-    if path.exists() {
-        Some(safe_canonicalize(&path))
+
+    // Prefer the pre-compiled .polkavm blob (built via `cargo run --example build_flow_test_blob`).
+    let blob_path = manifest_dir.join("../../../codetracer-polkavm-recorder/test-programs/rust/flow_test.polkavm");
+    if blob_path.exists() {
+        return Some(safe_canonicalize(&blob_path));
+    }
+
+    // Fall back to the .rs source. The caller (record_polkavm_trace) will detect
+    // the .rs extension and attempt to build the blob automatically.
+    let rs_path = manifest_dir.join("../../../codetracer-polkavm-recorder/test-programs/rust/flow_test.rs");
+    if rs_path.exists() {
+        Some(safe_canonicalize(&rs_path))
     } else {
         None
     }
@@ -2431,17 +2499,41 @@ fn record_solidity_trace(source_path: &Path, trace_dir: &Path) -> Result<(), Str
             .to_string()
     })?;
 
+    // Resolve the EVM recorder repo directory from the binary location.
+    // Binary is at <repo>/target/debug/codetracer-evm-recorder, so the repo
+    // root is three levels up.
+    let evm_recorder_dir = recorder.parent().and_then(|p| p.parent()).and_then(|p| p.parent());
+
     fs::create_dir_all(trace_dir).map_err(|e| format!("failed to create trace dir: {}", e))?;
 
-    let output = Command::new(&recorder)
-        .args([
-            "record",
-            source_path.to_str().unwrap(),
-            "--out-dir",
-            trace_dir.to_str().unwrap(),
-        ])
-        .output()
-        .map_err(|e| format!("failed to run EVM recorder: {}", e))?;
+    // The EVM recorder needs `solc` and `anvil` on PATH. These are provided
+    // by the EVM recorder's Nix dev shell. When the repo directory is
+    // available, we use `direnv exec` to enter that shell automatically.
+    let output = if let Some(repo_dir) = evm_recorder_dir.filter(|d| d.join(".envrc").exists()) {
+        Command::new("direnv")
+            .args([
+                "exec",
+                repo_dir.to_str().unwrap(),
+                recorder.to_str().unwrap(),
+                "record",
+                source_path.to_str().unwrap(),
+                "--trace-dir",
+                trace_dir.to_str().unwrap(),
+            ])
+            .output()
+            .map_err(|e| format!("failed to run EVM recorder via direnv exec: {}", e))?
+    } else {
+        // Fall back to direct invocation (assumes solc/anvil are already on PATH)
+        Command::new(&recorder)
+            .args([
+                "record",
+                source_path.to_str().unwrap(),
+                "--trace-dir",
+                trace_dir.to_str().unwrap(),
+            ])
+            .output()
+            .map_err(|e| format!("failed to run EVM recorder: {}", e))?
+    };
 
     if !output.status.success() {
         return Err(format!(
@@ -2515,15 +2607,18 @@ fn record_fuel_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String>
 
     fs::create_dir_all(trace_dir).map_err(|e| format!("failed to create trace dir: {}", e))?;
 
-    let output = Command::new(&recorder)
-        .args([
+    // The Fuel recorder needs `forc` (the Fuel/Sway compiler) on PATH, which is
+    // provided by the fuel-recorder repo's nix dev shell. Use `run_recorder_command`
+    // to automatically wrap with `direnv exec` when a `.envrc` is present.
+    let output = run_recorder_command(
+        &recorder,
+        &[
             "record",
             source_path.to_str().unwrap(),
             "--out-dir",
             trace_dir.to_str().unwrap(),
-        ])
-        .output()
-        .map_err(|e| format!("failed to run Fuel recorder: {}", e))?;
+        ],
+    )?;
 
     if !output.status.success() {
         return Err(format!(
@@ -2635,11 +2730,12 @@ fn record_solana_trace(source_path: &Path, trace_dir: &Path) -> Result<(), Strin
 /// Record a PolkaVM trace by invoking the `codetracer-polkavm-recorder record` CLI.
 ///
 /// Runs:
-///   `<polkavm-recorder> record <source.rs> --out-dir <trace_dir>`
+///   `<polkavm-recorder> record <blob.polkavm> --out-dir <trace_dir>`
 ///
-/// The PolkaVM recorder compiles the Rust source to a .polkavm blob, executes it
-/// on the PolkaVM interpreter, captures step-by-step execution state, and writes
-/// `trace.bin`, `trace_metadata.json`, and `trace_paths.json` into `trace_dir`.
+/// The PolkaVM recorder expects a pre-compiled `.polkavm` blob. If `source_path`
+/// points to a `.rs` file instead, this function first attempts to build the blob
+/// by running `cargo run --example build_flow_test_blob` inside the recorder repo
+/// (via `direnv exec` for the correct dev shell).
 ///
 /// Returns an error if the recorder binary is not found, or if recording fails.
 fn record_polkavm_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String> {
@@ -2650,17 +2746,66 @@ fn record_polkavm_trace(source_path: &Path, trace_dir: &Path) -> Result<(), Stri
             .to_string()
     })?;
 
+    // If the source_path is a .rs file, we need to build the .polkavm blob first.
+    // The PolkaVM recorder only accepts pre-compiled blobs.
+    let blob_path = if source_path.extension().and_then(|e| e.to_str()) == Some("rs") {
+        let blob = source_path.with_extension("polkavm");
+        if !blob.exists() {
+            // Try to build the blob via the recorder repo's build_flow_test_blob example.
+            let repo_dir = find_recorder_repo_dir(&recorder);
+            if let Some(ref repo_dir) = repo_dir {
+                eprintln!(
+                    "Building PolkaVM blob via: direnv exec {} cargo run --example build_flow_test_blob",
+                    repo_dir.display()
+                );
+                let build_output = Command::new("direnv")
+                    .args([
+                        "exec",
+                        repo_dir.to_str().unwrap(),
+                        "cargo",
+                        "run",
+                        "--example",
+                        "build_flow_test_blob",
+                    ])
+                    .current_dir(repo_dir)
+                    .output()
+                    .map_err(|e| format!("failed to build PolkaVM blob: {}", e))?;
+
+                if !build_output.status.success() {
+                    return Err(format!(
+                        "PolkaVM blob build failed:\nstdout: {}\nstderr: {}",
+                        String::from_utf8_lossy(&build_output.stdout),
+                        String::from_utf8_lossy(&build_output.stderr)
+                    ));
+                }
+            }
+        }
+
+        if !blob.exists() {
+            return Err(format!(
+                "PolkaVM blob not found at {}. Build it with: \
+                 cd codetracer-polkavm-recorder && cargo run --example build_flow_test_blob",
+                blob.display()
+            ));
+        }
+        blob
+    } else {
+        source_path.to_path_buf()
+    };
+
     fs::create_dir_all(trace_dir).map_err(|e| format!("failed to create trace dir: {}", e))?;
 
-    let output = Command::new(&recorder)
-        .args([
+    // Use run_recorder_command to wrap with `direnv exec` for the correct
+    // dev shell environment.
+    let output = run_recorder_command(
+        &recorder,
+        &[
             "record",
-            source_path.to_str().unwrap(),
+            blob_path.to_str().unwrap(),
             "--out-dir",
             trace_dir.to_str().unwrap(),
-        ])
-        .output()
-        .map_err(|e| format!("failed to run PolkaVM recorder: {}", e))?;
+        ],
+    )?;
 
     if !output.status.success() {
         return Err(format!(
@@ -2734,15 +2879,18 @@ fn record_circom_trace(source_path: &Path, trace_dir: &Path) -> Result<(), Strin
 
     fs::create_dir_all(trace_dir).map_err(|e| format!("failed to create trace dir: {}", e))?;
 
-    let output = Command::new(&recorder)
-        .args([
+    // The circom recorder needs the `circom` compiler on PATH, which is
+    // provided by the recorder repo's nix dev shell. Use `run_recorder_command`
+    // to automatically wrap with `direnv exec` when a `.envrc` is present.
+    let output = run_recorder_command(
+        &recorder,
+        &[
             "record",
             source_path.to_str().unwrap(),
             "--out-dir",
             trace_dir.to_str().unwrap(),
-        ])
-        .output()
-        .map_err(|e| format!("failed to run Circom recorder: {}", e))?;
+        ],
+    )?;
 
     if !output.status.success() {
         return Err(format!(
@@ -2878,6 +3026,56 @@ fn record_aiken_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String
     Ok(())
 }
 
+/// Build the Go helper binary (`cadence-trace-helper`) from the sibling
+/// `codetracer-flow-recorder/go-helper/` directory.
+///
+/// The helper is built inside the flow recorder's Nix dev shell (via
+/// `direnv exec`) so that the Cadence Go SDK and Go toolchain are available.
+/// The compiled binary is placed in the flow recorder's `target/debug/`
+/// directory for reuse across test runs.
+///
+/// Returns the absolute path to the built binary, or an error if the build
+/// fails.
+fn build_cadence_go_helper(flow_recorder_dir: &Path) -> Result<PathBuf, String> {
+    let go_helper_dir = flow_recorder_dir.join("go-helper");
+    if !go_helper_dir.exists() {
+        return Err(format!(
+            "Go helper source directory not found at {}",
+            go_helper_dir.display()
+        ));
+    }
+
+    let output_dir = flow_recorder_dir.join("target/debug");
+    fs::create_dir_all(&output_dir).map_err(|e| format!("failed to create output dir for Go helper: {}", e))?;
+
+    let helper_bin = output_dir.join("cadence-trace-helper");
+
+    // Build the Go helper using the flow recorder's dev shell for Go + Cadence SDK
+    let build_output = Command::new("direnv")
+        .args([
+            "exec",
+            flow_recorder_dir.to_str().unwrap(),
+            "go",
+            "build",
+            "-o",
+            helper_bin.to_str().unwrap(),
+            ".",
+        ])
+        .current_dir(&go_helper_dir)
+        .output()
+        .map_err(|e| format!("failed to run `direnv exec ... go build` for Go helper: {}", e))?;
+
+    if !build_output.status.success() {
+        return Err(format!(
+            "Go helper build failed:\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&build_output.stdout),
+            String::from_utf8_lossy(&build_output.stderr)
+        ));
+    }
+
+    Ok(safe_canonicalize(&helper_bin))
+}
+
 /// Record a Cadence/Flow trace by invoking the `codetracer-flow-recorder record` CLI.
 ///
 /// Runs:
@@ -2886,6 +3084,11 @@ fn record_aiken_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String
 /// The Flow recorder interprets the Cadence program, captures step-by-step
 /// execution state, and writes `trace.bin`, `trace_metadata.json`, and
 /// `trace_paths.json` into `trace_dir`.
+///
+/// Before running the recorder, this function builds the Go helper binary
+/// (`cadence-trace-helper`) that the recorder shells out to for Cadence
+/// interpretation. The helper path is passed via the `CADENCE_HELPER_BIN`
+/// environment variable.
 ///
 /// Returns an error if the recorder binary is not found, or if recording fails.
 fn record_cadence_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String> {
@@ -2896,15 +3099,45 @@ fn record_cadence_trace(source_path: &Path, trace_dir: &Path) -> Result<(), Stri
             .to_string()
     })?;
 
+    // Resolve the flow recorder repo directory from the binary location.
+    // Binary is at <repo>/target/debug/codetracer-flow-recorder, so the repo
+    // root is three levels up.
+    let flow_recorder_dir = recorder
+        .parent()
+        .and_then(|p| p.parent())
+        .and_then(|p| p.parent())
+        .ok_or_else(|| {
+            format!(
+                "Cannot determine flow recorder repo directory from binary path: {}",
+                recorder.display()
+            )
+        })?;
+
+    // Build the Go helper binary (cadence-trace-helper) if not already present
+    // or if the source is newer. We always rebuild to stay safe.
+    let helper_bin = if env::var("CADENCE_HELPER_BIN").is_ok() {
+        // User has explicitly set the helper path -- respect it.
+        None
+    } else {
+        Some(build_cadence_go_helper(flow_recorder_dir)?)
+    };
+
     fs::create_dir_all(trace_dir).map_err(|e| format!("failed to create trace dir: {}", e))?;
 
-    let output = Command::new(&recorder)
-        .args([
-            "record",
-            source_path.to_str().unwrap(),
-            "--out-dir",
-            trace_dir.to_str().unwrap(),
-        ])
+    let mut cmd = Command::new(&recorder);
+    cmd.args([
+        "record",
+        source_path.to_str().unwrap(),
+        "--out-dir",
+        trace_dir.to_str().unwrap(),
+    ]);
+
+    // Point the recorder at the freshly built Go helper.
+    if let Some(ref bin) = helper_bin {
+        cmd.env("CADENCE_HELPER_BIN", bin);
+    }
+
+    let output = cmd
         .output()
         .map_err(|e| format!("failed to run Flow recorder: {}", e))?;
 

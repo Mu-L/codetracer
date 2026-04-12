@@ -90,29 +90,28 @@ fn run_polkavm_dap_test(
     println!("PolkaVM DAP flow test passed!");
 }
 
-/// Tier 2 (DAP flow): Breakpoint in the `compute()` function after all 5
-/// locals are assigned.
+/// Tier 2 (DAP flow): Breakpoint at the last instruction step where all
+/// computed values are visible in registers.
 ///
-/// Expected local variables at line 20 (`let final_result`):
-///   a            = 10
-///   b            = 32
-///   sum_val      = 42  (a + b)
-///   doubled      = 84  (sum_val * 2)
-///   final_result = 94  (doubled + a)
+/// The PolkaVM recorder traces at the instruction level (no DWARF source-level
+/// debug info from ProgramBlobBuilder blobs). Register names are used instead
+/// of source-level variable names:
+///
+///   arg0 = 94  (final_result = doubled + a)
+///   arg1 = 32  (b, unchanged after initial load)
+///   S0   = 42  (sum_val = a + b)
+///   S1   = 84  (doubled = sum_val * 2)
+///
+/// The breakpoint line (16) corresponds to the last `add_32` instruction
+/// in the blob, where arg0 has been updated to the final result.
 #[test]
 #[ignore = "requires polkavm-recorder; run via: just test-polkavm-flow"]
 fn polkavm_flow_dap_variables() {
     let mut expected_values = HashMap::new();
-    expected_values.insert("a".to_string(), 10);
-    expected_values.insert("b".to_string(), 32);
-    expected_values.insert("sum_val".to_string(), 42);
-    expected_values.insert("doubled".to_string(), 84);
-    expected_values.insert("final_result".to_string(), 94);
+    expected_values.insert("arg0".to_string(), 94);
+    expected_values.insert("arg1".to_string(), 32);
+    expected_values.insert("S0".to_string(), 42);
+    expected_values.insert("S1".to_string(), 84);
 
-    run_polkavm_dap_test(
-        20,
-        vec!["a", "b", "sum_val", "doubled", "final_result"],
-        expected_values,
-        vec!["compute", "main"],
-    );
+    run_polkavm_dap_test(16, vec!["arg0", "arg1", "S0", "S1"], expected_values, vec!["main"]);
 }
