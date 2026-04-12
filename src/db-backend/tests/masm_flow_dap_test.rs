@@ -91,7 +91,10 @@ fn run_masm_dap_test(
     );
 
     // Record the MASM trace via the Miden recorder CLI.
-    let recording = TestRecording::create_db_trace(&source_path, Language::Masm, "masm-0.13")
+    // Use breakpoint_line in the version label to avoid temp directory collisions
+    // when multiple MASM tests run in parallel.
+    let label = format!("masm-0.13-bp{}", breakpoint_line);
+    let recording = TestRecording::create_db_trace(&source_path, Language::Masm, &label)
         .expect("MASM recording failed -- check that codetracer-miden-recorder is available");
 
     println!("Trace recorded to: {}", recording.trace_dir.display());
