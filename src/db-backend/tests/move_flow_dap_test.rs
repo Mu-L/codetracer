@@ -34,27 +34,26 @@ use std::path::PathBuf;
 use ct_dap_client::test_support::{FlowTestConfig, FlowTestRunner};
 
 mod test_harness;
-use test_harness::{find_move_flow_source, find_move_flow_test, find_move_recorder, Language, TestRecording};
+use test_harness::{find_move_flow_source, find_move_recorder, find_move_trace_file, Language, TestRecording};
 
 fn find_db_backend() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_db-backend"))
 }
 
-/// Returns the path to the Move flow test project directory.
+/// Returns the path to a specific Move trace file for a given test function.
 ///
-/// Discovers the test project from the sibling `codetracer-move-recorder` repo
-/// (canonical location per Test-Program-Layout.md), falling back to the local
-/// `test-programs/` directory if the sibling is not available.
-///
-/// For Move, the source_path is the project directory containing `Move.toml`,
-/// not a single source file. The recorder discovers source files from the
-/// project manifest.
-fn get_move_project_path() -> PathBuf {
-    find_move_flow_test().expect(
-        "Move flow test project not found. \
-         Check out codetracer-move-recorder as a sibling repo, or ensure \
-         test-programs/move/flow_test/ exists locally.",
-    )
+/// The Move recorder expects a pre-recorded trace file (`.json.zst`) produced
+/// by the Move compiler/VM test runner. Each test function has its own trace
+/// file in `codetracer-move-recorder/test-programs/move/flow_test/traces/`.
+fn get_move_trace_file(test_fn_name: &str) -> PathBuf {
+    find_move_trace_file(test_fn_name).unwrap_or_else(|| {
+        panic!(
+            "Move trace file for '{}' not found. \
+             Check out codetracer-move-recorder as a sibling repo, or ensure \
+             test-programs/move/flow_test/traces/flow_test__flow_test__{}.json.zst exists.",
+            test_fn_name, test_fn_name
+        )
+    })
 }
 
 /// Returns the path to the Move source file (for breakpoint setting).
@@ -68,16 +67,21 @@ fn get_move_source_path() -> PathBuf {
     )
 }
 
-/// Shared setup: verify prerequisites, record a trace, and resolve the
-/// breakpoint source path (which may be inside the trace directory).
+/// Shared setup: verify prerequisites, record a trace for the given test
+/// function, and resolve the breakpoint source path (which may be inside the
+/// trace directory).
+///
+/// `test_fn_name` selects which pre-recorded trace file to use (e.g.
+/// `"test_computation"` picks
+/// `flow_test__flow_test__test_computation.json.zst`).
 ///
 /// Returns `(db_backend_path, trace_recording, breakpoint_source_path)`.
 ///
 /// # Panics
 ///
-/// Panics if the Move recorder is not found, the project directory is missing,
+/// Panics if the Move recorder is not found, the trace file is missing,
 /// or recording fails.
-fn setup_move_trace() -> (PathBuf, TestRecording, PathBuf) {
+fn setup_move_trace(test_fn_name: &str) -> (PathBuf, TestRecording, PathBuf) {
     assert!(
         find_move_recorder().is_some(),
         "Move recorder not found. \
@@ -86,18 +90,12 @@ fn setup_move_trace() -> (PathBuf, TestRecording, PathBuf) {
     );
 
     let db_backend = find_db_backend();
-    let project_path = get_move_project_path();
+    let trace_file = get_move_trace_file(test_fn_name);
     let source_path = get_move_source_path();
 
-    assert!(
-        project_path.join("Move.toml").exists(),
-        "Move test project not found at {}",
-        project_path.display()
-    );
-
     // Record the Move trace via the Move recorder CLI.
-    // Pass the project directory (containing Move.toml) as source_path.
-    let recording = TestRecording::create_db_trace(&project_path, Language::Move, "move-2024")
+    // Pass the pre-recorded trace file (not the project directory) as source_path.
+    let recording = TestRecording::create_db_trace(&trace_file, Language::Move, "move-2024")
         .expect("Move recording failed — check that codetracer-move-recorder is available");
 
     println!("Trace recorded to: {}", recording.trace_dir.display());
@@ -116,15 +114,18 @@ fn setup_move_trace() -> (PathBuf, TestRecording, PathBuf) {
 
 /// Run a single DAP flow test with the given configuration.
 ///
-/// This helper records a trace (via `setup_move_trace`), creates a
-/// `FlowTestRunner`, executes `run_and_verify`, and disconnects.
+/// `test_fn_name` selects which pre-recorded Move trace file to convert
+/// (e.g. `"test_computation"`). This helper records a trace (via
+/// `setup_move_trace`), creates a `FlowTestRunner`, executes
+/// `run_and_verify`, and disconnects.
 fn run_move_flow_test(
+    test_fn_name: &str,
     breakpoint_line: usize,
     expected_variables: Vec<&str>,
     excluded_identifiers: Vec<&str>,
     expected_values: HashMap<String, i64>,
 ) {
-    let (db_backend, recording, breakpoint_source) = setup_move_trace();
+    let (db_backend, recording, breakpoint_source) = setup_move_trace(test_fn_name);
 
     let config = FlowTestConfig {
         source_file: breakpoint_source.to_str().unwrap().to_string(),
@@ -164,6 +165,7 @@ fn move_flow_dap_variables() {
     expected_values.insert("final_result".to_string(), 94);
 
     run_move_flow_test(
+        "test_computation",
         141, // line: let final_result: u64 = doubled + a;
         vec!["a", "b", "sum_val", "doubled", "final_result"],
         vec!["assert!", "test_computation"],
@@ -195,6 +197,7 @@ fn move_flow_dap_struct_variables() {
     expected_values.insert("area".to_string(), 40);
 
     run_move_flow_test(
+        "test_structs",
         168, // line: assert!(sum_coords == 20, ...)
         vec!["px", "py", "sum_coords", "area"],
         vec!["assert!", "test_structs", "add_points", "rectangle_area"],
@@ -230,6 +233,7 @@ fn move_flow_dap_vector_ops() {
     expected_values.insert("new_len".to_string(), 4);
 
     run_move_flow_test(
+        "test_vectors",
         208, // line: assert!(popped == 50, ...) — all vector locals in scope
         vec!["len", "first", "last", "sum", "popped", "new_len"],
         vec!["assert!", "test_vectors", "vector_sum"],
@@ -261,6 +265,7 @@ fn move_flow_dap_loop_variables() {
     expected_values.insert("iterations".to_string(), 7);
 
     run_move_flow_test(
+        "test_loops",
         240, // line: assert!(power == 128, ...) — after both loops complete
         vec!["counter", "accumulator", "power", "iterations"],
         vec!["assert!", "test_loops"],
@@ -296,6 +301,7 @@ fn move_flow_dap_nested_calls() {
     expected_values.insert("nested_result".to_string(), 15);
 
     run_move_flow_test(
+        "test_nested_calls",
         267, // line: assert!(nested_result == 15, ...) — after nested calls
         vec!["x", "y", "sum", "product", "max", "nested_result"],
         vec!["assert!", "test_nested_calls", "compute_triple", "max_u64", "min_u64"],
@@ -323,6 +329,7 @@ fn move_flow_dap_generic_function() {
     expected_values.insert("container_label".to_string(), 3);
 
     run_move_flow_test(
+        "test_generics",
         301, // line: assert!(container_label == 3, ...) — after generic ops
         vec!["v1", "container_label"],
         vec!["assert!", "test_generics", "wrap_value", "unwrap_value"],
@@ -356,6 +363,7 @@ fn move_flow_dap_fibonacci() {
     expected_values.insert("fib_15".to_string(), 610);
 
     run_move_flow_test(
+        "test_fibonacci",
         317, // line: assert!(fib_0 == 0, ...) — all fib values computed
         vec!["fib_0", "fib_1", "fib_5", "fib_10", "fib_15"],
         vec!["assert!", "test_fibonacci", "fibonacci"],

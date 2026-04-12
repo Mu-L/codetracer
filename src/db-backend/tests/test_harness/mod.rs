@@ -2077,6 +2077,26 @@ pub fn find_move_flow_source() -> Option<PathBuf> {
     find_move_flow_test().map(|project_dir| project_dir.join("sources/flow_test.move"))
 }
 
+/// Locate a specific Move trace file for a given test function name.
+///
+/// The Move test-programs directory contains pre-recorded trace files named
+/// `flow_test__flow_test__<test_fn>.json.zst` inside the `traces/` subdirectory.
+/// This function resolves the full path for a given test function name
+/// (e.g. `"test_computation"` →
+/// `.../flow_test/traces/flow_test__flow_test__test_computation.json.zst`).
+pub fn find_move_trace_file(test_fn_name: &str) -> Option<PathBuf> {
+    let project_dir = find_move_flow_test()?;
+    let trace_file = project_dir.join(format!(
+        "traces/flow_test__flow_test__{}.json.zst",
+        test_fn_name
+    ));
+    if trace_file.exists() {
+        Some(safe_canonicalize(&trace_file))
+    } else {
+        None
+    }
+}
+
 /// Locate the Solana flow test source file from the sibling Solana
 /// recorder repo.
 ///
@@ -2522,12 +2542,16 @@ fn record_fuel_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String>
 /// Record a Move/Sui trace by invoking the `codetracer-move-recorder record` CLI.
 ///
 /// Runs:
-///   `<move-recorder> record <project_dir> --out-dir <trace_dir>`
+///   `<move-recorder> record <trace_file> --out-dir <trace_dir> --source <source_file>`
 ///
-/// For Move, `source_path` points to the project directory containing `Move.toml`.
-/// The Move recorder compiles and executes the Move module tests, capturing
-/// step-by-step VM state and writing `trace.bin`, `trace_metadata.json`, and
-/// `trace_paths.json` into `trace_dir`.
+/// The Move recorder expects a pre-recorded trace file (e.g. `trace.json.zst`
+/// produced by the Move compiler/VM test runner) and converts it into the
+/// CodeTracer trace format. The `--source` flag provides the Move source file
+/// for source mapping.
+///
+/// `source_path` must point to a trace file (`.json` or `.json.zst`), not a
+/// directory. The source file for source mapping is discovered via
+/// `find_move_flow_source()`.
 ///
 /// Returns an error if the recorder binary is not found, or if recording fails.
 fn record_move_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String> {
@@ -2535,6 +2559,12 @@ fn record_move_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String>
         "Move recorder not found. \
              Set CODETRACER_MOVE_RECORDER_PATH or build codetracer-move-recorder \
              (run `cargo build` inside the codetracer-move-recorder repo)."
+            .to_string()
+    })?;
+
+    let move_source = find_move_flow_source().ok_or_else(|| {
+        "Move flow test source file not found. \
+             Ensure codetracer-move-recorder/test-programs/move/flow_test/sources/flow_test.move exists."
             .to_string()
     })?;
 
@@ -2546,6 +2576,8 @@ fn record_move_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String>
             source_path.to_str().unwrap(),
             "--out-dir",
             trace_dir.to_str().unwrap(),
+            "--source",
+            move_source.to_str().unwrap(),
         ])
         .output()
         .map_err(|e| format!("failed to run Move recorder: {}", e))?;
