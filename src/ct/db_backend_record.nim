@@ -9,39 +9,6 @@ import std/[ os, osproc, strutils, strformat, sequtils, json ],
   trace/shell
 
 
-# Languages whose recorders live in sibling repos with their own Nix dev shells.
-# When a recorder binary resides under a directory with `.envrc`, we must invoke
-# it through `direnv exec <repo-dir>` so that language-specific toolchains
-# (e.g. circom, forc, cadence) are available on PATH.
-const blockchainLangs* = {
-  LangMasm, LangMove, LangSolana, LangSway, LangCairo, LangCircom,
-  LangLeo, LangPolkavm, LangTolk, LangAiken, LangCadence, LangSolidity
-}
-
-
-proc findRecorderRepoDir(binaryPath: string): string =
-  ## Walk up from `binaryPath` to find the nearest ancestor directory
-  ## that contains a `.envrc` file, which marks the root of a sibling
-  ## recorder repo managed by direnv/Nix.
-  ## Returns "" if no such directory is found.
-  var dir = binaryPath.parentDir
-  # Resolve symlinks so we find the real repo directory
-  if symlinkExists(binaryPath):
-    let resolved = expandSymlink(binaryPath)
-    if resolved.isAbsolute:
-      dir = resolved.parentDir
-    else:
-      dir = (binaryPath.parentDir / resolved).parentDir
-  while dir.len > 1: # stop at filesystem root "/"
-    if fileExists(dir / ".envrc"):
-      return dir
-    let parent = dir.parentDir
-    if parent == dir:
-      break
-    dir = parent
-  return ""
-
-
 proc recordSymbols(sourceDir: string, outputFolder: string, lang: Lang) =
   var ctagsArgs = @[
     "--exclude=.git",
@@ -189,24 +156,6 @@ proc recordDb(
       # with `parentDir`
       programDir = program
 
-  if lang == LangSway:
-    # The Fuel recorder expects the Sway project directory (containing
-    # Forc.toml), not a single .sw source file.  Resolve upward from
-    # the program path to find the project root.
-    if dirExists(program):
-      programDir = program
-    else:
-      # Walk up from the .sw file to find the Forc.toml project root
-      var candidate = program.parentDir
-      while candidate.len > 1:
-        if fileExists(candidate / "Forc.toml"):
-          programDir = candidate
-          break
-        let parent = candidate.parentDir
-        if parent == candidate:
-          break
-        candidate = parent
-
   if lang == LangNoir:
     if vmExe.len == 0:
       echo "error: expected a path in `CODETRACER_NOIR_EXE_PATH`: please fill this env var"
@@ -231,25 +180,11 @@ proc recordDb(
         # work dir
         getCurrentDir()
 
-  # For blockchain recorders that live in sibling repos with their own Nix
-  # dev shells, wrap the invocation with `direnv exec <repo-dir>` so that
-  # language-specific toolchains are on PATH (e.g. circom, forc, cadence).
-  let repoDir = if lang in blockchainLangs: findRecorderRepoDir(vmExe) else: ""
-  let useDirenv = repoDir.len > 0 and fileExists(repoDir / ".envrc")
-
-  let process = if useDirenv:
-      echo fmt"codetracer: using direnv exec {repoDir} for {lang} recorder"
-      startProcess(
-        "direnv",
-        args = @["exec", repoDir, vmExe].concat(startArgs).concat(args),
-        workingDir = workdir,
-        options = {poParentStreams})
-    else:
-      startProcess(
-        vmExe,
-        args = startArgs.concat(args),
-        workingDir = workdir,
-        options = {poParentStreams}) # add poEchoCmd if you want to debug and see how the cmd might look
+  let process = startProcess(
+    vmExe,
+    args = startArgs.concat(args),
+    workingDir = workdir,
+    options = {poParentStreams}) # add poEchoCmd if you want to debug and see how the cmd might look
   let recordPid = process.processId
   let exitCode = waitForExit(process)
   if exitCode != 0:
