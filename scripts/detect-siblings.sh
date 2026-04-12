@@ -202,26 +202,6 @@ for _ct_bc_name in cairo cardano circom evm flow fuel leo miden move polkavm sol
 done
 unset _ct_bc_name _ct_bc_repo _ct_bc_bin _ct_bc_var
 
-# --- Cadence Go helper ---
-# The Cadence/Flow recorder needs the cadence-trace-helper Go binary.
-# Build it if the source exists and the binary is missing or outdated.
-_ct_flow_repo="$_CT_WORKSPACE_ROOT/codetracer-flow-recorder"
-if [ -d "$_ct_flow_repo/go-helper" ] && [ -n "${CODETRACER_FLOW_RECORDER_PATH:-}" ]; then
-	_ct_cadence_helper="$_ct_flow_repo/target/debug/cadence-trace-helper"
-	if [ ! -x "$_ct_cadence_helper" ] || [ "$_ct_flow_repo/go-helper/main.go" -nt "$_ct_cadence_helper" ]; then
-		mkdir -p "$_ct_flow_repo/target/debug"
-		if command -v go >/dev/null 2>&1; then
-			(cd "$_ct_flow_repo/go-helper" && go build -o "$_ct_cadence_helper" . 2>/dev/null) &&
-				_ct_detect_summary "cadence-trace-helper (built)" || true
-		fi
-	fi
-	if [ -x "$_ct_cadence_helper" ]; then
-		export CADENCE_HELPER_BIN="$_ct_cadence_helper"
-		export PATH="$_ct_flow_repo/target/debug:$PATH"
-	fi
-fi
-unset _ct_flow_repo _ct_cadence_helper
-
 # Language-name aliases for recorders where the language name differs from the
 # recorder repo name. The GUI tests (Playwright) use language-based env vars.
 if [ -n "${CODETRACER_CARDANO_RECORDER_PATH:-}" ]; then
