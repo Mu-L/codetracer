@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use codetracer_trace_types::{
-    CallKey, FullValueRecord, FunctionId, FunctionRecord, PathId, Place, StepId, TypeId,
-    TypeRecord, ValueRecord, VariableId,
+    CallKey, FullValueRecord, FunctionId, FunctionRecord, PathId, Place, StepId, TypeId, TypeRecord, ValueRecord,
+    VariableId,
 };
 
 use crate::db::{CellChange, Db, DbCall, DbRecordEvent, DbStep, EndOfProgram};
@@ -114,10 +114,7 @@ impl TraceReader for InMemoryTraceReader {
     }
 
     fn steps_on_line(&self, path_id: PathId, line: usize) -> Option<&Vec<DbStep>> {
-        self.db
-            .step_map
-            .get(path_id)
-            .and_then(|by_line| by_line.get(&line))
+        self.db.step_map.get(path_id).and_then(|by_line| by_line.get(&line))
     }
 
     fn step_map_for_path(&self, path_id: PathId) -> Option<&HashMap<usize, Vec<DbStep>>> {
@@ -127,13 +124,7 @@ impl TraceReader for InMemoryTraceReader {
     // ── Iteration helpers ────────────────────────────────────────────
 
     fn functions_iter(&self) -> Box<dyn Iterator<Item = (FunctionId, &FunctionRecord)> + '_> {
-        Box::new(
-            self.db
-                .functions
-                .iter()
-                .enumerate()
-                .map(|(i, f)| (FunctionId(i), f)),
-        )
+        Box::new(self.db.functions.iter().enumerate().map(|(i, f)| (FunctionId(i), f)))
     }
 
     fn calls_iter(&self) -> Box<dyn Iterator<Item = &DbCall> + '_> {

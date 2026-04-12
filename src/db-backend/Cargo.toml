@@ -74,6 +74,16 @@ tree-sitter-go = "0.25.0"
 tree-sitter-javascript = "0.25.0"
 tree-sitter-bash = "0.23.3"
 tree-sitter-solidity = "1.2"
+# blockchain-specific grammar bindings:
+tree-sitter-cairo = { path = "../../libs/tree-sitter-cairo" }
+tree-sitter-circom = { path = "../../libs/tree-sitter-circom" }
+tree-sitter-leo = { path = "../../libs/tree-sitter-leo" }
+tree-sitter-tolk = { path = "../../libs/tree-sitter-tolk" }
+tree-sitter-aiken = { path = "../../libs/tree-sitter-aiken" }
+tree-sitter-move-on-aptos = { path = "../../libs/tree-sitter-move-on-aptos" }
+tree-sitter-sway = { path = "../../libs/tree-sitter-sway" }
+tree-sitter-masm = { path = "../../libs/tree-sitter-masm/bindings/rust" }
+tree-sitter-cadence = { path = "../../libs/tree-sitter-cadence/bindings/rust" }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59.0", features = [

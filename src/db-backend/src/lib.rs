@@ -1,4 +1,5 @@
 #![allow(clippy::uninlined_format_args)]
+#![allow(clippy::expect_used)]
 #![allow(dead_code)]
 // use std::ffi::{c_char, CStr, CString};
 // use std::slice;
@@ -25,6 +26,7 @@ pub mod calltrace;
 #[cfg(feature = "io-transport")]
 pub mod core;
 
+pub mod ctfs_trace_reader;
 pub mod dap;
 pub mod dap_error;
 pub mod dap_server;
@@ -36,19 +38,18 @@ pub mod event_db;
 pub mod expr_loader;
 pub mod flow_preloader;
 pub mod handler;
+pub mod in_memory_trace_reader;
 pub mod lang;
 pub mod nim_mangling;
 pub mod paths;
 pub mod program_search_tool;
 pub mod query;
 pub mod replay;
-pub mod trace_reader;
-pub mod in_memory_trace_reader;
-pub mod ctfs_trace_reader;
 pub mod rr_dispatcher;
 pub mod step_lines_loader;
 pub mod task;
 pub mod trace_processor;
+pub mod trace_reader;
 pub mod tracepoint_interpreter;
 pub mod transport;
 pub mod transport_endpoint;

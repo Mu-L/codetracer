@@ -96,13 +96,10 @@ fn run_masm_dap_test(
 
     println!("Trace recorded to: {}", recording.trace_dir.display());
 
-    // The Miden recorder copies the source file into trace_dir and stores just
-    // the filename in trace_paths.json (workdir = trace_dir). Use the
-    // trace_dir copy path for the breakpoint so that path lookup succeeds.
-    let source_copy = recording.trace_dir.join(source_path.file_name().unwrap());
-
+    // Use the original source path — the trace stores the absolute path as recorded,
+    // not the trace-dir copy.
     let config = FlowTestConfig {
-        source_file: source_copy.to_str().unwrap().to_string(),
+        source_file: source_path.to_str().unwrap().to_string(),
         breakpoint_line,
         expected_variables: expected_variables.into_iter().map(String::from).collect(),
         excluded_identifiers: excluded.into_iter().map(String::from).collect(),

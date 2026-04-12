@@ -9,20 +9,22 @@ use std::path::Path;
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
 
-use codetracer_trace_types::{CallKey, EventLogKind, FullValueRecord, Line, PathId, StepId, TypeKind, VariableId, NO_KEY};
+use codetracer_trace_types::{
+    CallKey, EventLogKind, FullValueRecord, Line, PathId, StepId, TypeKind, VariableId, NO_KEY,
+};
 
 use crate::calltrace::Calltrace;
 use crate::dap::{self, DapClient, DapMessage};
 use crate::db::{Db, DbCall, DbRecordEvent, DbReplay};
 use crate::event_db::{EventDb, SingleTableId};
-use crate::in_memory_trace_reader::InMemoryTraceReader;
-use crate::trace_reader::TraceReader;
 use crate::expr_loader::ExprLoader;
 use crate::flow_preloader::FlowPreloader;
+use crate::in_memory_trace_reader::InMemoryTraceReader;
 use crate::lang::{lang_from_context, Lang};
 use crate::program_search_tool::ProgramSearchTool;
 use crate::replay::Replay;
 use crate::rr_dispatcher::{CtRRArgs, RRDispatcher};
+use crate::trace_reader::TraceReader;
 // use crate::response::{};
 use crate::dap_types;
 // use crate::dap_types::Source;
@@ -115,6 +117,7 @@ pub struct Handler {
 //   receives sender as arg
 //   sender.
 
+#[allow(clippy::expect_used)]
 impl Handler {
     pub fn new(trace_kind: TraceKind, ct_rr_args: CtRRArgs, db: Box<Db>) -> Handler {
         Self::construct(trace_kind, ct_rr_args, db, false)
@@ -218,7 +221,10 @@ impl Handler {
 
         let function_name = if step_record.call_key != NO_KEY {
             let call = self.reader.call(call_key).expect("load_location: invalid call_key");
-            let function = self.reader.function(call.function_id).expect("load_location: invalid function_id");
+            let function = self
+                .reader
+                .function(call.function_id)
+                .expect("load_location: invalid function_id");
             function.name.clone()
         } else {
             "<unknown>".to_string()
@@ -296,7 +302,10 @@ impl Handler {
                     //   this internal one: for which kinds do we produce dap events
                     #[allow(clippy::collapsible_if)]
                     if event.kind == EventLogKind::Write {
-                        let step = *self.reader.step(event.step_id).expect("prepare_output_events: invalid step_id");
+                        let step = *self
+                            .reader
+                            .step(event.step_id)
+                            .expect("prepare_output_events: invalid step_id");
                         info!("generate output event");
                         let raw_output_event = self.dap_client.output_event(
                             "stdout",
@@ -352,11 +361,21 @@ impl Handler {
         // self.db.load_location(self.step_id, call_key, &mut self.expr_loader),
         let mut location = self.replay.load_location(&mut self.expr_loader)?;
         self.step_id = self.replay.current_step_id();
-        // let call_key = location.call_key; // self.db.call_key_for_step(self.step_id);
+        // Preserve the Db-derived function boundaries before find_function_location
+        // potentially overwrites them with (0,0) when tree-sitter can't parse the file.
+        let db_function_first = location.function_first;
+        let db_function_last = location.function_last;
         location = self
             .flow_preloader
             .expr_loader
             .find_function_location(&location, &Line(location.line));
+        // When find_function_location returns (0,0) (no tree-sitter data for this
+        // language/file), restore the Db-derived boundaries so the downstream
+        // load_flow can iterate over all steps in the function.
+        if location.function_first == 0 && location.function_last == 0 && db_function_first != 0 {
+            location.function_first = db_function_first;
+            location.function_last = db_function_last;
+        }
         // TODO: change if we need to support non-int keys
         let reset_flow = self.should_reset_flow(is_main, &location);
         info!("  location: {location:?}");
@@ -494,7 +513,9 @@ impl Handler {
     }
 
     fn load_local_calltrace(&mut self, args: CalltraceLoadArgs) -> Result<Vec<CallLine>, Box<dyn Error>> {
-        let call_key = self.reader.call_key_for_step(self.step_id)
+        let call_key = self
+            .reader
+            .call_key_for_step(self.step_id)
             .expect("load_local_calltrace: invalid step_id");
         self.calltrace.optimize_collapse = args.optimize_collapse;
         if call_key != self.calltrace.start_call_key {
@@ -506,8 +527,13 @@ impl Handler {
             self.calltrace
                 .jump_to_with_depth(self.step_id, args.auto_collapsing, max_depth, &self.db, &*self.reader);
         }
-        self.calltrace
-            .load_lines(args.start_call_line_index, args.height, &self.db, &mut self.expr_loader, &*self.reader)
+        self.calltrace.load_lines(
+            args.start_call_line_index,
+            args.height,
+            &self.db,
+            &mut self.expr_loader,
+            &*self.reader,
+        )
     }
 
     fn calc_total_calls(&mut self) -> usize {
@@ -578,8 +604,32 @@ impl Handler {
         // if possible for example
 
         let flow_update = if arg.flow_mode == FlowMode::Call {
+            // For DB-based traces, populate function boundaries on the location
+            // before passing it to the flow preloader. The DAP client may send
+            // a location with function_first == 0. The Db has authoritative
+            // boundary data from the trace's Call/Function records.
+            let mut location = arg.location;
+            if self.trace_kind == TraceKind::DB
+                && location.function_first == 0
+                && location.function_last == 0
+                && location.rr_ticks.0 >= 0
+            {
+                let step_id = StepId(location.rr_ticks.0);
+                if (step_id.0 as usize) < self.db.steps.len() {
+                    let call_key = self.db.steps[step_id].call_key;
+                    let enriched = self
+                        .db
+                        .load_location(step_id, call_key, &mut self.flow_preloader.expr_loader);
+                    location.function_first = enriched.function_first;
+                    location.function_last = enriched.function_last;
+                    if location.function_name.is_empty() || location.function_name == "<unknown>" {
+                        location.function_name = enriched.function_name;
+                        location.high_level_function_name = enriched.high_level_function_name;
+                    }
+                }
+            }
             self.flow_preloader
-                .load(arg.location, arg.flow_mode, self.trace_kind, &mut *flow_replay)
+                .load(location, arg.flow_mode, self.trace_kind, &mut *flow_replay)
             // let step_id = StepId(arg.location.rr_ticks.0);
             // let call_key = self.db.steps[step_id].call_key;
             // let function_id = self.db.calls[call_key].function_id;
@@ -636,13 +686,13 @@ impl Handler {
         if depth < depth_limit && db_call.key.0 >= 0 {
             for child_call_id in &db_call.children_keys {
                 assert!(child_call_id.0 >= 0);
-                let child_db_call = self.reader.call(*child_call_id).expect("to_ct_calltrace_call: invalid child call_key").clone();
-                let (child_call, child_call_count) = self.to_ct_calltrace_call(
-                    &child_db_call,
-                    depth + 1,
-                    depth_limit,
-                    count_limit - count,
-                )?;
+                let child_db_call = self
+                    .reader
+                    .call(*child_call_id)
+                    .expect("to_ct_calltrace_call: invalid child call_key")
+                    .clone();
+                let (child_call, child_call_count) =
+                    self.to_ct_calltrace_call(&child_db_call, depth + 1, depth_limit, count_limit - count)?;
                 call.children.push(child_call);
                 count += child_call_count;
                 if count >= count_limit {
@@ -1115,8 +1165,14 @@ impl Handler {
         // TODO: eventually expose slice index? not obvious if easy
         // for now this is not often
         for step in self.reader.steps_from(self.step_id) {
-            let call = self.reader.call(step.call_key).expect("get_call_target: invalid call_key");
-            let function = self.reader.function(call.function_id).expect("get_call_target: invalid function_id");
+            let call = self
+                .reader
+                .call(step.call_key)
+                .expect("get_call_target: invalid call_key");
+            let function = self
+                .reader
+                .function(call.function_id)
+                .expect("get_call_target: invalid function_id");
             if loc.token == function.name {
                 line = function.line;
                 path_id = function.path_id;
@@ -1856,16 +1912,29 @@ impl Handler {
 
     fn load_steps_for_call(&mut self, call_key: CallKey) -> IndexMap<i64, StepId> {
         let mut list: IndexMap<i64, StepId> = IndexMap::default();
-        let db_call = self.reader.call(call_key).expect("load_steps_for_call: invalid call_key").clone();
-        let function_step = *self.reader.step(db_call.step_id).expect("load_steps_for_call: invalid step_id");
+        let db_call = self
+            .reader
+            .call(call_key)
+            .expect("load_steps_for_call: invalid call_key")
+            .clone();
+        let function_step = *self
+            .reader
+            .step(db_call.step_id)
+            .expect("load_steps_for_call: invalid step_id");
         let location = self.load_location(db_call.step_id);
         let function_location = self
             .flow_preloader
             .expr_loader
             .find_function_location(&location, &function_step.line);
         for line in function_location.function_first..function_location.function_last {
-            let function_id = self.reader.function(db_call.function_id).expect("load_steps_for_call: invalid function_id");
-            let step_map = self.reader.step_map_for_path(function_id.path_id).expect("load_steps_for_call: missing step_map");
+            let function_id = self
+                .reader
+                .function(db_call.function_id)
+                .expect("load_steps_for_call: invalid function_id");
+            let step_map = self
+                .reader
+                .step_map_for_path(function_id.path_id)
+                .expect("load_steps_for_call: missing step_map");
             if let Some(steps) = step_map.get(&(line as usize)) {
                 for step in steps {
                     if step.call_key == call_key {
@@ -1921,8 +1990,16 @@ impl Handler {
                             }
                         }
                     } else {
-                        let fn_id = self.reader.call(call_key).expect("load_asm_function: invalid call_key").function_id;
-                        let fn_path_id = self.reader.function(fn_id).expect("load_asm_function: invalid function_id").path_id;
+                        let fn_id = self
+                            .reader
+                            .call(call_key)
+                            .expect("load_asm_function: invalid call_key")
+                            .function_id;
+                        let fn_path_id = self
+                            .reader
+                            .function(fn_id)
+                            .expect("load_asm_function: invalid function_id")
+                            .path_id;
                         instructions.push(Instruction::empty(
                             *line,
                             self.reader.path(fn_path_id).unwrap_or(""),
@@ -2050,7 +2127,10 @@ impl Handler {
     fn to_program_event(&self, event_record: &DbRecordEvent, index: usize) -> ProgramEvent {
         let step_id_int = event_record.step_id.0;
         let (path, line) = if step_id_int != NO_INDEX {
-            let step_record = self.reader.step(event_record.step_id).expect("to_program_event: invalid step_id");
+            let step_record = self
+                .reader
+                .step(event_record.step_id)
+                .expect("to_program_event: invalid step_id");
             (
                 self.reader
                     .workdir()
@@ -2109,7 +2189,11 @@ impl Handler {
         //   or a new kind of index?
         // TODO(Phase 4): migrate to_call and load_location to TraceReader or free function
         let call = self.db.to_call(call_record, &mut self.expr_loader);
-        let current_call_key = self.reader.step(self.step_id).expect("produce_stack_frame: invalid step_id").call_key;
+        let current_call_key = self
+            .reader
+            .step(self.step_id)
+            .expect("produce_stack_frame: invalid step_id")
+            .call_key;
         let location = if call_record.key == current_call_key {
             self.db
                 .load_location(self.step_id, call_record.key, &mut self.expr_loader)
@@ -2261,8 +2345,14 @@ impl Handler {
             self.respond_dap(request, dap_types::ScopesResponseBody { scopes: vec![] }, sender)?;
             return Ok(());
         }
-        let call = self.reader.call(CallKey(arg.frame_id)).expect("load_dap_scopes: invalid call_key");
-        let function = self.reader.function(call.function_id).expect("load_dap_scopes: invalid function_id");
+        let call = self
+            .reader
+            .call(CallKey(arg.frame_id))
+            .expect("load_dap_scopes: invalid call_key");
+        let function = self
+            .reader
+            .function(call.function_id)
+            .expect("load_dap_scopes: invalid function_id");
         let scope = dap_types::Scope {
             name: function.name.clone(),
             presentation_hint: Some("locals".to_string()),
@@ -2301,7 +2391,11 @@ impl Handler {
         let full_value_locals: Vec<Variable> = vars_slice
             .iter()
             .map(|v| Variable {
-                expression: self.reader.variable_name(v.variable_id).unwrap_or("<unknown>").to_string(),
+                expression: self
+                    .reader
+                    .variable_name(v.variable_id)
+                    .unwrap_or("<unknown>")
+                    .to_string(),
                 // to_ct_value is a Db method that depends on type resolution;
                 // keep using self.db for it until TraceReader gains value conversion.
                 value: self.db.to_ct_value(&v.value),

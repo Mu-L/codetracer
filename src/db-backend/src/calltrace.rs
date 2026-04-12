@@ -78,7 +78,14 @@ impl Calltrace {
     /// up to `max_depth` are expanded so that the full tree is visible —
     /// this is the path taken by the Python API bridge which does not use
     /// the GUI's collapsing behaviour.
-    pub fn jump_to_with_depth(&mut self, step_id: StepId, auto_collapsing: bool, max_depth: Option<usize>, db: &Db, _reader: &dyn TraceReader) {
+    pub fn jump_to_with_depth(
+        &mut self,
+        step_id: StepId,
+        auto_collapsing: bool,
+        max_depth: Option<usize>,
+        db: &Db,
+        _reader: &dyn TraceReader,
+    ) {
         let call_key = db.call_key_for_step(step_id);
         if auto_collapsing {
             self.autocollapse_callstack(step_id, call_key, db, _reader);
@@ -288,7 +295,13 @@ impl Calltrace {
     //   collapse x/expand x
     //   filter?
     //   (property: calltrace valid and matching what is happening?)
-    fn autocollapse_callstack(&mut self, step_id: StepId, current_call_key: CallKey, db: &Db, _reader: &dyn TraceReader) {
+    fn autocollapse_callstack(
+        &mut self,
+        step_id: StepId,
+        current_call_key: CallKey,
+        db: &Db,
+        _reader: &dyn TraceReader,
+    ) {
         // autocollapse siblings before the current call
         // on each level of the callstack
         // potentially also part of the callstack itself
@@ -387,7 +400,13 @@ impl Calltrace {
         Ok(results)
     }
 
-    fn to_call_line(&self, metadata: &CallLineMetadata, db: &Db, expr_loader: &mut ExprLoader, _reader: &dyn TraceReader) -> CallLine {
+    fn to_call_line(
+        &self,
+        metadata: &CallLineMetadata,
+        db: &Db,
+        expr_loader: &mut ExprLoader,
+        _reader: &dyn TraceReader,
+    ) -> CallLine {
         if metadata.content.kind == CallLineContentKind::Call {
             let call = db.to_call(&self.calls[metadata.content.call_key], expr_loader);
             CallLine::call(

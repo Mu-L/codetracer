@@ -2086,10 +2086,7 @@ pub fn find_move_flow_source() -> Option<PathBuf> {
 /// `.../flow_test/traces/flow_test__flow_test__test_computation.json.zst`).
 pub fn find_move_trace_file(test_fn_name: &str) -> Option<PathBuf> {
     let project_dir = find_move_flow_test()?;
-    let trace_file = project_dir.join(format!(
-        "traces/flow_test__flow_test__{}.json.zst",
-        test_fn_name
-    ));
+    let trace_file = project_dir.join(format!("traces/flow_test__flow_test__{}.json.zst", test_fn_name));
     if trace_file.exists() {
         Some(safe_canonicalize(&trace_file))
     } else {
@@ -3056,12 +3053,8 @@ pub fn run_db_flow_test_with_format(
 
     // Create DB-based recording (no rr needed)
     println!("Recording trace...");
-    let recording = TestRecording::create_db_trace_with_format(
-        &config.source_path,
-        config.language,
-        version_label,
-        trace_format,
-    )?;
+    let recording =
+        TestRecording::create_db_trace_with_format(&config.source_path, config.language, version_label, trace_format)?;
     println!("Recording created at: {}", recording.trace_dir.display());
 
     // Start DAP client via stdio (cross-platform, no Unix sockets)

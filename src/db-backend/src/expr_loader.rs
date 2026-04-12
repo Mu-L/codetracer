@@ -288,6 +288,210 @@ static NODE_NAMES: Lazy<HashMap<Lang, NodeNames>> = Lazy::new(|| {
         },
     );
 
+    // Cairo language support
+    // tree-sitter-cairo node types: if_expression (Cairo 1), loop_expression, block, function_definition
+    m.insert(
+        Lang::Cairo,
+        NodeNames {
+            if_conditions: vec!["if_expression".to_string()],
+            else_conditions: vec!["else_clause".to_string()],
+            loops: vec!["loop_expression".to_string()],
+            branches_body: vec!["block".to_string()],
+            branches: vec!["block".to_string()],
+            functions: vec!["function_definition".to_string()],
+            values: vec!["identifier".to_string()],
+            comments: vec!["comment".to_string()],
+        },
+    );
+
+    // Circom language support
+    // tree-sitter-circom: if_statement, for_statement, while_statement, block_statement
+    m.insert(
+        Lang::Circom,
+        NodeNames {
+            if_conditions: vec!["if_statement".to_string()],
+            else_conditions: vec![],
+            loops: vec!["for_statement".to_string(), "while_statement".to_string()],
+            branches_body: vec!["block_statement".to_string()],
+            branches: vec!["block_statement".to_string()],
+            functions: vec!["function_definition".to_string(), "template_definition".to_string()],
+            values: vec!["identifier".to_string()],
+            comments: vec!["comment".to_string()],
+        },
+    );
+
+    // Leo language support
+    // tree-sitter-leo: conditional_statement, loop_statement, block, function_declaration
+    m.insert(
+        Lang::Leo,
+        NodeNames {
+            if_conditions: vec!["conditional_statement".to_string()],
+            else_conditions: vec!["branch".to_string()],
+            loops: vec!["loop_statement".to_string()],
+            branches_body: vec!["block".to_string()],
+            branches: vec!["block".to_string()],
+            functions: vec!["function_declaration".to_string(), "transition_declaration".to_string()],
+            values: vec!["identifier".to_string()],
+            comments: vec!["comment".to_string()],
+        },
+    );
+
+    // Tolk language support (TON blockchain)
+    // tree-sitter-tolk: if_statement, while_statement, do_while_statement, repeat_statement
+    m.insert(
+        Lang::Tolk,
+        NodeNames {
+            if_conditions: vec!["if_statement".to_string()],
+            else_conditions: vec![],
+            loops: vec![
+                "while_statement".to_string(),
+                "do_while_statement".to_string(),
+                "repeat_statement".to_string(),
+            ],
+            branches_body: vec!["block_statement".to_string()],
+            branches: vec!["block_statement".to_string()],
+            functions: vec![
+                "function_declaration".to_string(),
+                "method_declaration".to_string(),
+                "get_method_declaration".to_string(),
+            ],
+            values: vec!["identifier".to_string()],
+            comments: vec!["comment".to_string()],
+        },
+    );
+
+    // Aiken language support (Cardano)
+    // tree-sitter-aiken: if, function — functional language with no loops
+    m.insert(
+        Lang::Aiken,
+        NodeNames {
+            if_conditions: vec!["if".to_string(), "when".to_string()],
+            else_conditions: vec![],
+            loops: vec![],
+            branches_body: vec!["expression".to_string()],
+            branches: vec!["expression".to_string()],
+            functions: vec!["function".to_string(), "test".to_string(), "validator".to_string()],
+            values: vec!["identifier".to_string()],
+            comments: vec![
+                "comment".to_string(),
+                "module_comment".to_string(),
+                "definition_comment".to_string(),
+            ],
+        },
+    );
+
+    // Move language support (Aptos/Sui)
+    // tree-sitter-move-on-aptos: if_expression, for/while/loop_expression, block
+    m.insert(
+        Lang::Move,
+        NodeNames {
+            if_conditions: vec!["if_expression".to_string()],
+            else_conditions: vec![],
+            loops: vec![
+                "for_expression".to_string(),
+                "while_expression".to_string(),
+                "loop_expression".to_string(),
+            ],
+            branches_body: vec!["block".to_string()],
+            branches: vec!["block".to_string()],
+            functions: vec!["function_declaration".to_string()],
+            values: vec!["identifier".to_string()],
+            comments: vec!["line_comment".to_string(), "block_comment".to_string()],
+        },
+    );
+
+    // Sway language support (Fuel blockchain, Rust-like)
+    // tree-sitter-sway: if_expression, else_clause, for/while_expression, block
+    let sway_node_names = NodeNames {
+        if_conditions: vec!["if_expression".to_string()],
+        else_conditions: vec!["else_clause".to_string()],
+        loops: vec!["for_expression".to_string(), "while_expression".to_string()],
+        branches_body: vec!["block".to_string()],
+        branches: vec!["block".to_string()],
+        functions: vec!["function_item".to_string()],
+        values: vec!["identifier".to_string()],
+        comments: vec!["line_comment".to_string(), "block_comment".to_string()],
+    };
+    m.insert(Lang::Sway, sway_node_names);
+
+    // Miden Assembly (MASM) language support
+    // tree-sitter-masm: procedure_definition, if_block, while_block, repeat_block
+    m.insert(
+        Lang::Masm,
+        NodeNames {
+            if_conditions: vec!["if_block".to_string()],
+            else_conditions: vec![],
+            loops: vec!["while_block".to_string(), "repeat_block".to_string()],
+            branches_body: vec!["body".to_string()],
+            branches: vec!["body".to_string()],
+            functions: vec!["procedure_definition".to_string(), "export_definition".to_string()],
+            values: vec!["identifier".to_string()],
+            comments: vec!["comment".to_string()],
+        },
+    );
+
+    // Cadence language support (Flow blockchain)
+    // tree-sitter-cadence: if_statement, while_statement, for_statement, block
+    m.insert(
+        Lang::Cadence,
+        NodeNames {
+            if_conditions: vec!["if_statement".to_string(), "switch_statement".to_string()],
+            else_conditions: vec![],
+            loops: vec!["while_statement".to_string(), "for_statement".to_string()],
+            branches_body: vec!["block".to_string(), "declaration_block".to_string()],
+            branches: vec!["block".to_string(), "declaration_block".to_string()],
+            functions: vec![
+                "function_declaration".to_string(),
+                "view_function_declaration".to_string(),
+                "init_declaration".to_string(),
+            ],
+            values: vec!["identifier".to_string()],
+            comments: vec![
+                "line_comment".to_string(),
+                "block_comment".to_string(),
+                "doc_comment".to_string(),
+            ],
+        },
+    );
+
+    // Solana uses Rust source files — reuse Rust node names
+    m.insert(
+        Lang::Solana,
+        NodeNames {
+            if_conditions: vec!["if_expression".to_string()],
+            else_conditions: vec!["else_clause".to_string()],
+            loops: vec![
+                "for_expression".to_string(),
+                "loop_expression".to_string(),
+                "while_expression".to_string(),
+            ],
+            branches_body: vec!["block".to_string()],
+            branches: vec!["block".to_string()],
+            functions: vec!["function_item".to_string()],
+            values: vec!["identifier".to_string()],
+            comments: vec!["//".to_string()],
+        },
+    );
+
+    // PolkaVM uses Rust source files — reuse Rust node names
+    m.insert(
+        Lang::PolkaVM,
+        NodeNames {
+            if_conditions: vec!["if_expression".to_string()],
+            else_conditions: vec!["else_clause".to_string()],
+            loops: vec![
+                "for_expression".to_string(),
+                "loop_expression".to_string(),
+                "while_expression".to_string(),
+            ],
+            branches_body: vec!["block".to_string()],
+            branches: vec!["block".to_string()],
+            functions: vec!["function_item".to_string()],
+            values: vec!["identifier".to_string()],
+            comments: vec!["//".to_string()],
+        },
+    );
+
     m
 });
 
@@ -447,10 +651,29 @@ impl ExprLoader {
             parser.set_language(&tree_sitter_d::LANGUAGE.into())?;
         } else if lang == Lang::Solidity {
             parser.set_language(&tree_sitter_solidity::LANGUAGE.into())?;
+        } else if lang == Lang::Cairo {
+            parser.set_language(&tree_sitter_cairo::LANGUAGE.into())?;
+        } else if lang == Lang::Circom {
+            parser.set_language(&tree_sitter_circom::LANGUAGE.into())?;
+        } else if lang == Lang::Leo {
+            parser.set_language(&tree_sitter_leo::LANGUAGE.into())?;
+        } else if lang == Lang::Tolk {
+            parser.set_language(&tree_sitter_tolk::LANGUAGE.into())?;
+        } else if lang == Lang::Aiken {
+            parser.set_language(&tree_sitter_aiken::LANGUAGE.into())?;
+        } else if lang == Lang::Move {
+            parser.set_language(&tree_sitter_move_on_aptos::LANGUAGE.into())?;
+        } else if lang == Lang::Sway {
+            parser.set_language(&tree_sitter_sway::LANGUAGE.into())?;
+        } else if lang == Lang::Masm {
+            parser.set_language(&tree_sitter_masm::LANGUAGE.into())?;
+        } else if lang == Lang::Cadence {
+            parser.set_language(&tree_sitter_cadence::LANGUAGE.into())?;
+        } else if lang == Lang::Solana || lang == Lang::PolkaVM {
+            // Solana and PolkaVM use Rust source files
+            parser.set_language(&tree_sitter_rust::LANGUAGE.into())?;
         } else {
-            // else if lang == Lang::Small {
-            //     parser.set_language(&tree_sitter_elisp::LANGUAGE.into())?;
-            // } else {
+            // Fallback: try Rust grammar for unknown languages
             parser.set_language(&tree_sitter_rust::LANGUAGE.into())?;
         }
 
@@ -1379,6 +1602,312 @@ impl ExprLoader {
 
                 true
             }
+            // Sway, Solana, and PolkaVM use Rust-like syntax — reuse Rust variable detection
+            Lang::Sway | Lang::Solana | Lang::PolkaVM => {
+                if node.kind() != "identifier" {
+                    return false;
+                }
+                let Some(parent) = node.parent() else {
+                    return true;
+                };
+                let parent_kind = parent.kind();
+                match parent_kind {
+                    "function_item" | "function_signature_item" | "mod_item" => return false,
+                    "use_declaration" | "use_wildcard" | "use_list" | "scoped_use_list" | "use_as_clause" => {
+                        return false
+                    }
+                    "type_identifier" | "scoped_type_identifier" => return false,
+                    _ => {}
+                }
+                if parent_kind == "call_expression" || parent_kind == "macro_invocation" {
+                    if let Some(field) = field_name_in_parent(node) {
+                        if field == "function" {
+                            return false;
+                        }
+                    }
+                }
+                true
+            }
+
+            // Cairo uses Rust-like syntax (Cairo 1.0)
+            Lang::Cairo => {
+                if node.kind() != "identifier" {
+                    return false;
+                }
+                let Some(parent) = node.parent() else {
+                    return true;
+                };
+                let parent_kind = parent.kind();
+                // Filter out function definitions, use/import, type names
+                match parent_kind {
+                    "function_definition" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "name" {
+                                return false;
+                            }
+                        }
+                    }
+                    "use_path" | "use_clause" | "mod_item" | "trait_definition" | "impl_item" => return false,
+                    "call_expression" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "function" {
+                                return false;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                true
+            }
+
+            // Circom — filter out template/function names and signal declarations
+            Lang::Circom => {
+                if node.kind() != "identifier" {
+                    return false;
+                }
+                let Some(parent) = node.parent() else {
+                    return true;
+                };
+                let parent_kind = parent.kind();
+                match parent_kind {
+                    "function_definition" | "template_definition" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "name" {
+                                return false;
+                            }
+                        }
+                    }
+                    "include_directive" => return false,
+                    "call_expression" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "function" {
+                                return false;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                true
+            }
+
+            // Leo — filter out function/transition names and import paths
+            Lang::Leo => {
+                if node.kind() != "identifier" {
+                    return false;
+                }
+                let Some(parent) = node.parent() else {
+                    return true;
+                };
+                let parent_kind = parent.kind();
+                match parent_kind {
+                    "function_declaration" | "transition_declaration" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "name" {
+                                return false;
+                            }
+                        }
+                    }
+                    "import_declaration" | "import_path" => return false,
+                    "struct_declaration" | "record_declaration" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "name" {
+                                return false;
+                            }
+                        }
+                    }
+                    "function_call" | "call_expression" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "function" {
+                                return false;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                true
+            }
+
+            // Tolk — filter out function/method names
+            Lang::Tolk => {
+                if node.kind() != "identifier" {
+                    return false;
+                }
+                let Some(parent) = node.parent() else {
+                    return true;
+                };
+                let parent_kind = parent.kind();
+                match parent_kind {
+                    "function_declaration" | "method_declaration" | "get_method_declaration" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "name" {
+                                return false;
+                            }
+                        }
+                    }
+                    "import_statement" | "import_path" => return false,
+                    "call_expression" | "function_call" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "function" {
+                                return false;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                true
+            }
+
+            // Aiken — functional language, filter out function names and module paths
+            Lang::Aiken => {
+                if node.kind() != "identifier" {
+                    return false;
+                }
+                let Some(parent) = node.parent() else {
+                    return true;
+                };
+                let parent_kind = parent.kind();
+                match parent_kind {
+                    "function" | "test" | "validator" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "name" {
+                                return false;
+                            }
+                        }
+                    }
+                    "import" | "module_path" | "use" => return false,
+                    "type_definition" | "type_alias" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "name" {
+                                return false;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                true
+            }
+
+            // MASM — stack-based assembly, identifiers are mainly procedure names and constants
+            Lang::Masm => {
+                if node.kind() != "identifier" && node.kind() != "const_name" {
+                    return false;
+                }
+                let Some(parent) = node.parent() else {
+                    return true;
+                };
+                let parent_kind = parent.kind();
+                match parent_kind {
+                    // Filter out procedure/export definition names
+                    "procedure_definition" | "export_definition" => return false,
+                    // Filter out use/import paths
+                    "use_statement" | "module_path" => return false,
+                    // Filter out instruction opcodes
+                    "instruction" => return false,
+                    _ => {}
+                }
+                true
+            }
+
+            // Cadence — Swift-like syntax for Flow blockchain
+            Lang::Cadence => {
+                if node.kind() != "identifier" {
+                    return false;
+                }
+                let Some(parent) = node.parent() else {
+                    return true;
+                };
+                let parent_kind = parent.kind();
+                match parent_kind {
+                    "function_declaration" | "view_function_declaration" | "init_declaration" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "name" {
+                                return false;
+                            }
+                        }
+                    }
+                    "contract_declaration"
+                    | "struct_declaration"
+                    | "resource_declaration"
+                    | "enum_declaration"
+                    | "event_declaration"
+                    | "type_alias_declaration" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "name" {
+                                return false;
+                            }
+                        }
+                    }
+                    "import_declaration" => return false,
+                    "invocation_expression" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "function" {
+                                return false;
+                            }
+                        }
+                    }
+                    "member_expression" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "member" {
+                                return false;
+                            }
+                        }
+                    }
+                    "parameter" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "label" {
+                                return false;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                true
+            }
+
+            // Move — filter out function names, module names, use declarations
+            Lang::Move => {
+                if node.kind() != "identifier" {
+                    return false;
+                }
+                let Some(parent) = node.parent() else {
+                    return true;
+                };
+                let parent_kind = parent.kind();
+                match parent_kind {
+                    "function_declaration" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "name" {
+                                return false;
+                            }
+                        }
+                    }
+                    "module_declaration" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "name" {
+                                return false;
+                            }
+                        }
+                    }
+                    "use_declaration" | "use_member" | "use_module" => return false,
+                    "struct_declaration" | "enum_declaration" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "name" {
+                                return false;
+                            }
+                        }
+                    }
+                    "call_expression" => {
+                        if let Some(field) = field_name_in_parent(node) {
+                            if field == "function" {
+                                return false;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                true
+            }
+
             _ => NODE_NAMES[&lang].values.contains(&node.kind().to_string()),
         }
     }
@@ -1659,9 +2188,26 @@ impl ExprLoader {
         if self.processed_files.contains_key(path_buf) {
             let file_info = &self.processed_files[path_buf];
             let position = &Position(location.line);
-            // info!("  check for position {:?} in {:?}", position, file_info.functions);
+            // 1. Exact match: location.line is the function definition line.
             if file_info.functions.contains_key(position) {
                 (_, start, end) = file_info.functions[position][0].clone();
+            } else {
+                // 2. Range search: find the function whose range [start, end]
+                //    contains the given line. This handles the common case where
+                //    the breakpoint is inside a function body, not on the "fn" line.
+                for fn_list in file_info.functions.values() {
+                    for (name, fn_start, fn_end) in fn_list {
+                        if fn_start.0 <= location.line && location.line <= fn_end.0 {
+                            // Prefer the narrowest enclosing function (e.g. nested
+                            // closures). If we already found one, keep the smaller.
+                            if start.0 == NO_POSITION || (fn_end.0 - fn_start.0) < (end.0 - start.0) {
+                                start = *fn_start;
+                                end = *fn_end;
+                                let _ = name; // suppress unused warning
+                            }
+                        }
+                    }
+                }
             }
         }
         info!("  result {} {}", start.0, end.0);
@@ -1674,6 +2220,7 @@ impl ExprLoader {
         if self.processed_files.contains_key(path_buf) {
             let file_info = &self.processed_files[path_buf];
             let position = &Position(line.0);
+            // 1. Exact match: the line is the function definition line.
             if file_info.functions.contains_key(position) {
                 let (name, start, end) = &file_info.functions[position][0];
                 updated_location.function_name = name.to_string();
@@ -1681,6 +2228,26 @@ impl ExprLoader {
                 updated_location.function_first = start.0;
                 updated_location.high_level_line = start.0;
                 updated_location.function_last = end.0;
+            } else {
+                // 2. Range search: find the enclosing function for this line.
+                let mut best: Option<(&str, Position, Position)> = None;
+                for fn_list in file_info.functions.values() {
+                    for (name, fn_start, fn_end) in fn_list {
+                        if fn_start.0 <= line.0
+                            && line.0 <= fn_end.0
+                            && (best.is_none() || (fn_end.0 - fn_start.0) < (best.unwrap().2 .0 - best.unwrap().1 .0))
+                        {
+                            best = Some((name, *fn_start, *fn_end));
+                        }
+                    }
+                }
+                if let Some((name, start, end)) = best {
+                    updated_location.function_name = name.to_string();
+                    updated_location.high_level_function_name = name.to_string();
+                    updated_location.function_first = start.0;
+                    updated_location.high_level_line = start.0;
+                    updated_location.function_last = end.0;
+                }
             }
         }
         let real_path = self.find_real_path(path_buf);

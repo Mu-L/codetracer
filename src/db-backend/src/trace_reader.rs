@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use codetracer_trace_types::{
-    CallKey, FullValueRecord, FunctionId, FunctionRecord, PathId, Place, StepId, TypeId,
-    TypeRecord, ValueRecord, VariableId,
+    CallKey, FullValueRecord, FunctionId, FunctionRecord, PathId, Place, StepId, TypeId, TypeRecord, ValueRecord,
+    VariableId,
 };
 
 use crate::db::{CellChange, DbCall, DbRecordEvent, DbStep, EndOfProgram};

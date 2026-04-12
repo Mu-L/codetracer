@@ -13,8 +13,8 @@ use crate::{
     replay::Replay,
     task::{
         Action, BranchesTaken, CoreTrace, CtLoadLocalsArguments, FlowEvent, FlowMode, FlowStep, FlowUpdate,
-        FlowUpdateState, FlowUpdateStateKind, FlowViewUpdate, Iteration, Location, Loop, LoopId,
-        LoopIterationSteps, Position, RRTicks, StepCount, TraceKind,
+        FlowUpdateState, FlowUpdateStateKind, FlowViewUpdate, Iteration, Location, Loop, LoopId, LoopIterationSteps,
+        Position, RRTicks, StepCount, TraceKind,
     },
     value::{to_ct_value, Value, ValueRecordWithType},
 };
@@ -39,15 +39,31 @@ impl FlowPreloader {
     pub fn load(&mut self, location: Location, mode: FlowMode, kind: TraceKind, replay: &mut dyn Replay) -> FlowUpdate {
         info!("flow: load: {:?}", location);
         let path_buf = PathBuf::from(&location.path);
-        match self.expr_loader.load_file(&path_buf) {
-            Ok(_) => {
-                info!("  expression loader complete!");
-            }
-            Err(e) => {
-                // No tree-sitter grammar for this language (e.g. Cairo, Circom, Leo, Tolk, MASM).
-                // Continue loading the flow anyway — the fallback in log_expressions() will use
-                // trace-embedded variable data instead of tree-sitter-extracted names.
-                info!(" tree-sitter parse failed for {}: {} — will use trace-embedded variables", location.path, e);
+
+        // CODETRACER_DISABLE_TREESITTER=1 forces the trace-embedded variable
+        // fallback path, bypassing tree-sitter parsing entirely.  Useful for
+        // testing the fallback and for languages whose tree-sitter grammars
+        // are immature or produce incorrect ASTs.
+        let treesitter_disabled = std::env::var("CODETRACER_DISABLE_TREESITTER")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
+        if treesitter_disabled {
+            info!("  tree-sitter disabled via CODETRACER_DISABLE_TREESITTER — using trace-embedded variables");
+        } else {
+            match self.expr_loader.load_file(&path_buf) {
+                Ok(_) => {
+                    info!("  expression loader complete!");
+                }
+                Err(e) => {
+                    // Tree-sitter parsing failed for this file.
+                    // Continue loading the flow anyway — the fallback in log_expressions() will use
+                    // trace-embedded variable data instead of tree-sitter-extracted names.
+                    info!(
+                        "  tree-sitter parse failed for {}: {} — will use trace-embedded variables",
+                        location.path, e
+                    );
+                }
             }
         }
         let mut call_flow_preloader: CallFlowPreloader =
@@ -206,14 +222,38 @@ impl<'a> CallFlowPreloader<'a> {
             if self.location.event == 0 && original_event != 0 {
                 self.location.event = original_event;
             }
-            // When tree-sitter has no grammar for this language, find_function_location
-            // can't determine function boundaries. Fall back to the boundaries from
-            // load_location() which uses the trace's own function data.
+            // When tree-sitter can't determine function boundaries (no grammar, parse
+            // failure, or the line doesn't fall inside any function in the AST), fall back
+            // to the boundaries from the incoming location.  The handler enriches the
+            // location with Db-derived boundaries before calling load(), so this should
+            // give valid boundaries even without tree-sitter.
             if self.location.function_first == 0 && self.location.function_last == 0 {
+                info!(
+                    "  find_function_location returned (0,0) — using incoming location boundaries ({}, {})",
+                    location.function_first, location.function_last
+                );
                 self.location.function_first = location.function_first;
                 self.location.function_last = location.function_last;
                 self.location.function_name = location.function_name.clone();
                 self.location.high_level_function_name = location.high_level_function_name.clone();
+            }
+
+            // For DB traces, the flow should cover the entire function call,
+            // not just from the breakpoint forward. Use jump_to_call to find
+            // the call's first step, then step with StepIn to enter the body.
+            if self.trace_kind == TraceKind::DB && self.location.rr_ticks.0 > 0 {
+                if let Ok(call_loc) = replay.jump_to_call(&self.location) {
+                    // jump_to_call lands on the call entry step (the Call
+                    // event itself). StepIn from there enters the call body.
+                    if replay.step(Action::StepIn, true).is_ok() {
+                        let step_id = replay.current_step_id();
+                        info!(
+                            "  flow: entered call body at step {} (from call entry at step {})",
+                            step_id.0, call_loc.rr_ticks.0
+                        );
+                        self.location.rr_ticks = RRTicks(step_id.0);
+                    }
+                }
             }
         }
 
@@ -862,7 +902,10 @@ impl<'a> CallFlowPreloader<'a> {
             // Circom, Leo, Tolk, MASM), load variable names directly from the trace data.
             // DB-based traces embed variable names at each step, so we can use load_locals()
             // instead of the static source analysis.
-            info!(" no tree-sitter var list for line {:?} at step {:?} — trying trace-embedded variables", line, step_id);
+            info!(
+                " no tree-sitter var list for line {:?} at step {:?} — trying trace-embedded variables",
+                line, step_id
+            );
             if let Ok(locals) = replay.load_locals(CtLoadLocalsArguments {
                 rr_ticks: 0,
                 count_budget: 100,
@@ -884,7 +927,11 @@ impl<'a> CallFlowPreloader<'a> {
                     expr_order.push(value_name);
                 }
                 flow_view_update.steps.last_mut().unwrap().expr_order = expr_order.clone();
-                info!(" loaded {} variables from trace data at step {:?}", locals.len(), step_id);
+                info!(
+                    " loaded {} variables from trace data at step {:?}",
+                    locals.len(),
+                    step_id
+                );
             }
         }
 

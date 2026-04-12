@@ -69,15 +69,12 @@ fn base40_encode(name: &str) -> Result<u64, Box<dyn Error>> {
     let mut multiplier: u64 = 1;
 
     for (i, ch) in name.bytes().enumerate() {
-        let idx = BASE40_CHARS
-            .iter()
-            .position(|&c| c == ch)
-            .ok_or_else(|| {
-                format!(
-                    "CTFS filename contains invalid character '{}' (0x{:02x}) at position {i}",
-                    ch as char, ch
-                )
-            })?;
+        let idx = BASE40_CHARS.iter().position(|&c| c == ch).ok_or_else(|| {
+            format!(
+                "CTFS filename contains invalid character '{}' (0x{:02x}) at position {i}",
+                ch as char, ch
+            )
+        })?;
         encoded += (idx as u64) * multiplier;
         multiplier *= 40;
     }
@@ -245,14 +242,7 @@ impl CtfsReader {
             }
 
             let name = base40_decode(name_encoded);
-            files.insert(
-                name.clone(),
-                FileEntry {
-                    name,
-                    size,
-                    map_block,
-                },
-            );
+            files.insert(name.clone(), FileEntry { name, size, map_block });
         }
 
         Ok(CtfsReader {
@@ -286,7 +276,7 @@ impl CtfsReader {
         }
 
         let mut result = Vec::with_capacity(entry.size as usize);
-        let total_data_blocks = (entry.size as usize + self.block_size - 1) / self.block_size;
+        let total_data_blocks = (entry.size as usize).div_ceil(self.block_size);
 
         // Read data blocks by walking the mapping hierarchy.
         for block_index in 0..total_data_blocks {
@@ -379,12 +369,7 @@ impl CtfsReader {
     /// Recursively resolve a block index through multi-level mapping.
     ///
     /// `depth` is the number of remaining levels to descend (0 = direct lookup).
-    fn resolve_multilevel(
-        &self,
-        map_block: u64,
-        index: usize,
-        depth: usize,
-    ) -> Result<u64, CtfsError> {
+    fn resolve_multilevel(&self, map_block: u64, index: usize, depth: usize) -> Result<u64, CtfsError> {
         if depth == 0 {
             return self.read_mapping_entry(map_block, index);
         }
@@ -402,9 +387,7 @@ impl CtfsReader {
 
         let next_block = self.read_mapping_entry(map_block, sub_index)?;
         if next_block == 0 {
-            return Err(CtfsError::Corrupt(
-                "null pointer in mapping sub-block".to_string(),
-            ));
+            return Err(CtfsError::Corrupt("null pointer in mapping sub-block".to_string()));
         }
 
         self.resolve_multilevel(next_block, sub_remaining, depth - 1)
@@ -418,9 +401,7 @@ impl CtfsReader {
                 "mapping entry at block {block_num}, index {entry_index} is out of bounds"
             )));
         }
-        Ok(u64::from_le_bytes(
-            self.data[offset..offset + 8].try_into().unwrap(),
-        ))
+        Ok(u64::from_le_bytes(self.data[offset..offset + 8].try_into().unwrap()))
     }
 
     /// List the names of all files in the container.
@@ -448,10 +429,7 @@ impl CtfsReader {
 ///
 /// Panics if any file name is longer than 12 characters or contains
 /// characters outside the base40 alphabet.
-pub fn write_minimal_ctfs(
-    path: &Path,
-    files: &[(&str, &[u8])],
-) -> Result<(), Box<dyn Error>> {
+pub fn write_minimal_ctfs(path: &Path, files: &[(&str, &[u8])]) -> Result<(), Box<dyn Error>> {
     let block_size: usize = 4096;
     let max_root_entries: u32 = 31;
 
@@ -474,7 +452,7 @@ pub fn write_minimal_ctfs(
         let num_data_blocks = if data.is_empty() {
             0
         } else {
-            (data.len() + block_size - 1) / block_size
+            data.len().div_ceil(block_size)
         };
 
         let map_block = if data.is_empty() {
@@ -622,11 +600,7 @@ mod tests {
 
         let file_a = b"first file content";
         let file_b = b"second file with different data";
-        write_minimal_ctfs(
-            &path,
-            &[("file.a", file_a.as_slice()), ("file.b", file_b.as_slice())],
-        )
-        .unwrap();
+        write_minimal_ctfs(&path, &[("file.a", file_a.as_slice()), ("file.b", file_b.as_slice())]).unwrap();
 
         let mut reader = CtfsReader::open(&path).unwrap();
         assert_eq!(reader.read_file("file.a").unwrap(), file_a);
@@ -654,19 +628,13 @@ mod tests {
 
         let mut reader = CtfsReader::open(&path).unwrap();
         assert!(!reader.has_file("nope"));
-        assert!(matches!(
-            reader.read_file("nope"),
-            Err(CtfsError::FileNotFound(_))
-        ));
+        assert!(matches!(reader.read_file("nope"), Err(CtfsError::FileNotFound(_))));
     }
 
     #[test]
     fn test_invalid_magic() {
         let data = vec![0xFF; 1024];
-        assert!(matches!(
-            CtfsReader::from_bytes(data),
-            Err(CtfsError::InvalidMagic)
-        ));
+        assert!(matches!(CtfsReader::from_bytes(data), Err(CtfsError::InvalidMagic)));
     }
 
     #[test]

@@ -64,7 +64,7 @@ fn get_solana_source_path() -> PathBuf {
 /// 1. Asserts the Solana recorder is available.
 /// 2. Asserts the source file exists.
 /// 3. Records a trace.
-/// 4. Returns (db_backend_path, source_copy_in_trace_dir, recording).
+/// 4. Returns (db_backend_path, source_path, recording).
 ///
 /// Panics if any prerequisite is missing or recording fails.
 fn setup_solana_trace() -> (PathBuf, PathBuf, TestRecording) {
@@ -90,12 +90,9 @@ fn setup_solana_trace() -> (PathBuf, PathBuf, TestRecording) {
 
     println!("Trace recorded to: {}", recording.trace_dir.display());
 
-    // The Solana recorder copies the source file into trace_dir and stores just
-    // the filename in trace_paths.json (workdir = trace_dir). Use the
-    // trace_dir copy path for the breakpoint so that path lookup succeeds.
-    let source_copy = recording.trace_dir.join(source_path.file_name().unwrap());
-
-    (db_backend, source_copy, recording)
+    // Use the original source path — the trace stores the absolute path as recorded,
+    // not the trace-dir copy.
+    (db_backend, source_path, recording)
 }
 
 /// Runs a single DAP flow test with the given configuration.
@@ -135,7 +132,7 @@ fn run_dap_flow_test(db_backend: &Path, trace_dir: &Path, config: &FlowTestConfi
 #[test]
 #[ignore = "requires solana-recorder; run via: just test-solana-flow"]
 fn solana_flow_dap_variables() {
-    let (db_backend, source_copy, recording) = setup_solana_trace();
+    let (db_backend, source_path, recording) = setup_solana_trace();
 
     let mut expected_values = HashMap::new();
     expected_values.insert("a".to_string(), 10);
@@ -145,7 +142,7 @@ fn solana_flow_dap_variables() {
     expected_values.insert("final_result".to_string(), 94);
 
     let config = FlowTestConfig {
-        source_file: source_copy.to_str().unwrap().to_string(),
+        source_file: source_path.to_str().unwrap().to_string(),
         // Line 458: `let final_result: u64 = doubled + a;`
         breakpoint_line: 458,
         expected_variables: vec!["a", "b", "sum_val", "doubled", "final_result"]
@@ -172,14 +169,14 @@ fn solana_flow_dap_variables() {
 #[test]
 #[ignore = "requires solana-recorder; run via: just test-solana-flow"]
 fn solana_flow_dap_struct_variables() {
-    let (db_backend, source_copy, recording) = setup_solana_trace();
+    let (db_backend, source_path, recording) = setup_solana_trace();
 
     let mut expected_values = HashMap::new();
     expected_values.insert("account_total".to_string(), 1520);
     expected_values.insert("struct_check".to_string(), 1520);
 
     let config = FlowTestConfig {
-        source_file: source_copy.to_str().unwrap().to_string(),
+        source_file: source_path.to_str().unwrap().to_string(),
         // Line 465: `let struct_check: u64 = account_total;`
         breakpoint_line: 465,
         expected_variables: vec!["account_total", "struct_check"]
@@ -215,14 +212,14 @@ fn solana_flow_dap_struct_variables() {
 #[test]
 #[ignore = "requires solana-recorder; run via: just test-solana-flow"]
 fn solana_flow_dap_enum_match() {
-    let (db_backend, source_copy, recording) = setup_solana_trace();
+    let (db_backend, source_path, recording) = setup_solana_trace();
 
     let mut expected_values = HashMap::new();
     expected_values.insert("transfer_value".to_string(), 490);
     expected_values.insert("enum_check".to_string(), 490);
 
     let config = FlowTestConfig {
-        source_file: source_copy.to_str().unwrap().to_string(),
+        source_file: source_path.to_str().unwrap().to_string(),
         // Line 473: `let enum_check: u64 = transfer_value;`
         breakpoint_line: 473,
         expected_variables: vec!["transfer_value", "enum_check"]
@@ -255,7 +252,7 @@ fn solana_flow_dap_enum_match() {
 #[test]
 #[ignore = "requires solana-recorder; run via: just test-solana-flow"]
 fn solana_flow_dap_loop_variables() {
-    let (db_backend, source_copy, recording) = setup_solana_trace();
+    let (db_backend, source_path, recording) = setup_solana_trace();
 
     let mut expected_values = HashMap::new();
     expected_values.insert("while_sum".to_string(), 210);
@@ -264,7 +261,7 @@ fn solana_flow_dap_loop_variables() {
     expected_values.insert("loop_check".to_string(), 460);
 
     let config = FlowTestConfig {
-        source_file: source_copy.to_str().unwrap().to_string(),
+        source_file: source_path.to_str().unwrap().to_string(),
         // Line 498: `let loop_check: u64 = while_sum + for_sum + first_above;`
         breakpoint_line: 498,
         expected_variables: vec!["while_sum", "for_sum", "first_above", "loop_check"]
@@ -301,7 +298,7 @@ fn solana_flow_dap_loop_variables() {
 #[test]
 #[ignore = "requires solana-recorder; run via: just test-solana-flow"]
 fn solana_flow_dap_nested_calls() {
-    let (db_backend, source_copy, recording) = setup_solana_trace();
+    let (db_backend, source_path, recording) = setup_solana_trace();
 
     let mut expected_values = HashMap::new();
     expected_values.insert("nested_val".to_string(), 70);
@@ -309,7 +306,7 @@ fn solana_flow_dap_nested_calls() {
     expected_values.insert("nested_check".to_string(), 190);
 
     let config = FlowTestConfig {
-        source_file: source_copy.to_str().unwrap().to_string(),
+        source_file: source_path.to_str().unwrap().to_string(),
         // Line 514: `let nested_check: u64 = nested_val + deep_val;`
         breakpoint_line: 514,
         expected_variables: vec!["nested_val", "deep_val", "nested_check"]
@@ -350,7 +347,7 @@ fn solana_flow_dap_nested_calls() {
 #[test]
 #[ignore = "requires solana-recorder; run via: just test-solana-flow"]
 fn solana_flow_dap_array_ops() {
-    let (db_backend, source_copy, recording) = setup_solana_trace();
+    let (db_backend, source_path, recording) = setup_solana_trace();
 
     let mut expected_values = HashMap::new();
     expected_values.insert("arr_min".to_string(), 2);
@@ -360,7 +357,7 @@ fn solana_flow_dap_array_ops() {
     expected_values.insert("array_check".to_string(), 1999);
 
     let config = FlowTestConfig {
-        source_file: source_copy.to_str().unwrap().to_string(),
+        source_file: source_path.to_str().unwrap().to_string(),
         // Line 523: `let array_check: u64 = arr_min + arr_max + arr_sum + tuple_result;`
         breakpoint_line: 523,
         expected_variables: vec!["arr_min", "arr_max", "arr_sum", "tuple_result", "array_check"]
@@ -392,7 +389,7 @@ fn solana_flow_dap_array_ops() {
 #[test]
 #[ignore = "requires solana-recorder; run via: just test-solana-flow"]
 fn solana_flow_dap_fibonacci() {
-    let (db_backend, source_copy, recording) = setup_solana_trace();
+    let (db_backend, source_path, recording) = setup_solana_trace();
 
     let mut expected_values = HashMap::new();
     expected_values.insert("fib_recursive".to_string(), 55);
@@ -400,7 +397,7 @@ fn solana_flow_dap_fibonacci() {
     expected_values.insert("fib_check".to_string(), 110);
 
     let config = FlowTestConfig {
-        source_file: source_copy.to_str().unwrap().to_string(),
+        source_file: source_path.to_str().unwrap().to_string(),
         // Line 530: `let fib_check: u64 = fib_recursive + fib_iterative;`
         breakpoint_line: 530,
         expected_variables: vec!["fib_recursive", "fib_iterative", "fib_check"]

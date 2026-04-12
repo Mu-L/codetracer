@@ -110,11 +110,6 @@ fn solidity_flow_dap_variables() {
 
     println!("Trace recorded to: {}", recording.trace_dir.display());
 
-    // The EVM recorder copies the source file into trace_dir and stores just
-    // the filename in trace_paths.json (workdir = trace_dir). Use the
-    // trace_dir copy path for the breakpoint so that path lookup succeeds.
-    let source_copy = recording.trace_dir.join(source_path.file_name().unwrap());
-
     let mut expected_values = HashMap::new();
     expected_values.insert("a".to_string(), 10);
     expected_values.insert("b".to_string(), 32);
@@ -122,8 +117,10 @@ fn solidity_flow_dap_variables() {
     expected_values.insert("doubled".to_string(), 84);
     expected_values.insert("final_result".to_string(), 94);
 
+    // Use the original source path — the trace stores the absolute path as recorded,
+    // not the trace-dir copy.
     let config = FlowTestConfig {
-        source_file: source_copy.to_str().unwrap().to_string(),
+        source_file: source_path.to_str().unwrap().to_string(),
         // Line 39: `uint256 final_result = doubled + 10;` — all 5 locals are in scope here.
         breakpoint_line: 39,
         expected_variables: vec!["a", "b", "sum_val", "doubled", "final_result"]

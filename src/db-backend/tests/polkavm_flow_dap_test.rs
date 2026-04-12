@@ -72,10 +72,10 @@ fn run_polkavm_dap_test(
 
     println!("Trace recorded to: {}", recording.trace_dir.display());
 
-    let source_copy = recording.trace_dir.join(source_path.file_name().unwrap());
-
+    // Use the original source path — the trace stores the absolute path as recorded,
+    // not the trace-dir copy.
     let config = FlowTestConfig {
-        source_file: source_copy.to_str().unwrap().to_string(),
+        source_file: source_path.to_str().unwrap().to_string(),
         breakpoint_line,
         expected_variables: expected_variables.into_iter().map(String::from).collect(),
         excluded_identifiers: excluded.into_iter().map(String::from).collect(),

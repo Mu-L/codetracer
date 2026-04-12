@@ -33,7 +33,13 @@ impl StepLinesLoader {
         }
     }
 
-    fn simple_line_step(step_id: StepId, step: DbStep, db: &Db, expr_loader: &mut ExprLoader, _reader: &dyn TraceReader) -> LineStep {
+    fn simple_line_step(
+        step_id: StepId,
+        step: DbStep,
+        db: &Db,
+        expr_loader: &mut ExprLoader,
+        _reader: &dyn TraceReader,
+    ) -> LineStep {
         // let mut expr_loader = ExprLoader::new();
         let line = step.line;
         let raw_path = format!("{}", db.workdir.join(db.load_path_from_id(&step.path_id)).display());

@@ -20,8 +20,8 @@ use crate::{
     lang::Lang,
     replay::Replay,
     task::StringAndValueTuple,
-    trace_reader::TraceReader,
     trace_processor::{load_trace_data, load_trace_metadata, TraceProcessor},
+    trace_reader::TraceReader,
     value::Value,
 };
 

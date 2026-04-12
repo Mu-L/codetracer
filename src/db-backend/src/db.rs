@@ -17,11 +17,11 @@ use crate::distinct_vec::DistinctVec;
 use crate::expr_loader::ExprLoader;
 use crate::lang::Lang;
 use crate::replay::Replay;
-use crate::trace_reader::TraceReader;
 use crate::task::{
     Action, Breakpoint, Call, CallArg, CallLine, CoreTrace, CtLoadLocalsArguments, Events, HistoryResultWithRecord,
     LoadHistoryArg, Location, ProgramEvent, RRTicks, VariableWithRecord, NO_ADDRESS, NO_INDEX, NO_PATH, NO_POSITION,
 };
+use crate::trace_reader::TraceReader;
 use crate::value::{Type, Value, ValueRecordWithType};
 
 const NEXT_INTERNAL_STEP_OVERS_LIMIT: usize = 1_000;
@@ -168,7 +168,7 @@ impl Db {
                     let mut last_line = function_record.line.0;
                     let steps_len = self.steps.len() as i64;
                     for i in step_id_int..steps_len {
-                        let step = self.steps[StepId(i as i64)];
+                        let step = self.steps[StepId(i)];
                         if step.call_key == CallKey(call_key_int) {
                             if step.line.0 > last_line {
                                 last_line = step.line.0;
@@ -1347,6 +1347,29 @@ impl DbReplay {
                         return Some(id);
                     }
                 }
+            }
+        }
+
+        // 6. Filename-only match: when the file lives in a different directory
+        //    (e.g. source was copied into the trace dir), match by filename
+        //    alone.  Only used when exactly one stored path shares the same
+        //    filename to avoid ambiguity.
+        if let Some(lookup_filename) = abs_path.file_name() {
+            let matches: Vec<PathId> = self
+                .db
+                .path_map
+                .iter()
+                .filter_map(|(stored, &id)| {
+                    let sp = std::path::Path::new(stored);
+                    if sp.file_name() == Some(lookup_filename) {
+                        Some(id)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            if matches.len() == 1 {
+                return Some(matches[0]);
             }
         }
 
