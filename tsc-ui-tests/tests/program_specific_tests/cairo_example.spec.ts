@@ -65,12 +65,14 @@ const cairoPipelineAvailable = cairoRecorderAvailable && cairoTestProgram !== nu
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
-// TODO(failing): All 8 UI tests fail with "Unexpected last line of ct record: error: recorder exited with 2 for LangCairo".
-//   The recorder binary (codetracer-cairo-recorder) is on PATH and detected correctly, so the skip guard passes,
-//   but `ct record` fails because the Cairo toolchain (scarb/cairo compiler) is not in the codetracer dev shell --
-//   it is only available in codetracer-cairo-recorder's own dev shell.
-//   Hypothesis: The test fixture needs to run `ct record` inside `direnv exec ../codetracer-cairo-recorder`
-//   so the Cairo compiler is on PATH, or the recorder binary should be self-contained (bundling its toolchain).
+// TODO(failing): All 8 UI tests fail — recording succeeds but flow variable extraction finds nothing.
+//   HEADLESS DAP FINDING: The cairo_flow_dap_variables test records a trace successfully from
+//   the cairo recorder's dev shell, but finds 0 of the expected variables (a, b, sum_val, doubled,
+//   final_result). The recording pipeline works but the flow data extraction fails.
+//   Hypothesis: The expr_loader (tree-sitter-based variable extraction) likely lacks a Cairo
+//   grammar. Without tree-sitter-cairo, it cannot parse .cairo files to identify variable names.
+//   Fix: add tree-sitter-cairo to the db-backend dependencies and add Cairo handling in
+//   expr_loader.rs, or use the trace's own variable data if the recorder emits it.
 test.describe("cairo_example — basic layout", () => {
   test.skip(
     !cairoPipelineAvailable,

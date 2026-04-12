@@ -65,14 +65,14 @@ const polkavmPipelineAvailable = polkavmRecorderAvailable && polkavmTestProgram 
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
-// TODO(failing): All 8 UI tests fail with "ct record failed: error=undefined; status=1".
-//   The recorder binary is detected, but `ct record` invokes plain `rustc` (not the PolkaVM cross-compiler).
-//   Error: "error[E0433]: failed to resolve: use of unresolved module or unlinked crate `polkavm_derive`"
-//   followed by "error: unwinding panics are not supported without std".
-//   The test program requires `polkavm_derive` crate and a no_std PolkaVM build environment which is only
-//   available in codetracer-polkavm-recorder's dev shell, not in the codetracer dev shell.
-//   Hypothesis: The test fixture needs `direnv exec ../codetracer-polkavm-recorder` or the recorder
-//   should handle the full cargo build pipeline internally rather than delegating to plain rustc.
+// TODO(failing): All 8 UI tests fail with "ct record failed".
+//   HEADLESS DAP FINDING: The PolkaVM recorder expects a pre-compiled program blob, not
+//   a .rs source file. Error: "failed to parse program blob: blob doesn't start with the
+//   expected magic bytes". The test harness passes test-programs/rust/flow_test.rs but the
+//   recorder's tracer.rs:45 expects a compiled PolkaVM binary blob.
+//   Hypothesis: The test harness needs a compilation step to build the .rs into a PolkaVM
+//   blob before recording. The recorder should either include a build step or the test
+//   program should be pre-compiled. Similar to the Solana issue (needs pre-built artifact).
 test.describe("polkavm_example — basic layout", () => {
   test.skip(
     !polkavmPipelineAvailable,

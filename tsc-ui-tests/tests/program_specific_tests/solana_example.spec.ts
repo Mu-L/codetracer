@@ -62,14 +62,14 @@ const solanaPipelineAvailable = solanaRecorderAvailable;
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
-// TODO(failing): All 8 UI tests fail with "ct record failed: error=undefined; status=1".
-//   The recorder binary is detected, but `ct record` invokes plain `rustc` which fails with
-//   "error[E0601]: `main` function not found in crate `solana_flow_test`" -- the test program uses
-//   #[no_mangle] pub extern "C" fn entrypoint() (Solana BPF entrypoint), not a standard main().
-//   The Solana build pipeline (cargo-build-sbf or the recorder's own build step) is only available
-//   in codetracer-solana-recorder's dev shell, not in the codetracer dev shell.
-//   Hypothesis: The test fixture needs `direnv exec ../codetracer-solana-recorder` or the recorder
-//   should handle the full Solana BPF build pipeline internally rather than delegating to plain rustc.
+// TODO(failing): All 8 UI tests fail with "ct record failed".
+//   HEADLESS DAP FINDING: The Solana recorder expects a pre-compiled ELF binary (.so),
+//   not a .rs source file. Error: "invalid ELF file: ...solana_flow_test.rs — file does
+//   not start with the ELF magic number (\x7fELF)". The test harness passes the .rs source
+//   but the recorder's tracer.rs:171 expects an ELF program blob to execute in the SBF VM.
+//   Hypothesis: The test harness needs a compilation step (cargo-build-sbf) before recording,
+//   or the recorder itself should compile the source. The test program needs to be pre-built
+//   into an .so file and the harness should pass that path instead of the .rs source.
 test.describe("solana_example — basic layout", () => {
   // Skip the entire suite when the Solana recorder pipeline is absent.
   // Remove this guard once `ct record <path>.rs` (Solana) is integrated.
