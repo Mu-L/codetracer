@@ -118,18 +118,18 @@ fn run_masm_dap_test(
 /// locals are assigned.
 ///
 /// Expected local variables at line 143 (`u32checked_mul loc_store.5`):
-///   local[0] = 7   (a)
-///   local[1] = 3   (b)
+///   local[0] = 3   (a — first popped from stack, push.3 is below push.7)
+///   local[1] = 7   (b — second popped from stack, push.7 is on top)
 ///   local[2] = 10  (a + b)
 ///   local[3] = 21  (a * b)
-///   local[4] = 10  (u32checked_add)
-///   local[5] = 21  (u32checked_mul)
+///   local[4] = 10  (u32wrapping_add)
+///   local[5] = 21  (u32wrapping_mul)
 #[test]
 #[ignore = "requires miden-recorder; run via: just test-masm-flow"]
 fn masm_flow_dap_variables() {
     let mut expected_values = HashMap::new();
-    expected_values.insert("local[0]".to_string(), 7);
-    expected_values.insert("local[1]".to_string(), 3);
+    expected_values.insert("local[0]".to_string(), 3);
+    expected_values.insert("local[1]".to_string(), 7);
     expected_values.insert("local[2]".to_string(), 10);
     expected_values.insert("local[3]".to_string(), 21);
     expected_values.insert("local[4]".to_string(), 10);
@@ -148,17 +148,17 @@ fn masm_flow_dap_variables() {
 /// have values consistent with at least one loop iteration having executed.
 ///
 /// Breakpoint at line 94 (`loc_load.2 loc_load.1 add loc_store.2`):
-/// After the first iteration completes:
+/// Flow covers the entire call, so values reflect the final iteration:
 ///   local[0] = 5   (N, the limit)
-///   local[1] = 1   (counter after first increment)
-///   local[2] = 1   (accumulator: 0 + 1)
+///   local[1] = 5   (counter after all iterations)
+///   local[2] = 15  (accumulator: 1+2+3+4+5 = 15)
 #[test]
 #[ignore = "requires miden-recorder; run via: just test-masm-flow"]
 fn masm_flow_dap_loop_variables() {
     let mut expected_values = HashMap::new();
     expected_values.insert("local[0]".to_string(), 5);
-    expected_values.insert("local[1]".to_string(), 1);
-    expected_values.insert("local[2]".to_string(), 1);
+    expected_values.insert("local[1]".to_string(), 5);
+    expected_values.insert("local[2]".to_string(), 15);
 
     run_masm_dap_test(
         94,
@@ -270,19 +270,20 @@ fn masm_flow_dap_fibonacci() {
 /// Tier 2 (DAP flow): Breakpoint in `bitwise_ops` after all bitwise
 /// operations complete.
 ///
-/// Inputs: a = 255 (0xFF), b = 15 (0x0F)
-/// Expected local variables at line 17 (`u32checked_xor loc_store.4`):
-///   local[0] = 255 (a)
-///   local[1] = 15  (b)
-///   local[2] = 15  (0xFF AND 0x0F = 0x0F)
-///   local[3] = 255 (0xFF OR 0x0F = 0xFF)
-///   local[4] = 240 (0xFF XOR 0x0F = 0xF0)
+/// Inputs: push.15 push.255 — top=255, next=15
+/// loc_store.1 pops 255 → local[1]=255, loc_store.0 pops 15 → local[0]=15
+/// Expected local variables at line 17:
+///   local[0] = 15  (a — first popped)
+///   local[1] = 255 (b — second popped, was on top)
+///   local[2] = 15  (0x0F AND 0xFF = 0x0F)
+///   local[3] = 255 (0x0F OR 0xFF = 0xFF)
+///   local[4] = 240 (0x0F XOR 0xFF = 0xF0)
 #[test]
 #[ignore = "requires miden-recorder; run via: just test-masm-flow"]
 fn masm_flow_dap_bitwise() {
     let mut expected_values = HashMap::new();
-    expected_values.insert("local[0]".to_string(), 255);
-    expected_values.insert("local[1]".to_string(), 15);
+    expected_values.insert("local[0]".to_string(), 15);
+    expected_values.insert("local[1]".to_string(), 255);
     expected_values.insert("local[2]".to_string(), 15);
     expected_values.insert("local[3]".to_string(), 255);
     expected_values.insert("local[4]".to_string(), 240);
