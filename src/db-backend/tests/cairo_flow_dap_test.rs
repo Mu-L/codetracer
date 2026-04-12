@@ -20,7 +20,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use ct_dap_client::test_support::{FlowTestConfig, FlowTestRunner};
+use ct_dap_client::test_support::{FlowTestConfig, FlowTestRunner, StepAction, SteppingTestConfig};
 
 mod test_harness;
 use test_harness::{find_cairo_flow_test, find_cairo_recorder, Language, TestRecording};
@@ -84,6 +84,39 @@ fn run_cairo_dap_test(
     runner.finish().expect("disconnect failed");
 
     println!("Cairo DAP flow test passed!");
+}
+
+/// Tier 2 (DAP stepping): Verify that "next" advances the line in Cairo traces.
+///
+/// Sets a breakpoint at line 2 (let a), steps twice, and verifies the
+/// debugger advances to lines 3 and 4 respectively.
+/// This is the headless equivalent of the GUI "next" button test.
+#[test]
+#[ignore = "requires cairo-recorder; run via: just test-cairo-flow"]
+fn cairo_flow_dap_stepping() {
+    assert!(find_cairo_recorder().is_some(), "Cairo recorder not found.");
+
+    let db_backend = find_db_backend();
+    let source_path = get_cairo_source_path();
+
+    let recording =
+        TestRecording::create_db_trace(&source_path, Language::Cairo, "cairo-step").expect("Cairo recording failed");
+
+    let config = SteppingTestConfig {
+        source_file: source_path.to_str().unwrap().to_string(),
+        breakpoint_line: 2,
+        steps: vec![
+            (StepAction::Next, 3), // let a → let b
+            (StepAction::Next, 4), // let b → let sum_val
+        ],
+    };
+
+    let mut runner =
+        FlowTestRunner::new_db_trace(&db_backend, &recording.trace_dir).expect("DAP init failed for Cairo trace");
+    runner.run_stepping_test(&config).expect("Cairo stepping test failed");
+    runner.finish().expect("disconnect failed");
+
+    println!("Cairo DAP stepping test passed!");
 }
 
 /// Tier 2 (DAP flow): Breakpoint in the `compute()` function after all 5
