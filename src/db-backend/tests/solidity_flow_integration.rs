@@ -95,15 +95,19 @@ fn test_solidity_flow_integration() {
          (run `cargo build` inside the codetracer-evm-recorder repo)."
     );
 
-    if !is_solc_available() {
-        eprintln!("SKIP: solc not available — run from EVM recorder dev shell or set SOLC_PATH");
-        return;
-    }
+    assert!(
+        is_solc_available(),
+        "solc (Solidity compiler) not found. \
+         The EVM recorder's dev shell provides it — run tests via: \
+         direnv exec ../codetracer-evm-recorder cargo test --test solidity_flow_integration -- --ignored"
+    );
 
-    if !is_anvil_available() {
-        eprintln!("SKIP: anvil not available — run from EVM recorder dev shell or install Foundry");
-        return;
-    }
+    assert!(
+        is_anvil_available(),
+        "anvil (Foundry) not found. \
+         The EVM recorder's dev shell provides it — run tests via: \
+         direnv exec ../codetracer-evm-recorder cargo test --test solidity_flow_integration -- --ignored"
+    );
 
     let source_path = get_solidity_source_path();
     assert!(

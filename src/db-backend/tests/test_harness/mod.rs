@@ -2587,16 +2587,15 @@ fn record_masm_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String>
     Ok(())
 }
 
-/// Record a Sway/FuelVM trace by invoking the `codetracer-fuel-recorder record` CLI.
+/// Record a Sway/FuelVM trace.
 ///
-/// Runs:
-///   `<fuel-recorder> record <project_dir> --out-dir <trace_dir>`
+/// `source_path` is the Sway project directory (containing `Forc.toml`).
 ///
-/// For Sway, `source_path` points to the project directory containing `Forc.toml`.
-/// The Fuel recorder compiles the Sway script, executes it on FuelVM, and writes
-/// `trace.bin`, `trace_metadata.json`, and `trace_paths.json` into `trace_dir`.
+/// The pipeline has two steps:
+///   1. Compile the project with `forc build` (via the fuel-recorder's dev shell)
+///   2. Record the compiled bytecode: `<recorder> record --bytecode <.bin> --out-dir <trace_dir>`
 ///
-/// Returns an error if the recorder binary is not found, or if recording fails.
+/// The `forc build` output is at `<project>/out/debug/<project-name>.bin`.
 fn record_fuel_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String> {
     let recorder = find_fuel_recorder().ok_or_else(|| {
         "Fuel recorder not found. \
@@ -2605,16 +2604,50 @@ fn record_fuel_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String>
             .to_string()
     })?;
 
+    let recorder_repo = find_recorder_repo_dir(&recorder);
+
     fs::create_dir_all(trace_dir).map_err(|e| format!("failed to create trace dir: {}", e))?;
 
-    // The Fuel recorder needs `forc` (the Fuel/Sway compiler) on PATH, which is
-    // provided by the fuel-recorder repo's nix dev shell. Use `run_recorder_command`
-    // to automatically wrap with `direnv exec` when a `.envrc` is present.
+    // Step 1: Compile the Sway project with forc (needs the fuel-recorder's dev shell)
+    let forc_output = if let Some(ref repo_dir) = recorder_repo {
+        Command::new("direnv")
+            .args(["exec", repo_dir.to_str().unwrap(), "forc", "build"])
+            .current_dir(source_path)
+            .output()
+            .map_err(|e| format!("failed to run forc build via direnv: {}", e))?
+    } else {
+        Command::new("forc")
+            .arg("build")
+            .current_dir(source_path)
+            .output()
+            .map_err(|e| format!("failed to run forc build: {}", e))?
+    };
+
+    if !forc_output.status.success() {
+        return Err(format!(
+            "forc build failed:\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&forc_output.stdout),
+            String::from_utf8_lossy(&forc_output.stderr)
+        ));
+    }
+
+    // Step 2: Find the compiled bytecode
+    let project_name = source_path.file_name().and_then(|n| n.to_str()).unwrap_or("flow_test");
+    let bytecode = source_path.join(format!("out/debug/{}.bin", project_name));
+    if !bytecode.exists() {
+        return Err(format!(
+            "forc build succeeded but compiled bytecode not found at {}",
+            bytecode.display()
+        ));
+    }
+
+    // Step 3: Record using --bytecode
     let output = run_recorder_command(
         &recorder,
         &[
             "record",
-            source_path.to_str().unwrap(),
+            "--bytecode",
+            bytecode.to_str().unwrap(),
             "--out-dir",
             trace_dir.to_str().unwrap(),
         ],
