@@ -1,8 +1,10 @@
 import { test, expect, readyOnEntryTest as readyOnEntry, loadedEventLog } from "../../lib/fixtures";
 import { StatusBar } from "../../page-objects/status_bar";
 import { StatePanel } from "../../page-objects/state";
+import { LayoutPage } from "../../page-objects/layout-page";
 import { retry } from "../../lib/retry-helpers";
 
+// Entry point: first executable line in main() is `let x = 3;` at line 11.
 const ENTRY_LINE = 11;
 
 // Each describe block gets its own fixture scope (each test records + launches independently).
@@ -11,21 +13,13 @@ test.describe("wasm example — basic layout", () => {
   test.setTimeout(90_000);
   test.use({ sourcePath: "wasm_example/", launchMode: "trace" });
 
-  // TODO(skipped): ct record for WASM requires `cargo build --target wasm32-wasip1` which is not
-  //   available in the nix-built ct wrapper's PATH. The WASM build toolchain is missing.
-  //   Hypothesis: Add wasm32-wasip1 target to the codetracer nix dev shell, or pre-build
-  //   the WASM binary and use it as a fixture.
-  test.fixme("we can access the browser window, not just dev tools", async ({ ctPage }) => {
+  test("we can access the browser window, not just dev tools", async ({ ctPage }) => {
     const title = await ctPage.title();
     expect(title).toContain("CodeTracer");
     await ctPage.focus("div");
   });
 
-  // TODO(skipped): WASM backend does not send CtCompleteMove on trace load, so .location-path
-  //   never appears and readyOnEntry() times out.
-  //   Hypothesis: The wazero-based WASM db-backend needs to emit CtCompleteMove after initial
-  //   trace load so the frontend can populate the status bar location.
-  test.fixme("correct entry status path/line", async ({ ctPage }) => {
+  test("correct entry status path/line", async ({ ctPage }) => {
     await readyOnEntry(ctPage);
 
     const statusBar = new StatusBar(ctPage, ctPage.locator("#status-base"));
@@ -39,27 +33,31 @@ test.describe("wasm example — state and navigation", () => {
   test.setTimeout(90_000);
   test.use({ sourcePath: "wasm_example/", launchMode: "trace" });
 
-  // TODO(skipped): Event log footer row count is not populated for WASM/DB traces.
-  //   The `.data-tables-footer-rows-count` element shows 0 or is missing.
-  //   Hypothesis: The frontend event count population code path is only wired for RR-based
-  //   traces. The DB trace loader needs to emit the event count to the frontend.
+  // BUG: The event log footer row count stays at 0 for DB-based traces (WASM, blockchain).
+  // The trace data exists (34 events, 8 steps) but the frontend DataTables component
+  // does not populate the footer count for DB trace types. This is a frontend bug
+  // in the event log population code path, not a backend or recorder issue.
   test.fixme("expected event count", async ({ ctPage }) => {
     await loadedEventLog(ctPage);
 
-    const raw = await ctPage.$eval(
-      ".data-tables-footer-rows-count",
-      (el) => el.textContent ?? "",
+    let count = 0;
+    await retry(
+      async () => {
+        const raw = await ctPage.$eval(
+          ".data-tables-footer-rows-count",
+          (el) => el.textContent ?? "",
+        );
+        const match = raw.match(/(\d+)/);
+        if (!match) return false;
+        count = parseInt(match[1], 10);
+        return count > 0;
+      },
+      { maxAttempts: 30, delayMs: 500 },
     );
-    const match = raw.match(/(\d+)/);
-    expect(match).not.toBeNull();
-    const count = parseInt(match![1], 10);
     expect(count).toBeGreaterThanOrEqual(1);
   });
 
-  // TODO(skipped): WASM backend does not send CtCompleteMove on trace load, so readyOnEntry
-  //   times out waiting for the status bar to show a location.
-  //   Hypothesis: Same as "correct entry status path/line" -- needs CtCompleteMove in wazero backend.
-  test.fixme("state panel loaded initially", async ({ ctPage }) => {
+  test("state panel loaded initially", async ({ ctPage }) => {
     await readyOnEntry(ctPage);
     const statePanel = new StatePanel(ctPage);
     // Wait for the code state line to be populated before asserting
@@ -73,14 +71,27 @@ test.describe("wasm example — state and navigation", () => {
     await expect(statePanel.codeStateLine()).toContainText(`${ENTRY_LINE} | `);
   });
 
-  // TODO(skipped): WASM DB-based debugger variable inspection is not supported in the wazero backend.
-  //   Variables x, y are expected but the state panel is empty.
-  //   Hypothesis: The wazero trace format does not include DWARF-level variable data.
-  //   Needs wazero to emit local variable values in its trace output.
-  test.fixme("state panel supports integer values", async ({ ctPage }) => {
+  test("state panel supports integer values", async ({ ctPage }) => {
     await readyOnEntry(ctPage);
-    const statePanel = new StatePanel(ctPage);
+    const layout = new LayoutPage(ctPage);
+    const statusBar = new StatusBar(ctPage, ctPage.locator("#status-base"));
 
+    // Step forward twice (next) to move past `let x = 3;` and `let y = 4;`
+    // so both variables are assigned. Entry is at line 11; after two nexts
+    // we should be at line 13 (`let result = add(x, y);`).
+    for (let i = 0; i < 2; i++) {
+      await layout.nextButton().click();
+      await retry(
+        async () => {
+          const status = ctPage.locator("#stable-status");
+          const className = (await status.getAttribute("class")) ?? "";
+          return className.includes("ready-status");
+        },
+        { maxAttempts: 60, delayMs: 500 },
+      );
+    }
+
+    const statePanel = new StatePanel(ctPage);
     const values = await statePanel.values();
     expect(values.x.text).toBe("3");
     expect(values.x.typeText).toBe("i32");
@@ -89,16 +100,54 @@ test.describe("wasm example — state and navigation", () => {
     expect(values.y.typeText).toBe("i32");
   });
 
-  // TODO(skipped): Debug movement (continue/next) not implemented for WASM traces.
-  //   The wazero backend does not emit movement counters or CtCompleteMove events.
-  //   Hypothesis: Needs debug movement support in the WASM db-backend, similar to noir.
-  test.fixme("continue", async () => {
-    // Requires debug movement counter support in WASM backend.
+  test("continue", async ({ ctPage }) => {
+    await readyOnEntry(ctPage);
+    const statusBar = new StatusBar(ctPage, ctPage.locator("#status-base"));
+    const layout = new LayoutPage(ctPage);
+    await layout.continueButton().click();
+    await retry(
+      async () => {
+        const status = ctPage.locator("#stable-status");
+        const className = (await status.getAttribute("class")) ?? "";
+        return className.includes("ready-status");
+      },
+      { maxAttempts: 60, delayMs: 500 },
+    );
+    const newLocation = await statusBar.location();
+    expect(newLocation.line).toBeGreaterThanOrEqual(1);
   });
 
-  // TODO(skipped): Same as "continue" above -- debug movement not implemented for WASM traces.
-  //   Hypothesis: Needs debug movement support in the WASM db-backend.
-  test.fixme("next", async () => {
-    // Requires debug movement counter support in WASM backend.
+  test("next", async ({ ctPage }) => {
+    await readyOnEntry(ctPage);
+    const statusBar = new StatusBar(ctPage, ctPage.locator("#status-base"));
+    const initialLocation = await statusBar.location();
+    const layout = new LayoutPage(ctPage);
+
+    // First next may stay on the same line (function entry in WASM traces)
+    await layout.nextButton().click();
+    await retry(
+      async () => {
+        const status = ctPage.locator("#stable-status");
+        const className = (await status.getAttribute("class")) ?? "";
+        return className.includes("ready-status");
+      },
+      { maxAttempts: 60, delayMs: 500 },
+    );
+
+    // Second next should advance to a different line
+    await layout.nextButton().click();
+    await retry(
+      async () => {
+        const status = ctPage.locator("#stable-status");
+        const className = (await status.getAttribute("class")) ?? "";
+        return className.includes("ready-status");
+      },
+      { maxAttempts: 60, delayMs: 500 },
+    );
+
+    const newLocation = await statusBar.location();
+    expect(newLocation.line).toBeGreaterThanOrEqual(1);
+    // Line should have changed after two steps
+    expect(newLocation.line).not.toBe(initialLocation.line);
   });
 });
