@@ -1,76 +1,66 @@
-//! Headless DAP tests for Cadence/Flow traces.
+//! Headless DAP flow test for Cadence/Flow traces.
 //!
-//! The recording pipeline requires:
-//!   1. The `cadence-trace-helper` Go binary (built from codetracer-flow-recorder/go-helper/)
-//!   2. The `codetracer-flow-recorder` Rust binary
-//!
-//! The Go helper needs updating for Cadence v1.x API:
-//!   - `cadence.NewProgram` → use `runtime.NewInterpreterRuntime` + Config with Debugger
-//!   - `interpreter.WithOnStatementHandler` → use `interpreter.Debugger.Next()` stepping API
-//!   - `interpreter.ExportValue` → use `runtime.ExportValue`
+//! Records a Cadence script via the flow recorder (Go helper + Rust converter),
+//! launches the DAP server, and verifies variable extraction.
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+use ct_dap_client::test_support::{FlowTestConfig, FlowTestRunner};
 
 mod test_harness;
-use test_harness::{find_cadence_flow_test, find_cadence_recorder};
+use test_harness::{find_cadence_flow_test, find_cadence_recorder, Language, TestRecording};
 
-/// Find the flow recorder repo directory from the binary path.
-fn find_flow_recorder_repo(recorder: &Path) -> Option<PathBuf> {
-    let mut dir = recorder.parent();
-    while let Some(d) = dir {
-        if d.join(".envrc").exists() {
-            return Some(d.to_path_buf());
-        }
-        dir = d.parent();
-    }
-    None
+fn find_db_backend() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_db-backend"))
 }
 
-/// Verify the full Cadence recording pipeline.
+/// Full Cadence flow test: record → DAP → breakpoint → verify variables.
 ///
-/// This test builds the Go helper, records a trace, and launches the DAP server.
-/// If any step fails, the test fails with a clear message about what to fix.
+/// The recording pipeline builds the Go helper (`cadence-trace-helper`) from
+/// the flow-recorder's `go-helper/` directory, runs it against the Cadence
+/// source, then converts the NDJSON output to CodeTracer trace format.
 #[test]
 #[ignore = "requires flow-recorder + go helper; run via: just test-cadence-flow"]
 fn cadence_flow_dap_variables() {
-    // 1. Verify recorder exists
-    let recorder = find_cadence_recorder().expect("Cadence/Flow recorder not found — build codetracer-flow-recorder");
+    assert!(
+        find_cadence_recorder().is_some(),
+        "Cadence/Flow recorder not found — build codetracer-flow-recorder"
+    );
 
-    // 2. Verify test program exists
-    let _source = find_cadence_flow_test()
+    let source = find_cadence_flow_test()
         .expect("Cadence test program not found — check codetracer-flow-recorder/test-programs/cadence/flow_test.cdc");
+    let db_backend = find_db_backend();
 
-    // 3. Verify Go helper builds
-    let flow_recorder_dir =
-        find_flow_recorder_repo(&recorder).expect("Could not find flow-recorder repo directory from binary path");
-    let go_helper_dir = flow_recorder_dir.join("go-helper");
-    assert!(
-        go_helper_dir.exists(),
-        "Go helper source not found at {}",
-        go_helper_dir.display()
-    );
+    let recording = TestRecording::create_db_trace(&source, Language::Cadence, "cadence-flow")
+        .expect("Cadence recording failed — check that codetracer-flow-recorder and go-helper are available");
 
-    let helper_bin = flow_recorder_dir.join("target/debug/cadence-trace-helper");
-    let build_output = Command::new("direnv")
-        .args([
-            "exec",
-            flow_recorder_dir.to_str().unwrap(),
-            "go",
-            "build",
-            "-o",
-            helper_bin.to_str().unwrap(),
-            ".",
-        ])
-        .current_dir(&go_helper_dir)
-        .output()
-        .expect("failed to run direnv exec go build");
+    println!("Trace recorded to: {}", recording.trace_dir.display());
 
-    assert!(
-        build_output.status.success(),
-        "Go helper build failed (Cadence SDK API mismatch — go-helper/main.go needs \
-         updating for Cadence v1.x: cadence.NewProgram removed, use \
-         runtime.NewInterpreterRuntime with interpreter.Debugger):\n{}",
-        String::from_utf8_lossy(&build_output.stderr)
-    );
+    // The Cadence trace should contain variables a, b, sum_val, doubled, final_result
+    // with correct values from the compute() function.
+    let mut expected_values = HashMap::new();
+    expected_values.insert("a".to_string(), 10);
+    expected_values.insert("b".to_string(), 32);
+    expected_values.insert("sum_val".to_string(), 42);
+    expected_values.insert("doubled".to_string(), 84);
+    expected_values.insert("final_result".to_string(), 94);
+
+    let config = FlowTestConfig {
+        source_file: source.to_str().unwrap().to_string(),
+        breakpoint_line: 6,
+        expected_variables: vec!["a", "b", "sum_val", "doubled", "final_result"]
+            .into_iter()
+            .map(String::from)
+            .collect(),
+        excluded_identifiers: vec!["compute".to_string(), "main".to_string()],
+        expected_values,
+    };
+
+    let mut runner =
+        FlowTestRunner::new_db_trace(&db_backend, &recording.trace_dir).expect("DAP init failed for Cadence trace");
+    runner.run_and_verify(&config).expect("Cadence flow DAP test failed");
+    runner.finish().expect("disconnect failed");
+
+    println!("Cadence DAP flow test passed!");
 }
