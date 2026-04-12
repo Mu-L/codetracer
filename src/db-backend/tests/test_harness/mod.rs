@@ -2396,7 +2396,7 @@ fn record_noir_trace(project_dir: &Path, trace_dir: &Path) -> Result<(), String>
 /// Record a Solidity trace by invoking the `codetracer-evm-recorder record` CLI.
 ///
 /// Runs:
-///   `<evm-recorder> record <source.sol> --trace-dir <trace_dir>`
+///   `<evm-recorder> record <source.sol> --out-dir <trace_dir>`
 ///
 /// The EVM recorder compiles the contract, deploys it to a temporary local
 /// Anvil node, calls the default entry-point function (`run()`), fetches
@@ -2420,7 +2420,7 @@ fn record_solidity_trace(source_path: &Path, trace_dir: &Path) -> Result<(), Str
         .args([
             "record",
             source_path.to_str().unwrap(),
-            "--trace-dir",
+            "--out-dir",
             trace_dir.to_str().unwrap(),
         ])
         .output()
@@ -2440,7 +2440,7 @@ fn record_solidity_trace(source_path: &Path, trace_dir: &Path) -> Result<(), Str
 /// Record a Miden/MASM trace by invoking the `codetracer-miden-recorder record` CLI.
 ///
 /// Runs:
-///   `<miden-recorder> record <source.masm> --trace-dir <trace_dir>`
+///   `<miden-recorder> record <source.masm> --out-dir <trace_dir>`
 ///
 /// The Miden recorder executes the MASM program on the Miden VM, captures
 /// step-by-step execution state (stack, locals, memory), and writes
@@ -2461,7 +2461,7 @@ fn record_masm_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String>
         .args([
             "record",
             source_path.to_str().unwrap(),
-            "--trace-dir",
+            "--out-dir",
             trace_dir.to_str().unwrap(),
         ])
         .output()
@@ -2481,7 +2481,7 @@ fn record_masm_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String>
 /// Record a Sway/FuelVM trace by invoking the `codetracer-fuel-recorder record` CLI.
 ///
 /// Runs:
-///   `<fuel-recorder> record <project_dir> --trace-dir <trace_dir>`
+///   `<fuel-recorder> record <project_dir> --out-dir <trace_dir>`
 ///
 /// For Sway, `source_path` points to the project directory containing `Forc.toml`.
 /// The Fuel recorder compiles the Sway script, executes it on FuelVM, and writes
@@ -2502,7 +2502,7 @@ fn record_fuel_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String>
         .args([
             "record",
             source_path.to_str().unwrap(),
-            "--trace-dir",
+            "--out-dir",
             trace_dir.to_str().unwrap(),
         ])
         .output()
@@ -2522,7 +2522,7 @@ fn record_fuel_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String>
 /// Record a Move/Sui trace by invoking the `codetracer-move-recorder record` CLI.
 ///
 /// Runs:
-///   `<move-recorder> record <project_dir> --trace-dir <trace_dir>`
+///   `<move-recorder> record <project_dir> --out-dir <trace_dir>`
 ///
 /// For Move, `source_path` points to the project directory containing `Move.toml`.
 /// The Move recorder compiles and executes the Move module tests, capturing
@@ -2544,7 +2544,7 @@ fn record_move_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String>
         .args([
             "record",
             source_path.to_str().unwrap(),
-            "--trace-dir",
+            "--out-dir",
             trace_dir.to_str().unwrap(),
         ])
         .output()
@@ -2564,7 +2564,7 @@ fn record_move_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String>
 /// Record a Solana/SBF trace by invoking the `codetracer-solana-recorder record` CLI.
 ///
 /// Runs:
-///   `<solana-recorder> record <source.rs> --trace-dir <trace_dir>`
+///   `<solana-recorder> record <source.rs> --out-dir <trace_dir>`
 ///
 /// The Solana recorder compiles the Rust source to SBF bytecode, executes it
 /// on the Solana VM simulator, captures register-level execution state, and
@@ -2586,7 +2586,7 @@ fn record_solana_trace(source_path: &Path, trace_dir: &Path) -> Result<(), Strin
         .args([
             "record",
             source_path.to_str().unwrap(),
-            "--trace-dir",
+            "--out-dir",
             trace_dir.to_str().unwrap(),
         ])
         .output()
@@ -2606,7 +2606,7 @@ fn record_solana_trace(source_path: &Path, trace_dir: &Path) -> Result<(), Strin
 /// Record a PolkaVM trace by invoking the `codetracer-polkavm-recorder record` CLI.
 ///
 /// Runs:
-///   `<polkavm-recorder> record <source.rs> --trace-dir <trace_dir>`
+///   `<polkavm-recorder> record <source.rs> --out-dir <trace_dir>`
 ///
 /// The PolkaVM recorder compiles the Rust source to a .polkavm blob, executes it
 /// on the PolkaVM interpreter, captures step-by-step execution state, and writes
@@ -2627,7 +2627,7 @@ fn record_polkavm_trace(source_path: &Path, trace_dir: &Path) -> Result<(), Stri
         .args([
             "record",
             source_path.to_str().unwrap(),
-            "--trace-dir",
+            "--out-dir",
             trace_dir.to_str().unwrap(),
         ])
         .output()
@@ -2647,7 +2647,7 @@ fn record_polkavm_trace(source_path: &Path, trace_dir: &Path) -> Result<(), Stri
 /// Record a Cairo trace by invoking the `codetracer-cairo-recorder record` CLI.
 ///
 /// Runs:
-///   `<cairo-recorder> record <source.cairo> --trace-dir <trace_dir>`
+///   `<cairo-recorder> record <source.cairo> --out-dir <trace_dir>`
 ///
 /// The Cairo recorder compiles the Cairo source to Sierra bytecode, executes it
 /// on the Cairo VM, captures step-by-step execution state, and writes
@@ -2668,7 +2668,7 @@ fn record_cairo_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String
         .args([
             "record",
             source_path.to_str().unwrap(),
-            "--trace-dir",
+            "--out-dir",
             trace_dir.to_str().unwrap(),
         ])
         .output()
@@ -2688,7 +2688,7 @@ fn record_cairo_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String
 /// Record a Circom trace by invoking the `codetracer-circom-recorder record` CLI.
 ///
 /// Runs:
-///   `<circom-recorder> record <source.circom> --trace-dir <trace_dir>`
+///   `<circom-recorder> record <source.circom> --out-dir <trace_dir>`
 ///
 /// The Circom recorder compiles the circuit, generates a witness via Wasm,
 /// captures signal assignments step-by-step, and writes `trace.bin`,
@@ -2709,7 +2709,7 @@ fn record_circom_trace(source_path: &Path, trace_dir: &Path) -> Result<(), Strin
         .args([
             "record",
             source_path.to_str().unwrap(),
-            "--trace-dir",
+            "--out-dir",
             trace_dir.to_str().unwrap(),
         ])
         .output()
@@ -2729,7 +2729,7 @@ fn record_circom_trace(source_path: &Path, trace_dir: &Path) -> Result<(), Strin
 /// Record a Leo trace by invoking the `codetracer-leo-recorder record` CLI.
 ///
 /// Runs:
-///   `<leo-recorder> record <source.leo> --trace-dir <trace_dir>`
+///   `<leo-recorder> record <source.leo> --out-dir <trace_dir>`
 ///
 /// The Leo recorder interprets the Leo program, captures step-by-step execution
 /// state, and writes `trace.bin`, `trace_metadata.json`, and `trace_paths.json`
@@ -2750,7 +2750,7 @@ fn record_leo_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String> 
         .args([
             "record",
             source_path.to_str().unwrap(),
-            "--trace-dir",
+            "--out-dir",
             trace_dir.to_str().unwrap(),
         ])
         .output()
@@ -2770,7 +2770,7 @@ fn record_leo_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String> 
 /// Record a Tolk/TON trace by invoking the `codetracer-ton-recorder record` CLI.
 ///
 /// Runs:
-///   `<ton-recorder> record <source.tolk> --trace-dir <trace_dir>`
+///   `<ton-recorder> record <source.tolk> --out-dir <trace_dir>`
 ///
 /// The TON recorder compiles the Tolk source, executes it on the TVM, captures
 /// step-by-step execution state, and writes `trace.bin`, `trace_metadata.json`,
@@ -2791,7 +2791,7 @@ fn record_tolk_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String>
         .args([
             "record",
             source_path.to_str().unwrap(),
-            "--trace-dir",
+            "--out-dir",
             trace_dir.to_str().unwrap(),
         ])
         .output()
@@ -2811,7 +2811,7 @@ fn record_tolk_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String>
 /// Record an Aiken/Cardano trace by invoking the `codetracer-cardano-recorder record` CLI.
 ///
 /// Runs:
-///   `<cardano-recorder> record <source.ak> --trace-dir <trace_dir>`
+///   `<cardano-recorder> record <source.ak> --out-dir <trace_dir>`
 ///
 /// The Cardano recorder compiles the Aiken source to UPLC, executes it on the
 /// CEK machine, captures step-by-step execution state, and writes `trace.bin`,
@@ -2832,7 +2832,7 @@ fn record_aiken_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String
         .args([
             "record",
             source_path.to_str().unwrap(),
-            "--trace-dir",
+            "--out-dir",
             trace_dir.to_str().unwrap(),
         ])
         .output()
@@ -2852,7 +2852,7 @@ fn record_aiken_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String
 /// Record a Cadence/Flow trace by invoking the `codetracer-flow-recorder record` CLI.
 ///
 /// Runs:
-///   `<flow-recorder> record <source.cdc> --trace-dir <trace_dir>`
+///   `<flow-recorder> record <source.cdc> --out-dir <trace_dir>`
 ///
 /// The Flow recorder interprets the Cadence program, captures step-by-step
 /// execution state, and writes `trace.bin`, `trace_metadata.json`, and
@@ -2873,7 +2873,7 @@ fn record_cadence_trace(source_path: &Path, trace_dir: &Path) -> Result<(), Stri
         .args([
             "record",
             source_path.to_str().unwrap(),
-            "--trace-dir",
+            "--out-dir",
             trace_dir.to_str().unwrap(),
         ])
         .output()
