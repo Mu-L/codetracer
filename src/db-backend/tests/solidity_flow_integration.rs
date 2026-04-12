@@ -31,24 +31,6 @@ fn get_solidity_source_path() -> PathBuf {
 }
 
 /// Check if `solc` (Solidity compiler) is available on PATH or via `SOLC_PATH`.
-fn is_solc_available() -> bool {
-    let cmd = std::env::var("SOLC_PATH").unwrap_or_else(|_| "solc".to_string());
-    std::process::Command::new(&cmd)
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-}
-
-/// Check if `anvil` (Foundry local EVM node) is available on PATH.
-fn is_anvil_available() -> bool {
-    std::process::Command::new("anvil")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-}
-
 fn create_solidity_flow_config() -> FlowTestConfig {
     let mut expected_values = HashMap::new();
     // Canonical flow-test values: a=10, b=32, sum_val=42, doubled=84, final_result=94
@@ -95,19 +77,9 @@ fn test_solidity_flow_integration() {
          (run `cargo build` inside the codetracer-evm-recorder repo)."
     );
 
-    assert!(
-        is_solc_available(),
-        "solc (Solidity compiler) not found. \
-         The EVM recorder's dev shell provides it — run tests via: \
-         direnv exec ../codetracer-evm-recorder cargo test --test solidity_flow_integration -- --ignored"
-    );
-
-    assert!(
-        is_anvil_available(),
-        "anvil (Foundry) not found. \
-         The EVM recorder's dev shell provides it — run tests via: \
-         direnv exec ../codetracer-evm-recorder cargo test --test solidity_flow_integration -- --ignored"
-    );
+    // solc and anvil are provided by the EVM recorder's dev shell.
+    // The record_solidity_trace function uses direnv exec to access them,
+    // so we don't need to check for them on the current PATH.
 
     let source_path = get_solidity_source_path();
     assert!(
