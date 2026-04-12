@@ -42,15 +42,17 @@ impl FlowPreloader {
         match self.expr_loader.load_file(&path_buf) {
             Ok(_) => {
                 info!("  expression loader complete!");
-                let mut call_flow_preloader: CallFlowPreloader =
-                    CallFlowPreloader::new(self, location.clone(), HashSet::new(), HashSet::new(), mode, kind);
-                call_flow_preloader.load_flow(location, replay)
             }
             Err(e) => {
-                warn!("can't process file {}: error {}", location.path, e);
-                FlowUpdate::error(&format!("can't process file {}", location.path))
+                // No tree-sitter grammar for this language (e.g. Cairo, Circom, Leo, Tolk, MASM).
+                // Continue loading the flow anyway — the fallback in log_expressions() will use
+                // trace-embedded variable data instead of tree-sitter-extracted names.
+                info!(" tree-sitter parse failed for {}: {} — will use trace-embedded variables", location.path, e);
             }
         }
+        let mut call_flow_preloader: CallFlowPreloader =
+            CallFlowPreloader::new(self, location.clone(), HashSet::new(), HashSet::new(), mode, kind);
+        call_flow_preloader.load_flow(location, replay)
     }
 
     pub fn load_diff_flow(
@@ -203,6 +205,15 @@ impl<'a> CallFlowPreloader<'a> {
             }
             if self.location.event == 0 && original_event != 0 {
                 self.location.event = original_event;
+            }
+            // When tree-sitter has no grammar for this language, find_function_location
+            // can't determine function boundaries. Fall back to the boundaries from
+            // load_location() which uses the trace's own function data.
+            if self.location.function_first == 0 && self.location.function_last == 0 {
+                self.location.function_first = location.function_first;
+                self.location.function_last = location.function_last;
+                self.location.function_name = location.function_name.clone();
+                self.location.high_level_function_name = location.high_level_function_name.clone();
             }
         }
 
@@ -851,7 +862,7 @@ impl<'a> CallFlowPreloader<'a> {
             // Circom, Leo, Tolk, MASM), load variable names directly from the trace data.
             // DB-based traces embed variable names at each step, so we can use load_locals()
             // instead of the static source analysis.
-            info!("  no tree-sitter var list for line {:?} — trying trace-embedded variables", line);
+            info!(" no tree-sitter var list for line {:?} at step {:?} — trying trace-embedded variables", line, step_id);
             if let Ok(locals) = replay.load_locals(CtLoadLocalsArguments {
                 rr_ticks: 0,
                 count_budget: 100,
@@ -873,7 +884,7 @@ impl<'a> CallFlowPreloader<'a> {
                     expr_order.push(value_name);
                 }
                 flow_view_update.steps.last_mut().unwrap().expr_order = expr_order.clone();
-                info!("  loaded {} variables from trace data", locals.len());
+                info!(" loaded {} variables from trace data at step {:?}", locals.len(), step_id);
             }
         }
 

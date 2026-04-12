@@ -157,7 +157,27 @@ impl Db {
                     location.function_last = fn_last;
                 }
                 Err(e) => {
-                    warn!("expr loader load file error: {e:?}");
+                    // No tree-sitter grammar for this language (Cairo, Circom, etc.).
+                    // Fall back to the trace's own function line data.
+                    warn!("expr loader load file error: {e:?} — using trace function boundaries");
+                    let function_id = self.calls[CallKey(call_key_int)].function_id;
+                    let function_record = &self.functions[function_id];
+                    location.function_first = function_record.line.0;
+                    // Estimate function_last from the last step in this call.
+                    // Walk steps from the call's step_id to find the last line in this call scope.
+                    let mut last_line = function_record.line.0;
+                    let steps_len = self.steps.len() as i64;
+                    for i in step_id_int..steps_len {
+                        let step = self.steps[StepId(i as i64)];
+                        if step.call_key == CallKey(call_key_int) {
+                            if step.line.0 > last_line {
+                                last_line = step.line.0;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                    location.function_last = last_line;
                 }
             }
         }
