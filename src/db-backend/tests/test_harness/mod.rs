@@ -235,10 +235,14 @@ impl TestRecording {
             std::process::id()
         ));
 
-        // Clean up any existing temp directory
-        if temp_dir.exists() {
-            fs::remove_dir_all(&temp_dir).map_err(|e| format!("failed to clean temp dir: {}", e))?;
-        }
+        // Clean up any existing temp directory. In sandboxed builds (nix),
+        // remove_dir_all can fail with ENOTEMPTY if another test process
+        // has handles open. Retry once after a short delay, then proceed.
+        if temp_dir.exists()
+            && fs::remove_dir_all(&temp_dir).is_err() {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                let _ = fs::remove_dir_all(&temp_dir);
+            }
         fs::create_dir_all(&temp_dir).map_err(|e| format!("failed to create temp dir: {}", e))?;
 
         let trace_dir = temp_dir.join("trace");
@@ -3254,10 +3258,14 @@ impl TestRecording {
             std::process::id()
         ));
 
-        // Clean up any existing temp directory
-        if temp_dir.exists() {
-            fs::remove_dir_all(&temp_dir).map_err(|e| format!("failed to clean temp dir: {}", e))?;
-        }
+        // Clean up any existing temp directory. In sandboxed builds (nix),
+        // remove_dir_all can fail with ENOTEMPTY if another test process
+        // has handles open. Retry once after a short delay, then proceed.
+        if temp_dir.exists()
+            && fs::remove_dir_all(&temp_dir).is_err() {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                let _ = fs::remove_dir_all(&temp_dir);
+            }
         fs::create_dir_all(&temp_dir).map_err(|e| format!("failed to create temp dir: {}", e))?;
 
         let trace_dir = temp_dir.join("trace");
