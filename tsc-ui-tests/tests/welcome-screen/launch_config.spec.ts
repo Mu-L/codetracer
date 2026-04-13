@@ -45,9 +45,9 @@ test.describe("Launch Configuration Menu", () => {
 
   // On macOS, the in-app HTML menu (#menu-root, #navigation-menu) is replaced
   // by native Electron menus (compiled with -d:ctmacos), so DOM-based menu
-  // tests cannot work there. These tests are excluded entirely on non-macOS
-  // platforms to avoid inflating the skip count.
-  if (process.platform === "darwin") {
+  // tests cannot work there. These tests only run on Linux where the HTML
+  // menu is used.
+  if (process.platform !== "darwin") {
     test("navigation menu is visible", async ({ ctPage }) => {
       await ctPage.waitForSelector(".lm_goldenlayout", { timeout: 15000 });
 
@@ -200,8 +200,8 @@ test.describe("Launch Configuration Recording", () => {
 });
 
 // The "Debug: Inspect Menu Structure" tests rely on in-app HTML menus which
-// are only available on macOS. Excluded entirely on other platforms.
-if (process.platform === "darwin") {
+// are only available on Linux. On macOS, native Electron menus are used.
+if (process.platform !== "darwin") {
   test.describe("Debug: Inspect Menu Structure", () => {
     test.use({ launchMode: "edit", editFolderPath: examplesFolder });
 
