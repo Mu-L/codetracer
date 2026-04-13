@@ -61,11 +61,7 @@ mkShell {
 
     # stylus
     ourPkgs.cargo-stylus
-    foundry # provides cast, forge, anvil (needed for Stylus and Solidity)
-
-    # blockchain recorder runtime dependencies
-    ourPkgs.circom # Circom compiler (needed by codetracer-circom-recorder)
-    ourPkgs.forc # Sway/Fuel compiler (needed by codetracer-fuel-recorder)
+    foundry # provides cast, forge, anvil (needed for Stylus integration tests)
 
     # codex acp agent client
     ourPkgs.codex-acp

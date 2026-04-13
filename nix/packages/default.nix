@@ -57,10 +57,6 @@
         cargo-stylus =
           inputs.nix-blockchain-development.outputs.legacyPackages.${system}.metacraft-labs.cargo-stylus;
 
-        circom = inputs.nix-blockchain-development.outputs.legacyPackages.${system}.metacraft-labs.circom;
-
-        forc = inputs.nix-blockchain-development.outputs.legacyPackages.${system}.metacraft-labs.forc;
-
         codex-acp =
           let
             # Pick a recent nightly (post-1.88) so dependencies like `home`
