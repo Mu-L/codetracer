@@ -41,7 +41,8 @@ use ctfs_container::CtfsReader;
 /// | File | Purpose |
 /// |------|---------|
 /// | `meta.json` | Trace metadata (workdir, program, args) |
-/// | `events.log` | CBOR-encoded `TraceLowLevelEvent` stream |
+/// | `events.log` | Encoded `TraceLowLevelEvent` stream (chunked Zstd or legacy CBOR) |
+/// | `events.fmt` | Serialization format marker (`"split-binary"` or absent for CBOR) |
 /// | `paths.idx` | Interned source paths |
 /// | `types.idx` | Interned type records |
 /// | `funcs.idx` | Interned function records |
@@ -100,9 +101,24 @@ impl CTFSTraceReader {
 
     /// Extract `TraceLowLevelEvent` values from the CTFS container.
     ///
-    /// Tries `events.log` first (CBOR-encoded event stream). If that file
-    /// is not present, returns an empty event list so that the reader can
-    /// still be constructed (useful for metadata-only traces or tests).
+    /// Supports three data layouts, detected automatically:
+    ///
+    /// 1. **Chunked split-binary** (new default): `events.fmt` contains
+    ///    `"split-binary"` and `events.log` uses inline 16-byte chunk
+    ///    headers with Zstd-compressed payloads. Decompressed via
+    ///    [`codetracer_ctfs::ChunkedReader`], then decoded via
+    ///    [`codetracer_trace_writer::split_binary::decode_events`].
+    ///
+    /// 2. **Chunked CBOR**: `events.log` uses chunk headers but
+    ///    `events.fmt` is absent or does not say `"split-binary"`.
+    ///    Decompressed via `ChunkedReader`, then deserialized as CBOR.
+    ///
+    /// 3. **Legacy CBOR streaming**: No chunk headers (e.g. older zeekstd
+    ///    frames). Falls back to sequential `cbor4ii::serde::from_reader`.
+    ///
+    /// If `events.log` is missing entirely, an empty event list is
+    /// returned so that the reader can still be constructed (useful for
+    /// metadata-only traces or tests).
     fn load_events(ctfs: &mut CtfsReader) -> Result<Vec<TraceLowLevelEvent>, Box<dyn Error>> {
         let event_bytes = match ctfs.read_file("events.log") {
             Ok(bytes) => bytes,
@@ -117,17 +133,43 @@ impl CTFSTraceReader {
             return Ok(Vec::new());
         }
 
-        // Deserialize the CBOR-encoded event stream using cbor4ii, the same
-        // library used by codetracer_trace_reader for the standalone binary
-        // trace format. The events.log file contains a sequence of
-        // individually-encoded CBOR values (one per TraceLowLevelEvent).
-        //
-        // cbor4ii::serde::from_reader reads exactly one CBOR value from the
-        // stream. We wrap the bytes in a BufReader and read until EOF.
+        // Detect the serialization format. The presence of `events.fmt`
+        // with the content `"split-binary"` indicates the new split-binary
+        // encoding; otherwise we fall back to CBOR.
+        let is_split_binary = match ctfs.read_file("events.fmt") {
+            Ok(fmt) => fmt == b"split-binary",
+            Err(_) => false, // Legacy: no format marker means CBOR
+        };
+
+        // Try the chunked format first (new writer produces inline 16-byte
+        // chunk headers followed by Zstd-compressed payloads).
+        if let Ok(decompressed) = codetracer_ctfs::ChunkedReader::decompress_all(&event_bytes) {
+            if is_split_binary {
+                return Ok(codetracer_trace_writer::split_binary::decode_events(&decompressed));
+            } else {
+                // Chunked CBOR — decompress, then parse CBOR from the buffer
+                return Self::deserialize_cbor_from_buffer(&decompressed);
+            }
+        }
+
+        // Fallback: legacy CBOR streaming (zeekstd frames, no chunk headers).
+        // This path handles older `.ct` files that pre-date the chunked format.
+        Self::deserialize_cbor_from_buffer(&event_bytes)
+    }
+
+    /// Deserialize a sequence of individually-encoded CBOR
+    /// `TraceLowLevelEvent` values from an in-memory buffer.
+    ///
+    /// Uses `cbor4ii::serde::from_reader` in a loop, the same approach as
+    /// `codetracer_trace_reader` for the standalone binary trace format.
+    /// A parse error after at least one successful event is treated as a
+    /// truncated stream (common during streaming recording when the
+    /// recorder has not flushed completely).
+    fn deserialize_cbor_from_buffer(data: &[u8]) -> Result<Vec<TraceLowLevelEvent>, Box<dyn Error>> {
         use std::io::BufRead;
 
         let mut events = Vec::new();
-        let mut buf_reader = std::io::BufReader::new(event_bytes.as_slice());
+        let mut buf_reader = std::io::BufReader::new(data);
 
         loop {
             // Check for EOF before attempting to deserialize
