@@ -1389,6 +1389,7 @@ dependencies = [
 [[package]]
 name = "tree-sitter-aiken"
 version = "0.0.1"
+source = "git+https://github.com/metacraft-labs/tree-sitter-aiken?branch=tree-sitter-language-api#ee7072a2509151d370ba27bdeb51b9e885a4ca3f"
 dependencies = [
  "cc",
  "tree-sitter-language",
@@ -1417,6 +1418,7 @@ dependencies = [
 [[package]]
 name = "tree-sitter-cadence"
 version = "0.1.0"
+source = "git+https://github.com/metacraft-labs/tree-sitter-cadence?branch=main#0e223cc1acba4363baa14776979422b298243873"
 dependencies = [
  "cc",
  "tree-sitter",
@@ -1426,6 +1428,7 @@ dependencies = [
 [[package]]
 name = "tree-sitter-cairo"
 version = "1.0.0"
+source = "git+https://github.com/metacraft-labs/tree-sitter-cairo?branch=tree-sitter-language-api#3b186463ad7e0ea987cd1f63399683d661421276"
 dependencies = [
  "cc",
  "tree-sitter-language",
@@ -1434,6 +1437,7 @@ dependencies = [
 [[package]]
 name = "tree-sitter-circom"
 version = "0.0.1"
+source = "git+https://github.com/Decurity/tree-sitter-circom?branch=main#02150524228b1e6afef96949f2d6b7cc0aaf999e"
 dependencies = [
  "cc",
  "tree-sitter-language",
@@ -1488,6 +1492,7 @@ checksum = "c4013970217383f67b18aef68f6fb2e8d409bc5755227092d32efb0422ba24b8"
 [[package]]
 name = "tree-sitter-leo"
 version = "0.0.1"
+source = "git+https://github.com/r001/tree-sitter-leo?branch=main#6bc5564917edacd070afc4d33cf5e2e677831ea9"
 dependencies = [
  "cc",
  "tree-sitter-language",
@@ -1496,6 +1501,7 @@ dependencies = [
 [[package]]
 name = "tree-sitter-masm"
 version = "0.1.0"
+source = "git+https://github.com/metacraft-labs/tree-sitter-masm?branch=main#70feb951a6ac43eae7084e2311a68e31be3ebfd6"
 dependencies = [
  "cc",
  "tree-sitter",
@@ -1505,6 +1511,7 @@ dependencies = [
 [[package]]
 name = "tree-sitter-move-on-aptos"
 version = "0.0.1"
+source = "git+https://github.com/metacraft-labs/tree-sitter-move-on-aptos?branch=tree-sitter-language-api#0a6b33fb734998e35de13e078b2c1b5296440690"
 dependencies = [
  "cc",
  "tree-sitter-language",
@@ -1513,6 +1520,7 @@ dependencies = [
 [[package]]
 name = "tree-sitter-nim"
 version = "0.1.0"
+source = "git+https://github.com/metacraft-labs/tree-sitter-nim?branch=main#f43052ff411799af699f936bffcef767eb0328e0"
 dependencies = [
  "cc",
  "tree-sitter",
@@ -1572,6 +1580,7 @@ dependencies = [
 [[package]]
 name = "tree-sitter-sway"
 version = "0.0.1"
+source = "git+https://github.com/metacraft-labs/tree-sitter-sway?branch=tree-sitter-language-api#24b8f85332e93d218ddeb3ae9527cb54c0d48fdc"
 dependencies = [
  "cc",
  "tree-sitter-language",
@@ -1580,6 +1589,7 @@ dependencies = [
 [[package]]
 name = "tree-sitter-tolk"
 version = "0.4.5"
+source = "git+https://github.com/ton-blockchain/tree-sitter-tolk?branch=main#beba5629dc4c9f81ff2dbde107c7b177505399df"
 dependencies = [
  "cc",
  "tree-sitter-language",
