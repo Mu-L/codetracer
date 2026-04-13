@@ -48,7 +48,7 @@
     };
 
     nix-blockchain-development = {
-      url = "github:metacraft-labs/nix-blockchain-development?ref=stylus-tools";
+      url = "github:metacraft-labs/nix-blockchain-development";
       inputs.nixpkgs.follows = "nixpkgs";
       flake = true;
     };
