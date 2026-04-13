@@ -346,6 +346,12 @@ impl TraceReader for CTFSTraceReader {
     fn end_of_program(&self) -> &EndOfProgram {
         &self.db.end_of_program
     }
+
+    // ── Transitional ───────────────────────────────────────────────
+
+    fn as_db(&self) -> &Db {
+        &self.db
+    }
 }
 
 #[cfg(test)]

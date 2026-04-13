@@ -6,7 +6,7 @@ use codetracer_trace_types::{
     VariableId,
 };
 
-use crate::db::{CellChange, DbCall, DbRecordEvent, DbStep, EndOfProgram};
+use crate::db::{CellChange, Db, DbCall, DbRecordEvent, DbStep, EndOfProgram};
 
 /// Facade for reading trace data.
 ///
@@ -146,4 +146,14 @@ pub trait TraceReader: std::fmt::Debug + Send {
 
     /// How the traced program ended (normal exit vs. error).
     fn end_of_program(&self) -> &EndOfProgram;
+
+    // ── Transitional ───────────────────────────────────────────────
+
+    /// Direct access to the underlying `Db`.
+    ///
+    /// This is a **transitional** escape hatch that allows code which
+    /// has not yet been migrated to the `TraceReader` API to keep
+    /// working.  Once every call-site goes through trait methods, this
+    /// method will be removed.
+    fn as_db(&self) -> &Db;
 }

@@ -161,4 +161,81 @@ impl TraceReader for InMemoryTraceReader {
     fn end_of_program(&self) -> &EndOfProgram {
         &self.db.end_of_program
     }
+
+    // ── Transitional ───────────────────────────────────────────────
+
+    fn as_db(&self) -> &Db {
+        &self.db
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    /// Helper: create an empty `InMemoryTraceReader` for testing.
+    fn empty_reader() -> InMemoryTraceReader {
+        let db = Db::new(&PathBuf::from("/tmp/test-workdir"));
+        InMemoryTraceReader::new(db)
+    }
+
+    #[test]
+    fn empty_reader_counts_are_zero() {
+        let reader = empty_reader();
+        assert_eq!(reader.step_count(), 0);
+        assert_eq!(reader.call_count(), 0);
+        assert_eq!(reader.path_count(), 0);
+        assert_eq!(reader.function_count(), 0);
+        assert_eq!(reader.type_count(), 0);
+        assert_eq!(reader.event_count(), 0);
+    }
+
+    #[test]
+    fn empty_reader_lookups_return_none() {
+        let reader = empty_reader();
+        assert!(reader.step(StepId(0)).is_none());
+        assert!(reader.call(CallKey(0)).is_none());
+        assert!(reader.path(PathId(0)).is_none());
+        assert!(reader.function(FunctionId(0)).is_none());
+        assert!(reader.type_record(TypeId(0)).is_none());
+        assert!(reader.variable_name(VariableId(0)).is_none());
+        assert!(reader.path_id_for("nonexistent.rs").is_none());
+    }
+
+    #[test]
+    fn empty_reader_per_step_data_returns_none() {
+        let reader = empty_reader();
+        assert!(reader.variables_at(StepId(0)).is_none());
+        assert!(reader.compound_at(StepId(0)).is_none());
+        assert!(reader.cells_at(StepId(0)).is_none());
+        assert!(reader.variable_cells_at(StepId(0)).is_none());
+        assert!(reader.instructions_at(StepId(0)).is_none());
+    }
+
+    #[test]
+    fn empty_reader_events_empty() {
+        let reader = empty_reader();
+        assert!(reader.events().is_empty());
+    }
+
+    #[test]
+    fn empty_reader_steps_from_is_empty() {
+        let reader = empty_reader();
+        assert!(reader.steps_from(StepId(0)).is_empty());
+    }
+
+    #[test]
+    fn as_db_returns_inner_db() {
+        let reader = empty_reader();
+        // Verify the transitional as_db method provides access to the
+        // underlying Db (same workdir we constructed with).
+        assert_eq!(reader.as_db().workdir, PathBuf::from("/tmp/test-workdir"));
+    }
+
+    #[test]
+    fn workdir_matches_construction() {
+        let reader = empty_reader();
+        assert_eq!(reader.workdir(), Path::new("/tmp/test-workdir"));
+    }
 }
