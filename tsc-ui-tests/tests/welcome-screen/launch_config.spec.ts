@@ -159,8 +159,13 @@ test.describe("Launch Configuration Menu", () => {
   }
 });
 
+// The Ruby recording test navigates through the HTML menu to launch a
+// recording. On macOS, native menus are used instead of HTML, so this
+// test only runs on Linux.
 test.describe("Launch Configuration Recording", () => {
   test.use({ launchMode: "edit", editFolderPath: examplesFolder });
+
+  test.skip(process.platform === "darwin", "Uses HTML menu (not available on macOS)");
 
   test("Recording Ruby: Fibonacci produces a trace", async ({ ctPage }) => {
     await ctPage.waitForSelector(".lm_goldenlayout", { timeout: 15000 });
