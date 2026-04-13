@@ -84,6 +84,47 @@ non-nix-build/windows/toolchain-versions.env
 
 For detailed Windows porting progress, see `windows-porting-initiative-status.md`.
 
+## Nix dev shell and local flake overrides
+
+The `.envrc` auto-detects sibling repos and passes `--override-input` flags
+to `nix develop`. The sibling map is in `.envrc` (the `_ct_sibling_map` array).
+
+### Blockchain recorder tools (circom, forc)
+
+The codetracer nix dev shell includes `circom` and `forc` from the
+`nix-blockchain-development` flake input. These are needed by the Circom
+and Fuel/Sway recorders at runtime.
+
+For the packages to resolve, the local `nix-blockchain-development` checkout
+must be used (the `main` branch has all packages; the pinned `stylus-tools`
+branch in `flake.lock` does not). The `.envrc` sibling map includes
+`nix-blockchain-development` for automatic local override.
+
+### Invalidating the nix-direnv cache
+
+When you modify a local override input (e.g. change a package in
+`../nix-blockchain-development`), `nix-direnv` may serve a stale cached
+environment. To force re-evaluation:
+
+```bash
+# Option 1: Delete the cached profile
+rm -rf .direnv/flake-profile-* .direnv/flake-inputs
+direnv allow
+
+# Option 2: Use nix develop directly (bypasses nix-direnv cache)
+nix develop '.?submodules=1' --override-input nix-blockchain-development path:../nix-blockchain-development -c bash
+```
+
+The `nix develop` approach always evaluates fresh and is useful for testing
+changes to override inputs before waiting for nix-direnv to catch up.
+
+### Cadence Go helper
+
+The `detect-siblings.sh` script auto-builds `cadence-trace-helper` from
+`codetracer-flow-recorder/go-helper/` when the flow recorder sibling is
+present and `go` is available. The built binary is exported via
+`CADENCE_HELPER_BIN` and added to PATH.
+
 # Keeping notes
 
 In the `.agents/codebase-insights.txt` file, we try to maintain useful tips that may help
