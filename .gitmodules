@@ -84,3 +84,30 @@
 [submodule "libs/codetracer-design-system"]
 	path = libs/codetracer-design-system
 	url = https://github.com/metacraft-labs/codetracer-design-system.git
+[submodule "libs/tree-sitter-cairo"]
+	path = libs/tree-sitter-cairo
+	url = https://github.com/metacraft-labs/tree-sitter-cairo.git
+[submodule "libs/tree-sitter-aiken"]
+	path = libs/tree-sitter-aiken
+	url = https://github.com/metacraft-labs/tree-sitter-aiken.git
+[submodule "libs/tree-sitter-move-on-aptos"]
+	path = libs/tree-sitter-move-on-aptos
+	url = https://github.com/metacraft-labs/tree-sitter-move-on-aptos.git
+[submodule "libs/tree-sitter-sway"]
+	path = libs/tree-sitter-sway
+	url = https://github.com/metacraft-labs/tree-sitter-sway.git
+[submodule "libs/tree-sitter-circom"]
+	path = libs/tree-sitter-circom
+	url = https://github.com/Decurity/tree-sitter-circom.git
+[submodule "libs/tree-sitter-leo"]
+	path = libs/tree-sitter-leo
+	url = https://github.com/r001/tree-sitter-leo.git
+[submodule "libs/tree-sitter-tolk"]
+	path = libs/tree-sitter-tolk
+	url = https://github.com/ton-blockchain/tree-sitter-tolk.git
+[submodule "libs/tree-sitter-masm"]
+	path = libs/tree-sitter-masm
+	url = https://github.com/metacraft-labs/tree-sitter-masm.git
+[submodule "libs/tree-sitter-cadence"]
+	path = libs/tree-sitter-cadence
+	url = https://github.com/metacraft-labs/tree-sitter-cadence.git

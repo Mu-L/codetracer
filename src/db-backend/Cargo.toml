@@ -66,7 +66,7 @@ tree-sitter-pascal = "0.10.0"
 tree-sitter-d = "0.8.2"
 tree-sitter-ruby = "0.23.1"
 tree-sitter-python = "0.25.0"
-tree-sitter-nim = { git = "https://github.com/metacraft-labs/tree-sitter-nim", branch = "main" }
+tree-sitter-nim = { path = "../../libs/tree-sitter-nim/bindings/rust" }
 
 # the binding for our custom tracepoint tresitter grammar:
 tree-sitter-tracepoint = { path = "./tree-sitter-trace/" }
@@ -74,19 +74,16 @@ tree-sitter-go = "0.25.0"
 tree-sitter-javascript = "0.25.0"
 tree-sitter-bash = "0.23.3"
 tree-sitter-solidity = "1.2"
-# blockchain-specific grammar bindings:
-# Forked to metacraft-labs with tree-sitter-language API migration:
-tree-sitter-cairo = { git = "https://github.com/metacraft-labs/tree-sitter-cairo", branch = "tree-sitter-language-api" }
-tree-sitter-aiken = { git = "https://github.com/metacraft-labs/tree-sitter-aiken", branch = "tree-sitter-language-api" }
-tree-sitter-move-on-aptos = { git = "https://github.com/metacraft-labs/tree-sitter-move-on-aptos", branch = "tree-sitter-language-api" }
-tree-sitter-sway = { git = "https://github.com/metacraft-labs/tree-sitter-sway", branch = "tree-sitter-language-api" }
-# Upstream repos already use tree-sitter-language API:
-tree-sitter-circom = { git = "https://github.com/Decurity/tree-sitter-circom", branch = "main" }
-tree-sitter-leo = { git = "https://github.com/r001/tree-sitter-leo", branch = "main" }
-tree-sitter-tolk = { git = "https://github.com/ton-blockchain/tree-sitter-tolk", branch = "main" }
-# Our own grammar repos:
-tree-sitter-masm = { git = "https://github.com/metacraft-labs/tree-sitter-masm", branch = "main" }
-tree-sitter-cadence = { git = "https://github.com/metacraft-labs/tree-sitter-cadence", branch = "main" }
+# blockchain-specific grammar bindings (all via git submodules in libs/):
+tree-sitter-cairo = { path = "../../libs/tree-sitter-cairo" }
+tree-sitter-aiken = { path = "../../libs/tree-sitter-aiken" }
+tree-sitter-move-on-aptos = { path = "../../libs/tree-sitter-move-on-aptos" }
+tree-sitter-sway = { path = "../../libs/tree-sitter-sway" }
+tree-sitter-circom = { path = "../../libs/tree-sitter-circom" }
+tree-sitter-leo = { path = "../../libs/tree-sitter-leo" }
+tree-sitter-tolk = { path = "../../libs/tree-sitter-tolk" }
+tree-sitter-masm = { path = "../../libs/tree-sitter-masm/bindings/rust" }
+tree-sitter-cadence = { path = "../../libs/tree-sitter-cadence/bindings/rust" }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59.0", features = [
