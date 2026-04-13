@@ -87,15 +87,19 @@
 [submodule "libs/tree-sitter-cairo"]
 	path = libs/tree-sitter-cairo
 	url = https://github.com/metacraft-labs/tree-sitter-cairo.git
+	branch = tree-sitter-language-api
 [submodule "libs/tree-sitter-aiken"]
 	path = libs/tree-sitter-aiken
 	url = https://github.com/metacraft-labs/tree-sitter-aiken.git
+	branch = tree-sitter-language-api
 [submodule "libs/tree-sitter-move-on-aptos"]
 	path = libs/tree-sitter-move-on-aptos
 	url = https://github.com/metacraft-labs/tree-sitter-move-on-aptos.git
+	branch = tree-sitter-language-api
 [submodule "libs/tree-sitter-sway"]
 	path = libs/tree-sitter-sway
 	url = https://github.com/metacraft-labs/tree-sitter-sway.git
+	branch = tree-sitter-language-api
 [submodule "libs/tree-sitter-circom"]
 	path = libs/tree-sitter-circom
 	url = https://github.com/Decurity/tree-sitter-circom.git
