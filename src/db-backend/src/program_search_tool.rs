@@ -4,16 +4,11 @@ use std::path::PathBuf;
 use codetracer_trace_types::{CallKey, StepId, TypeId, ValueRecord};
 use log::warn;
 
-use crate::db::Db;
 use crate::expr_loader::ExprLoader;
 use crate::task::{CodeSnippet, CommandPanelResult, Location};
 use crate::trace_reader::TraceReader;
 
 pub struct ProgramSearchTool<'a> {
-    db: &'a Db,
-    /// Read-only trace access, prepared for future migration away from
-    /// direct `Db` field usage.
-    #[allow(dead_code)]
     reader: &'a dyn TraceReader,
 }
 
@@ -30,8 +25,8 @@ pub enum ProgramQueryNode {
 }
 
 impl<'a> ProgramSearchTool<'a> {
-    pub fn new(db: &'a Db, reader: &'a dyn TraceReader) -> Self {
-        ProgramSearchTool { db, reader }
+    pub fn new(reader: &'a dyn TraceReader) -> Self {
+        ProgramSearchTool { reader }
     }
 
     pub fn search(&self, query: &str, expr_loader: &mut ExprLoader) -> Result<Vec<CommandPanelResult>, Box<dyn Error>> {
@@ -82,7 +77,7 @@ impl<'a> ProgramSearchTool<'a> {
         expr_loader: &mut ExprLoader,
     ) -> Vec<CommandPanelResult> {
         let mut results = vec![];
-        for step_id_int in 0..self.db.steps.len() {
+        for step_id_int in 0..self.reader.step_count() {
             match self.match_compare(StepId(step_id_int as i64), op, &left, &right, expr_loader) {
                 Ok(new_result) => {
                     results.push(new_result);
@@ -112,7 +107,7 @@ impl<'a> ProgramSearchTool<'a> {
             Operator::Equal => {
                 if left_value == right_value {
                     let value = "".to_string(); // TODO "TODO value = <>".to_string();
-                    let location = &self.db.load_location(step_id, CallKey(-1), expr_loader);
+                    let location = &self.reader.load_location(step_id, CallKey(-1), expr_loader);
                     Ok(self.program_search_result(&value, location, expr_loader))
                 } else {
                     Err("no match".into())
@@ -152,9 +147,11 @@ impl<'a> ProgramSearchTool<'a> {
         match node.clone() {
             ProgramQueryNode::Compare(_, _, _) => Err("evaluate compare not implemented".into()),
             ProgramQueryNode::Variable(name) => {
-                for full_value_record in &self.db.variables[step_id] {
-                    if self.db.variable_names[full_value_record.variable_id] == name {
-                        return Ok(full_value_record.value.clone());
+                if let Some(vars) = self.reader.variables_at(step_id) {
+                    for full_value_record in vars {
+                        if self.reader.variable_name(full_value_record.variable_id) == Some(&name) {
+                            return Ok(full_value_record.value.clone());
+                        }
                     }
                 }
                 Err("variable not found".into())

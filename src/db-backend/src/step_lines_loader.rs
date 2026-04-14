@@ -21,10 +21,13 @@ pub struct StepLinesLoader {
 }
 
 impl StepLinesLoader {
-    pub fn new(db: &Db, expr_loader: &mut ExprLoader, _reader: &dyn TraceReader) -> Self {
+    #[allow(clippy::expect_used)]
+    pub fn new(reader: &dyn TraceReader, expr_loader: &mut ExprLoader) -> Self {
         let mut global_line_steps = DistinctVec::new();
-        for (step_id_int, step) in db.steps.iter().enumerate() {
-            let line_step = Self::simple_line_step(StepId(step_id_int as i64), *step, db, expr_loader, _reader);
+        for step_id_int in 0..reader.step_count() {
+            let step_id = StepId(step_id_int as i64);
+            let step = *reader.step(step_id).expect("StepLinesLoader::new: invalid step_id");
+            let line_step = Self::simple_line_step(step_id, step, reader, expr_loader);
             global_line_steps.push(line_step);
         }
         StepLinesLoader {
@@ -36,13 +39,15 @@ impl StepLinesLoader {
     fn simple_line_step(
         step_id: StepId,
         step: DbStep,
-        db: &Db,
+        reader: &dyn TraceReader,
         expr_loader: &mut ExprLoader,
-        _reader: &dyn TraceReader,
     ) -> LineStep {
         // let mut expr_loader = ExprLoader::new();
         let line = step.line;
-        let raw_path = format!("{}", db.workdir.join(db.load_path_from_id(&step.path_id)).display());
+        let raw_path = format!(
+            "{}",
+            reader.workdir().join(reader.path(step.path_id).unwrap_or("")).display()
+        );
         let path = PathBuf::from(&raw_path);
         let source_line = if let Ok(()) = expr_loader.load_file(&path) {
             expr_loader.get_source_line(&path, line.0 as usize)
@@ -58,7 +63,7 @@ impl StepLinesLoader {
             // no virtualization for now for this
             delta: step_id.0,
 
-            location: db.load_location(step_id, CallKey(-1), expr_loader),
+            location: reader.load_location(step_id, CallKey(-1), expr_loader),
             source_line,
             // TODO? iteration_info: vec![],
             values: vec![],

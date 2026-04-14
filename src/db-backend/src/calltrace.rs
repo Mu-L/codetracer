@@ -3,7 +3,7 @@ use std::error::Error;
 // use log::info;
 use codetracer_trace_types::{CallKey, StepId, NO_KEY};
 
-use crate::db::{Db, DbCall, EndOfProgram};
+use crate::db::{DbCall, EndOfProgram};
 use crate::distinct_vec::DistinctVec;
 use crate::expr_loader::ExprLoader;
 use crate::task::{
@@ -36,18 +36,21 @@ pub struct CallState {
 }
 
 impl Calltrace {
-    pub fn new(db: &Db, _reader: &dyn TraceReader) -> Self {
+    #[allow(clippy::expect_used)]
+    pub fn new(reader: &dyn TraceReader) -> Self {
         let mut call_states = DistinctVec::new();
-        for call_key_int in 0..db.calls.len() {
+        let mut calls = DistinctVec::new();
+        for call_key_int in 0..reader.call_count() {
             let call_key = CallKey(call_key_int as i64);
+            let call_record = reader.call(call_key).expect("Calltrace::new: invalid call key");
             call_states.push(CallState {
                 expanded: false,
                 hidden_children: false,
                 non_expanded_kind: CalltraceNonExpandedKind::Calls,
-                children_count: db.calls[call_key].children_keys.len(),
+                children_count: call_record.children_keys.len(),
             });
+            calls.push(call_record.clone());
         }
-        let calls = db.calls.clone();
         let global_call_lines = DistinctVec::new();
 
         Calltrace {
@@ -65,8 +68,8 @@ impl Calltrace {
         }
     }
 
-    pub fn jump_to(&mut self, step_id: StepId, auto_collapsing: bool, db: &Db, _reader: &dyn TraceReader) {
-        self.jump_to_with_depth(step_id, auto_collapsing, None, db, _reader);
+    pub fn jump_to(&mut self, step_id: StepId, auto_collapsing: bool, reader: &dyn TraceReader) {
+        self.jump_to_with_depth(step_id, auto_collapsing, None, reader);
     }
 
     /// Jump to the call containing `step_id` and rebuild the global call-line
@@ -83,16 +86,15 @@ impl Calltrace {
         step_id: StepId,
         auto_collapsing: bool,
         max_depth: Option<usize>,
-        db: &Db,
-        _reader: &dyn TraceReader,
+        reader: &dyn TraceReader,
     ) {
-        let call_key = db.call_key_for_step(step_id);
+        let call_key = reader.call_key_for_step(step_id).unwrap_or(CallKey(-1));
         if auto_collapsing {
-            self.autocollapse_callstack(step_id, call_key, db, _reader);
+            self.autocollapse_callstack(step_id, call_key, reader);
         } else if let Some(depth_limit) = max_depth {
             // Expand all calls up to the requested depth so the Python API
             // (and other non-GUI callers) can see the full call tree.
-            self.expand_all_up_to_depth(depth_limit, db, _reader);
+            self.expand_all_up_to_depth(depth_limit, reader);
         }
         self.start_call_key = call_key;
         self.rebuild_global_call_lines();
@@ -100,10 +102,10 @@ impl Calltrace {
 
     /// Mark all calls at depth <= `max_depth` as expanded so they appear
     /// in the global call-line index built by [`rebuild_global_call_lines`].
-    fn expand_all_up_to_depth(&mut self, max_depth: usize, db: &Db, _reader: &dyn TraceReader) {
+    fn expand_all_up_to_depth(&mut self, max_depth: usize, _reader: &dyn TraceReader) {
         for call_key_int in 0..self.call_states.len() {
             let call_key = CallKey(call_key_int as i64);
-            let call = &db.calls[call_key];
+            let call = &self.calls[call_key];
             if call.depth <= max_depth {
                 self.call_states[call_key].expanded = true;
                 self.call_states[call_key].hidden_children = call.depth == max_depth;
@@ -295,19 +297,13 @@ impl Calltrace {
     //   collapse x/expand x
     //   filter?
     //   (property: calltrace valid and matching what is happening?)
-    fn autocollapse_callstack(
-        &mut self,
-        step_id: StepId,
-        current_call_key: CallKey,
-        db: &Db,
-        _reader: &dyn TraceReader,
-    ) {
+    fn autocollapse_callstack(&mut self, step_id: StepId, current_call_key: CallKey, reader: &dyn TraceReader) {
         // autocollapse siblings before the current call
         // on each level of the callstack
         // potentially also part of the callstack itself
         // if it's too long
         // TODO
-        let callstack = self.load_callstack(step_id, db, _reader);
+        let callstack = self.load_callstack(step_id, reader);
 
         // callstack originally is in opposite order of depth
         //   compared to call state/calltrace iteration:
@@ -320,8 +316,8 @@ impl Calltrace {
 
         for (call_key_int, call_state) in self.call_states.iter_mut().enumerate() {
             let call_key = CallKey(call_key_int as i64);
-            let call = &db.calls[call_key];
-            let current_call = &db.calls[current_call_key];
+            let call = &self.calls[call_key];
+            let current_call = &self.calls[current_call_key];
 
             if call.depth < callstack_level_keys.len() {
                 let callstack_level_key = callstack_level_keys[call.depth];
@@ -361,17 +357,18 @@ impl Calltrace {
         // unimplemented!()
     }
 
-    pub fn load_callstack(&self, step_id: StepId, db: &Db, _reader: &dyn TraceReader) -> Vec<DbCall> {
+    #[allow(clippy::expect_used)]
+    pub fn load_callstack(&self, step_id: StepId, reader: &dyn TraceReader) -> Vec<DbCall> {
         let mut callstack = vec![];
-        if step_id.0 < db.steps.len().try_into().unwrap_or(i64::MAX) {
-            let current_step = &db.steps[step_id];
+        if step_id.0 < reader.step_count().try_into().unwrap_or(i64::MAX) {
+            let current_step = reader.step(step_id).expect("load_callstack: invalid step_id");
             let mut call_key = current_step.call_key;
 
             assert!(call_key.0 >= 0);
 
             // info!("step {:#?}", current_step);
             while call_key != NO_KEY {
-                let call_record = &db.calls[call_key];
+                let call_record = reader.call(call_key).expect("load_callstack: invalid call_key");
                 callstack.push(call_record.clone());
 
                 call_key = call_record.parent_key;
@@ -385,15 +382,14 @@ impl Calltrace {
         &self,
         from: GlobalCallLineIndex,
         count: usize,
-        db: &Db,
+        reader: &dyn TraceReader,
         expr_loader: &mut ExprLoader,
-        _reader: &dyn TraceReader,
     ) -> Result<Vec<CallLine>, Box<dyn Error>> {
         let mut results = vec![];
         let mut index = from;
         while results.len() < count && index.0 < self.global_call_lines.len() {
             let metadata = &self.global_call_lines[index];
-            results.push(self.to_call_line(metadata, db, expr_loader, _reader));
+            results.push(self.to_call_line(metadata, reader, expr_loader));
             index += 1;
         }
         // info!("{:?}", results);
@@ -403,12 +399,11 @@ impl Calltrace {
     fn to_call_line(
         &self,
         metadata: &CallLineMetadata,
-        db: &Db,
+        reader: &dyn TraceReader,
         expr_loader: &mut ExprLoader,
-        _reader: &dyn TraceReader,
     ) -> CallLine {
         if metadata.content.kind == CallLineContentKind::Call {
-            let call = db.to_call(&self.calls[metadata.content.call_key], expr_loader);
+            let call = reader.to_call(&self.calls[metadata.content.call_key], expr_loader);
             CallLine::call(
                 call,
                 metadata.content.hidden_children,
@@ -416,7 +411,7 @@ impl Calltrace {
                 metadata.depth,
             )
         } else if metadata.content.kind == CallLineContentKind::CallstackInternalCount {
-            let call = db.to_call(&self.calls[metadata.content.call_key], expr_loader);
+            let call = reader.to_call(&self.calls[metadata.content.call_key], expr_loader);
             CallLine::callstack_count(
                 metadata.content.non_expanded_kind,
                 call,
@@ -424,7 +419,7 @@ impl Calltrace {
                 metadata.depth,
             )
         } else if metadata.content.kind == CallLineContentKind::StartCallstackCount {
-            let call = db.to_call(&self.calls[CallKey(0)], expr_loader);
+            let call = reader.to_call(&self.calls[CallKey(0)], expr_loader);
             CallLine::start_callstack_count(
                 metadata.content.non_expanded_kind,
                 call,
@@ -432,7 +427,7 @@ impl Calltrace {
                 metadata.depth,
             )
         } else if metadata.content.kind == CallLineContentKind::EndOfProgramCall {
-            let (is_error, text) = if let EndOfProgram::Error { reason } = &db.end_of_program {
+            let (is_error, text) = if let EndOfProgram::Error { reason } = reader.end_of_program() {
                 (true, format!("<{reason}>"))
             } else {
                 (false, "<end of program>".to_string())
@@ -445,10 +440,10 @@ impl Calltrace {
                 // for now, we accept end of program error events only for the last step
                 // if this assumption changes, we need to update this as well, or to
                 // pass the step id with the end_of_program object!
-                StepId((db.steps.len() - 1) as i64),
+                StepId((reader.step_count() - 1) as i64),
             )
         } else {
-            let call = db.to_call(&self.calls[metadata.content.call_key], expr_loader);
+            let call = reader.to_call(&self.calls[metadata.content.call_key], expr_loader);
             CallLine::non_expanded(
                 metadata.content.non_expanded_kind,
                 call,

@@ -125,10 +125,10 @@ impl Handler {
         // the TraceReader abstraction. Direct Db access is available via
         // `reader.as_db()` for methods not yet migrated to the trait.
         let reader: Arc<dyn TraceReader> = Arc::new(InMemoryTraceReader::new(*db));
-        let calltrace = Calltrace::new(reader.as_db(), &*reader);
+        let calltrace = Calltrace::new(&*reader);
         let trace = CoreTrace::default();
         let mut expr_loader = ExprLoader::new(trace.clone());
-        let step_lines_loader = StepLinesLoader::new(reader.as_db(), &mut expr_loader, &*reader);
+        let step_lines_loader = StepLinesLoader::new(&*reader, &mut expr_loader);
         let replay: Box<dyn Replay> = if trace_kind == TraceKind::DB {
             Box::new(DbReplay::new(Box::new(reader.as_db().clone()), Arc::clone(&reader)))
         } else {
@@ -519,20 +519,14 @@ impl Handler {
             // The GUI uses auto_collapsing=true and handles expand/collapse
             // interactively, so it does not need this.
             let max_depth = if args.auto_collapsing { None } else { Some(args.depth) };
-            self.calltrace.jump_to_with_depth(
-                self.step_id,
-                args.auto_collapsing,
-                max_depth,
-                self.reader.as_db(),
-                &*self.reader,
-            );
+            self.calltrace
+                .jump_to_with_depth(self.step_id, args.auto_collapsing, max_depth, &*self.reader);
         }
         self.calltrace.load_lines(
             args.start_call_line_index,
             args.height,
-            self.reader.as_db(),
-            &mut self.expr_loader,
             &*self.reader,
+            &mut self.expr_loader,
         )
     }
 
@@ -1739,7 +1733,7 @@ impl Handler {
     }
 
     pub fn search_program(&mut self, query: String, _task: Task) -> Result<(), Box<dyn Error>> {
-        let program_search_tool = ProgramSearchTool::new(self.reader.as_db(), &*self.reader);
+        let program_search_tool = ProgramSearchTool::new(&*self.reader);
         let _results = program_search_tool.search(&query, &mut self.expr_loader)?;
         // TODO: send with DAP
         // self.send_event((
@@ -2312,7 +2306,7 @@ impl Handler {
                 stack_frames
             } else {
                 self.calltrace
-                    .load_callstack(self.step_id, self.reader.as_db(), &*self.reader)
+                    .load_callstack(self.step_id, &*self.reader)
                     .iter()
                     .map(|call_record| {
                         // expanded children count not relevant in raw callstack
