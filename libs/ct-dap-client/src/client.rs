@@ -363,6 +363,16 @@ impl DapStdioClient {
         self.send_step("ct/step", step_args)
     }
 
+    /// Step in backward (reverse step).
+    pub fn step_back(&mut self) -> Result<MoveState, BoxError> {
+        self.send_step("ct/step", StepArg::new(Action::StepIn, true))
+    }
+
+    /// Continue backward (reverse continue).
+    pub fn continue_back(&mut self) -> Result<MoveState, BoxError> {
+        self.send_step("ct/step", StepArg::new(Action::Continue, true))
+    }
+
     fn send_step(&mut self, command: &str, args: StepArg) -> Result<MoveState, BoxError> {
         self.send_request(command, serde_json::to_value(&args)?)?;
         let event = self.recv_event("ct/complete-move", Duration::from_secs(30))?;
