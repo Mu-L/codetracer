@@ -46,14 +46,11 @@ const TRACEPOINT_RESULTS_LIMIT_BEFORE_UPDATE: usize = 5;
 
 #[derive(Debug)]
 pub struct Handler {
-    pub db: Box<Db>,
     /// Abstracted read-only access to trace data.
     ///
     /// Shared via `Arc` so that `DbReplay` (and other consumers) can hold
     /// a reference to the same reader without cloning the underlying data.
-    /// During the migration, both `db` (direct) and `reader` (abstracted)
-    /// coexist. New code should use `reader`; remaining `db` accesses will be
-    /// migrated incrementally.
+    /// Code that still needs direct `Db` access can use `reader.as_db()`.
     pub reader: Arc<dyn TraceReader>,
     pub step_id: StepId,
     pub last_location: Location,
@@ -92,8 +89,8 @@ pub struct Handler {
     /// `load_terminal()`.
     ///
     /// When `load_terminal()` is called before `ensure_events_loaded()`,
-    /// this cache is filled by scanning `self.db.events` for Write records
-    /// only -- much faster than loading all events into memory first.
+    /// this cache is filled by scanning `reader.as_db().events` for Write
+    /// records only -- much faster than loading all events into memory first.
     /// When `cached_events` is already populated, Write events are extracted
     /// from it instead.
     cached_terminal_events: Option<Vec<ProgramEvent>>,
@@ -124,24 +121,22 @@ impl Handler {
     }
 
     pub fn construct(trace_kind: TraceKind, ct_rr_args: CtRRArgs, db: Box<Db>, indirect_send: bool) -> Handler {
-        // Wrap a clone of the Db in an InMemoryTraceReader so that new code
-        // can go through the TraceReader abstraction. The original `db` is
-        // kept around until all direct accesses are migrated.
-        // Using Arc so that DbReplay and Handler share the same reader instance.
-        let reader: Arc<dyn TraceReader> = Arc::new(InMemoryTraceReader::new(*db.clone()));
-        let calltrace = Calltrace::new(&db, &*reader);
+        // Wrap the Db in an InMemoryTraceReader so that all code goes through
+        // the TraceReader abstraction. Direct Db access is available via
+        // `reader.as_db()` for methods not yet migrated to the trait.
+        let reader: Arc<dyn TraceReader> = Arc::new(InMemoryTraceReader::new(*db));
+        let calltrace = Calltrace::new(reader.as_db(), &*reader);
         let trace = CoreTrace::default();
         let mut expr_loader = ExprLoader::new(trace.clone());
-        let step_lines_loader = StepLinesLoader::new(&db, &mut expr_loader, &*reader);
+        let step_lines_loader = StepLinesLoader::new(reader.as_db(), &mut expr_loader, &*reader);
         let replay: Box<dyn Replay> = if trace_kind == TraceKind::DB {
-            Box::new(DbReplay::new(db.clone(), Arc::clone(&reader)))
+            Box::new(DbReplay::new(Box::new(reader.as_db().clone()), Arc::clone(&reader)))
         } else {
             Box::new(RRDispatcher::new(&ct_rr_args.name, 0, ct_rr_args.clone()))
         };
         // let sender = sender::Sender::new();
         let mut handler = Handler {
             trace_kind,
-            db: db.clone(),
             reader,
             step_id: StepId(0),
             last_location: Location {
@@ -524,13 +519,18 @@ impl Handler {
             // The GUI uses auto_collapsing=true and handles expand/collapse
             // interactively, so it does not need this.
             let max_depth = if args.auto_collapsing { None } else { Some(args.depth) };
-            self.calltrace
-                .jump_to_with_depth(self.step_id, args.auto_collapsing, max_depth, &self.db, &*self.reader);
+            self.calltrace.jump_to_with_depth(
+                self.step_id,
+                args.auto_collapsing,
+                max_depth,
+                self.reader.as_db(),
+                &*self.reader,
+            );
         }
         self.calltrace.load_lines(
             args.start_call_line_index,
             args.height,
-            &self.db,
+            self.reader.as_db(),
             &mut self.expr_loader,
             &*self.reader,
         )
@@ -594,7 +594,10 @@ impl Handler {
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
         let mut flow_replay: Box<dyn Replay> = if self.trace_kind == TraceKind::DB {
-            Box::new(DbReplay::new(self.db.clone(), Arc::clone(&self.reader)))
+            Box::new(DbReplay::new(
+                Box::new(self.reader.as_db().clone()),
+                Arc::clone(&self.reader),
+            ))
         } else {
             Box::new(RRDispatcher::new("flow", self.load_flow_index, self.ct_rr_args.clone()))
         };
@@ -615,11 +618,12 @@ impl Handler {
                 && location.rr_ticks.0 >= 0
             {
                 let step_id = StepId(location.rr_ticks.0);
-                if (step_id.0 as usize) < self.db.steps.len() {
-                    let call_key = self.db.steps[step_id].call_key;
-                    let enriched = self
-                        .db
-                        .load_location(step_id, call_key, &mut self.flow_preloader.expr_loader);
+                if (step_id.0 as usize) < self.reader.as_db().steps.len() {
+                    let call_key = self.reader.as_db().steps[step_id].call_key;
+                    let enriched =
+                        self.reader
+                            .as_db()
+                            .load_location(step_id, call_key, &mut self.flow_preloader.expr_loader);
                     location.function_first = enriched.function_first;
                     location.function_last = enriched.function_last;
                     if location.function_name.is_empty() || location.function_name == "<unknown>" {
@@ -670,7 +674,7 @@ impl Handler {
     ) -> Result<(Call, usize), Box<dyn Error>> {
         // expanded children count not used here: we add actual children
         // TODO(Phase 4): migrate to_call to TraceReader or free function
-        let mut call = self.db.to_call(db_call, &mut self.expr_loader);
+        let mut call = self.reader.as_db().to_call(db_call, &mut self.expr_loader);
         let mut count = 1; // our call
                            // TODO: on depth/count limit
                            // generate something like Calls non-expanded/limited
@@ -980,7 +984,7 @@ impl Handler {
             if list.contains(&db_call.function_id.0) {
                 // expanded children count not relevant here
                 // TODO(Phase 4): migrate to_call to TraceReader or free function
-                calls.push(self.db.to_call(db_call, &mut self.expr_loader));
+                calls.push(self.reader.as_db().to_call(db_call, &mut self.expr_loader));
             }
         }
 
@@ -1738,7 +1742,7 @@ impl Handler {
     }
 
     pub fn search_program(&mut self, query: String, _task: Task) -> Result<(), Box<dyn Error>> {
-        let program_search_tool = ProgramSearchTool::new(&self.db, &*self.reader);
+        let program_search_tool = ProgramSearchTool::new(self.reader.as_db(), &*self.reader);
         let _results = program_search_tool.search(&query, &mut self.expr_loader)?;
         // TODO: send with DAP
         // self.send_event((
@@ -2188,14 +2192,15 @@ impl Handler {
         //   how to do it efficiently is a non-trivial question: maybe by iterating through previous steps,
         //   or a new kind of index?
         // TODO(Phase 4): migrate to_call and load_location to TraceReader or free function
-        let call = self.db.to_call(call_record, &mut self.expr_loader);
+        let call = self.reader.as_db().to_call(call_record, &mut self.expr_loader);
         let current_call_key = self
             .reader
             .step(self.step_id)
             .expect("produce_stack_frame: invalid step_id")
             .call_key;
         let location = if call_record.key == current_call_key {
-            self.db
+            self.reader
+                .as_db()
                 .load_location(self.step_id, call_record.key, &mut self.expr_loader)
         } else {
             call.location
@@ -2312,7 +2317,7 @@ impl Handler {
                 stack_frames
             } else {
                 self.calltrace
-                    .load_callstack(self.step_id, &self.db, &*self.reader)
+                    .load_callstack(self.step_id, self.reader.as_db(), &*self.reader)
                     .iter()
                     .map(|call_record| {
                         // expanded children count not relevant in raw callstack
@@ -2397,8 +2402,8 @@ impl Handler {
                     .unwrap_or("<unknown>")
                     .to_string(),
                 // to_ct_value is a Db method that depends on type resolution;
-                // keep using self.db for it until TraceReader gains value conversion.
-                value: self.db.to_ct_value(&v.value),
+                // keep using reader.as_db() for it until TraceReader gains value conversion.
+                value: self.reader.as_db().to_ct_value(&v.value),
                 address: NO_ADDRESS,
             })
             .collect();
@@ -2460,7 +2465,7 @@ mod tests {
     fn test_struct_handling() {
         let db = setup_db();
         let handler: Handler = Handler::new(TraceKind::DB, CtRRArgs::default(), Box::new(db));
-        let value = handler.db.to_ct_value(&ValueRecord::Struct {
+        let value = handler.reader.as_db().to_ct_value(&ValueRecord::Struct {
             field_values: vec![],
             type_id: TypeId(1),
         });
@@ -2638,7 +2643,8 @@ mod tests {
 
         let calltrace_load_args = CalltraceLoadArgs {
             location: handler
-                .db
+                .reader
+                .as_db()
                 .load_location(StepId(4), CallKey(-1), &mut handler.expr_loader),
             start_call_line_index: GlobalCallLineIndex(0),
             depth: 10,
@@ -2702,7 +2708,7 @@ mod tests {
     }
 
     fn test_step_in_scenario(handler: &mut Handler, path: &Path, sender: Sender<DapMessage>) {
-        for i in 0..handler.db.steps.len() - 1 {
+        for i in 0..handler.reader.as_db().steps.len() - 1 {
             // eprintln!("doing step-in {i}");
             handler.step_in(true).unwrap();
             assert_eq!(handler.step_id, StepId(i as i64 + 1));
