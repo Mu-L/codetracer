@@ -325,6 +325,10 @@ impl TraceReader for CTFSTraceReader {
         }
     }
 
+    fn path_entries_iter(&self) -> Box<dyn Iterator<Item = (&str, PathId)> + '_> {
+        Box::new(self.db.path_map.iter().map(|(s, &id)| (s.as_str(), id)))
+    }
+
     // ── Instructions ────────────────────────────────────────────────
 
     fn instructions_at(&self, step_id: StepId) -> Option<&Vec<String>> {

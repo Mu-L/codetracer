@@ -50,7 +50,6 @@ pub struct Handler {
     ///
     /// Shared via `Arc` so that `DbReplay` (and other consumers) can hold
     /// a reference to the same reader without cloning the underlying data.
-    /// Code that still needs direct `Db` access can use `reader.as_db()`.
     pub reader: Arc<dyn TraceReader>,
     pub step_id: StepId,
     pub last_location: Location,
@@ -89,7 +88,7 @@ pub struct Handler {
     /// `load_terminal()`.
     ///
     /// When `load_terminal()` is called before `ensure_events_loaded()`,
-    /// this cache is filled by scanning `reader.as_db().events` for Write
+    /// this cache is filled by scanning `reader.events()` for Write
     /// records only -- much faster than loading all events into memory first.
     /// When `cached_events` is already populated, Write events are extracted
     /// from it instead.
@@ -123,7 +122,7 @@ impl Handler {
     pub fn construct(trace_kind: TraceKind, ct_rr_args: CtRRArgs, db: Box<Db>, indirect_send: bool) -> Handler {
         // Wrap the Db in an InMemoryTraceReader so that all code goes through
         // the TraceReader abstraction. Direct Db access is available via
-        // `reader.as_db()` for methods not yet migrated to the trait.
+        // All trace data access goes through the TraceReader trait.
         let reader: Arc<dyn TraceReader> = Arc::new(InMemoryTraceReader::new(*db));
         let calltrace = Calltrace::new(&*reader);
         let trace = CoreTrace::default();

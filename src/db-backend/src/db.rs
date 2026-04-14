@@ -24,7 +24,7 @@ use crate::task::{
 use crate::trace_reader::TraceReader;
 use crate::value::{Type, Value, ValueRecordWithType};
 
-const NEXT_INTERNAL_STEP_OVERS_LIMIT: usize = 1_000;
+pub(crate) const NEXT_INTERNAL_STEP_OVERS_LIMIT: usize = 1_000;
 
 #[derive(Debug, Clone)]
 pub struct Db {
@@ -1202,24 +1202,43 @@ impl DbReplay {
 
     fn step_out(&mut self, forward: bool) -> Result<bool, Box<dyn Error>> {
         let old_step_id = self.step_id;
-        (self.step_id, _) = self.reader.as_db().step_out_step_id_relative_to(self.step_id, forward);
+        (self.step_id, _) = self.reader.step_out_step_id_relative_to(self.step_id, forward);
         Ok(self.step_id != old_step_id)
     }
 
     fn next(&mut self, forward: bool) -> Result<bool, Box<dyn Error>> {
         let step_to_different_line = true; // which is better/should be let the user configure it?
         let moved;
-        (self.step_id, moved) =
-            self.reader
-                .as_db()
-                .next_step_id_relative_to(self.step_id, forward, step_to_different_line);
+        (self.step_id, moved) = self
+            .reader
+            .next_step_id_relative_to(self.step_id, forward, step_to_different_line);
         Ok(moved)
     }
 
     // returns if it has hit any breakpoints
     #[allow(clippy::expect_used)] // Trace must have at least one step
     fn step_continue(&mut self, forward: bool) -> Result<bool, Box<dyn Error>> {
-        for step in self.reader.as_db().step_from(self.step_id, forward) {
+        // Build an iterator over steps after (or before) the current step.
+        let steps: Vec<DbStep> = if forward {
+            let slice = self.reader.steps_from(self.step_id);
+            // Skip the current step itself.
+            if slice.len() > 1 {
+                slice[1..].to_vec()
+            } else {
+                vec![]
+            }
+        } else {
+            let all = self.reader.steps_from(StepId(0));
+            let end = self.step_id.0 as usize;
+            if end <= all.len() {
+                let mut v = all[..end].to_vec();
+                v.reverse();
+                v
+            } else {
+                vec![]
+            }
+        };
+        for step in steps {
             if !self.breakpoint_list.is_empty() {
                 if let Some(enabled) = self.breakpoint_list[step.path_id.0]
                     .get(&step.line.into())
@@ -1259,162 +1278,15 @@ impl DbReplay {
 
     /// Resolves a source path to its `PathId` in the trace database.
     ///
-    /// The path_map in the DB typically stores *relative* paths (e.g. `src/main.py`),
-    /// but callers (such as the Python API or DAP clients) often provide *absolute*
-    /// paths (e.g. `/tmp/workdir/src/main.py`). To bridge this mismatch we try
-    /// three strategies in order:
-    ///
-    /// 1. **Exact match** - the path is already in the map as-is.
-    /// 2. **Workdir-stripped match** - strip the trace workdir prefix from the
-    ///    absolute path and look up the resulting relative path.
-    /// 3. **Suffix match** - iterate over all stored paths and return the first
-    ///    one where the requested path ends with the stored relative path
-    ///    (compared as whole path components via `std::path::Path::ends_with`).
+    /// Delegates to `TraceReader::fuzzy_path_id_for` which tries multiple
+    /// matching strategies: exact match, workdir-stripped, suffix match,
+    /// canonicalized, reverse canonicalize, and filename-only.
     fn load_path_id(&self, path: &str) -> Option<PathId> {
-        // This method uses as_db() for direct path_map iteration which is
-        // not yet exposed through TraceReader (only exact-match `path_id_for`
-        // is available).  The fuzzy matching strategies below require iterating
-        // the full path_map.
-        let db = self.reader.as_db();
-
-        // 1. Exact match (fast path).
-        if let Some(&id) = db.path_map.get(path) {
-            return Some(id);
-        }
-
-        // On Windows, normalize separators so that paths with `/` and `\` can
-        // match each other.  Ruby and other recorders may store forward-slash
-        // paths while the DAP client sends backslash paths (or vice-versa).
-        #[cfg(windows)]
-        let normalized = path.replace('\\', "/");
-
-        #[cfg(windows)]
-        if normalized != path {
-            if let Some(&id) = db.path_map.get(&normalized) {
-                return Some(id);
-            }
-        }
-
-        let abs_path = std::path::Path::new(path);
-        let workdir = self.reader.workdir();
-
-        // 2. Try stripping the workdir prefix to obtain a relative path.
-        if let Ok(relative) = abs_path.strip_prefix(workdir) {
-            if let Some(rel_str) = relative.to_str() {
-                if let Some(&id) = db.path_map.get(rel_str) {
-                    return Some(id);
-                }
-                // Also try with normalized separators.
-                #[cfg(windows)]
-                {
-                    let norm_rel = rel_str.replace('\\', "/");
-                    if norm_rel != rel_str {
-                        if let Some(&id) = db.path_map.get(&norm_rel) {
-                            return Some(id);
-                        }
-                    }
-                }
-            }
-        }
-
-        // On Windows, also try stripping the workdir with normalized separators.
-        #[cfg(windows)]
-        {
-            let norm_workdir = workdir.to_string_lossy().replace('\\', "/");
-            if normalized.starts_with(&norm_workdir) {
-                let relative = &normalized[norm_workdir.len()..].trim_start_matches('/');
-                if let Some(&id) = db.path_map.get(*relative) {
-                    return Some(id);
-                }
-            }
-        }
-
-        // 3. Suffix match: check if the absolute path ends with any stored
-        //    relative path (compared component-wise).
-        //    Skip empty stored paths — Path::ends_with("") returns true for any
-        //    path (vacuous truth), which would cause every lookup to match the
-        //    empty-path entry instead of the correct file.
-        for (stored_path, &id) in &db.path_map {
-            if !stored_path.is_empty() && abs_path.ends_with(stored_path) {
-                return Some(id);
-            }
-        }
-
-        // 4. Canonicalize and retry: on macOS, /tmp is a symlink to
-        //    /private/tmp, so a path recorded as /tmp/… won't match a
-        //    lookup for /private/tmp/… (or vice-versa).  Canonicalizing
-        //    both sides resolves such symlink mismatches.
-        if let Ok(canonical) = abs_path.canonicalize() {
-            if canonical != abs_path {
-                // Retry exact match with the canonical path.
-                if let Some(canonical_str) = canonical.to_str() {
-                    if let Some(&id) = db.path_map.get(canonical_str) {
-                        return Some(id);
-                    }
-                }
-
-                // Retry suffix match with the canonical path.
-                for (stored_path, &id) in &db.path_map {
-                    if !stored_path.is_empty() && canonical.ends_with(stored_path) {
-                        return Some(id);
-                    }
-                }
-            }
-        }
-
-        // 5. Reverse canonicalize: the stored paths themselves may be
-        //    symlink-resolved while the lookup path is not.  Try
-        //    canonicalizing each stored absolute path against the lookup.
-        for (stored_path, &id) in &db.path_map {
-            if stored_path.is_empty() {
-                continue;
-            }
-            let sp = std::path::Path::new(stored_path);
-            if sp.is_absolute() {
-                if let Ok(canonical_stored) = sp.canonicalize() {
-                    if canonical_stored == abs_path {
-                        return Some(id);
-                    }
-                }
-            }
-        }
-
-        // 6. Filename-only match: when the file lives in a different directory
-        //    (e.g. source was copied into the trace dir), match by filename
-        //    alone.  Only used when exactly one stored path shares the same
-        //    filename to avoid ambiguity.
-        if let Some(lookup_filename) = abs_path.file_name() {
-            let matches: Vec<PathId> = db
-                .path_map
-                .iter()
-                .filter_map(|(stored, &id)| {
-                    let sp = std::path::Path::new(stored);
-                    if sp.file_name() == Some(lookup_filename) {
-                        Some(id)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            if matches.len() == 1 {
-                return Some(matches[0]);
-            }
-        }
-
-        None
+        self.reader.fuzzy_path_id_for(path)
     }
 
     fn id_to_name(&self, variable_id: VariableId) -> &str {
         self.reader.variable_name(variable_id).unwrap_or("<unknown>")
-    }
-
-    /// Convenience accessor for the underlying `Db`.
-    ///
-    /// Used for complex Db methods (`step_from`, `load_value_for_place`,
-    /// `next_step_id_relative_to`, etc.) that have not yet been lifted to
-    /// the `TraceReader` trait.
-    fn db(&self) -> &Db {
-        self.reader.as_db()
     }
 }
 
@@ -1502,7 +1374,7 @@ impl Replay for DbReplay {
             .map(|(variable_id, place)| {
                 let name = self.reader.variable_name(*variable_id).unwrap_or("<unknown>");
                 info!("log local {variable_id:?} {name} place: {place:?}");
-                let value = self.db().load_value_for_place(*place, self.step_id);
+                let value = self.reader.load_value_for_place(*place, self.step_id);
                 VariableWithRecord {
                     expression: self
                         .reader
@@ -1619,8 +1491,6 @@ impl Replay for DbReplay {
             .expect("load_history: invalid step_id")
             .call_key;
 
-        // Iterate over all steps and their variables.  We use as_db() here
-        // because TraceReader does not expose a bulk variables iterator yet.
         let step_count = self.reader.step_count();
         for step_idx in 0..step_count {
             let sid = StepId(step_idx as i64);

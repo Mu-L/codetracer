@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use log::warn;
+use log::{info, warn};
 use num_bigint::BigInt;
 
 use codetracer_trace_types::{
@@ -9,7 +9,7 @@ use codetracer_trace_types::{
     TypeSpecificInfo, ValueRecord, VariableId, NO_KEY,
 };
 
-use crate::db::{CellChange, Db, DbCall, DbRecordEvent, DbStep, EndOfProgram};
+use crate::db::{CellChange, Db, DbCall, DbRecordEvent, DbStep, EndOfProgram, NEXT_INTERNAL_STEP_OVERS_LIMIT};
 use crate::expr_loader::ExprLoader;
 use crate::task::{Call, CallArg, Location, RRTicks};
 use crate::value::{Type, Value};
@@ -123,6 +123,12 @@ pub trait TraceReader: std::fmt::Debug + Send {
     ///
     /// Returns an empty slice when `start_id` is out of bounds.
     fn steps_from(&self, start_id: StepId) -> &[DbStep];
+
+    /// Iterate over all `(path_string, PathId)` entries in the path map.
+    ///
+    /// This is needed for fuzzy path matching (suffix match, filename match,
+    /// etc.) where exact-match `path_id_for` is insufficient.
+    fn path_entries_iter(&self) -> Box<dyn Iterator<Item = (&str, PathId)> + '_>;
 
     // ── Instructions ────────────────────────────────────────────────
 
@@ -432,6 +438,412 @@ pub trait TraceReader: std::fmt::Debug + Send {
             }
         }
         location
+    }
+
+    // ── Navigation helpers ────────────────────────────────────────
+
+    /// Step forward or backward through the trace, skipping steps that
+    /// are deeper than the starting depth minus `delta`.
+    ///
+    /// * `delta == 0` → "next" (same level or shallower)
+    /// * `delta == 1` → "step out" (shallower level only)
+    ///
+    /// Returns the new `StepId` (unchanged if no suitable step was found).
+    #[allow(clippy::expect_used)]
+    fn step_over_depths_step_id(&self, start_step_id: StepId, forward: bool, delta: usize) -> StepId {
+        let Some(initial_step) = self.step(start_step_id) else {
+            warn!(
+                "step_over_depths_step_id: start_step_id {:?} is out of bounds (steps len {})",
+                start_step_id,
+                self.step_count()
+            );
+            return start_step_id;
+        };
+        let Some(initial_call) = self.call(initial_step.call_key) else {
+            warn!(
+                "step_over_depths_step_id: call_key {:?} for step {:?} is out of bounds (calls len {})",
+                initial_step.call_key,
+                start_step_id,
+                self.call_count()
+            );
+            return start_step_id;
+        };
+        let initial_call_depth = initial_call.depth;
+        let mut current_step_id = start_step_id;
+
+        // Iterate using steps_from slice, skipping the first element (the start step itself).
+        let steps_slice = self.steps_from(start_step_id);
+        let iter: Box<dyn Iterator<Item = &DbStep>> = if forward {
+            // Skip the first element (the start step itself).
+            Box::new(steps_slice.iter().skip(1))
+        } else {
+            // For backward iteration, we need all steps before start_step_id.
+            // steps_from gives us [start_step_id..end], but we need [0..start_step_id) reversed.
+            let all_steps = self.steps_from(StepId(0));
+            let end = start_step_id.0 as usize;
+            if end <= all_steps.len() {
+                Box::new(all_steps[..end].iter().rev())
+            } else {
+                Box::new(std::iter::empty())
+            }
+        };
+
+        for new_step in iter {
+            let new_call_key = new_step.call_key;
+            current_step_id = new_step.step_id;
+            let Some(new_call) = self.call(new_call_key) else {
+                warn!(
+                    "step_over_depths_step_id: call_key {:?} for step {:?} is out of bounds (calls len {})",
+                    new_call_key,
+                    current_step_id,
+                    self.call_count()
+                );
+                break;
+            };
+
+            info!("for returned: {:?} with depth: {:?}", new_step, new_call.depth);
+
+            // depth - delta can be < 0: compare as i64 to avoid underflow.
+            if (new_call.depth as i64) <= (initial_call_depth as i64) - (delta as i64) {
+                break;
+            }
+        }
+
+        current_step_id
+    }
+
+    /// Find the step id after stepping out of the current call (one level shallower).
+    ///
+    /// Returns `(new_step_id, moved)` where `moved` is `true` when
+    /// the position actually changed.
+    fn step_out_step_id_relative_to(&self, step_id: StepId, forward: bool) -> (StepId, bool) {
+        let new_step_id = self.step_over_depths_step_id(step_id, forward, 1);
+        (new_step_id, step_id != new_step_id)
+    }
+
+    /// Find the next step id at the same call depth (stepping over deeper calls),
+    /// optionally requiring a different source line.
+    ///
+    /// Returns `(new_step_id, moved)`.
+    fn next_step_id_relative_to(&self, step_id: StepId, forward: bool, step_to_different_line: bool) -> (StepId, bool) {
+        let mut last_step_id = step_id;
+        let Some(original_step) = self.step(step_id) else {
+            warn!(
+                "next_step_id_relative_to: step_id {:?} is out of bounds (steps len {})",
+                step_id,
+                self.step_count()
+            );
+            return (step_id, false);
+        };
+        let original_step = *original_step;
+        let (original_path_id, original_line, original_call_key) =
+            (original_step.path_id, original_step.line, original_step.call_key);
+        let mut count = 0;
+        loop {
+            let current_step_id = self.step_over_depths_step_id(last_step_id, forward, 0);
+            if current_step_id == last_step_id {
+                return (current_step_id, false);
+            }
+            last_step_id = current_step_id;
+            count += 1;
+            if count >= NEXT_INTERNAL_STEP_OVERS_LIMIT {
+                break;
+            }
+            if !step_to_different_line {
+                break;
+            } else if let Some(current_step) = self.step(current_step_id) {
+                if original_path_id != current_step.path_id
+                    || original_line != current_step.line
+                    || original_call_key != current_step.call_key
+                {
+                    break;
+                }
+            } else {
+                warn!(
+                    "next_step_id_relative_to: current_step_id {:?} out of bounds during line check",
+                    current_step_id
+                );
+                break;
+            }
+        }
+        if let Some(last_step) = self.step(last_step_id) {
+            info!("next step id: {:?}", last_step);
+        }
+        (last_step_id, step_id != last_step_id)
+    }
+
+    // ── Value loading ──────────────────────────────────────────────
+
+    /// Look up the value for a given `Place` at the given step, walking
+    /// the cell-change history to find the most recent change.
+    #[allow(clippy::comparison_chain)]
+    fn load_value_for_place(&self, place: Place, step_id: StepId) -> ValueRecord {
+        info!("load_value_for_place {place:?} for #{step_id:?}");
+        if let Some(changes) = self.cell_changes_for(&place) {
+            let mut i: usize = 0;
+            let mut last_change_index: Option<usize> = None;
+            while i < changes.len() {
+                let change = changes[i];
+                info!("cell change {i} for {place:?} for {step_id:?}: {change:?}");
+                if changes[i].step_id == step_id {
+                    last_change_index = Some(i);
+                    break;
+                } else if changes[i].step_id > step_id {
+                    break;
+                } else {
+                    last_change_index = Some(i);
+                    i += 1;
+                    continue;
+                }
+            }
+            if let Some(index) = last_change_index {
+                let cell_change = changes[index];
+                info!("last cell change for {place:?} for {step_id:?}: {cell_change:?}");
+                info!("==============");
+                if let Some(cells_for_step_id) = self.cells_at(cell_change.step_id) {
+                    if cells_for_step_id.contains_key(&place) {
+                        cells_for_step_id[&place].clone()
+                    } else {
+                        self.load_compound_value_for_place(place, cell_change)
+                    }
+                } else {
+                    self.load_compound_value_for_place(place, cell_change)
+                }
+            } else {
+                ValueRecord::Error {
+                    msg: format!("internal error: no cell change for place {place:?} up to step_id {place:?}"),
+                    type_id: TypeId(0),
+                }
+            }
+        } else {
+            ValueRecord::Error {
+                msg: "internal error: no change found for this place".to_string(),
+                type_id: TypeId(0),
+            }
+        }
+    }
+
+    /// Load a compound (aggregate) value for a place from the compound table.
+    fn load_compound_value_for_place(&self, place: Place, cell_change: CellChange) -> ValueRecord {
+        info!("load_compound_value_for_place {place:?} {cell_change:?}");
+        if let Some(compound_for_step_id) = self.compound_at(cell_change.step_id) {
+            if compound_for_step_id.contains_key(&place) {
+                let compound_value = &compound_for_step_id[&place];
+                if let ValueRecord::Sequence {
+                    elements,
+                    type_id,
+                    is_slice: _,
+                } = compound_value
+                {
+                    let loaded_elements = elements
+                        .iter()
+                        .map(|element| {
+                            if let ValueRecord::Cell { place } = element {
+                                self.load_value_for_place(*place, cell_change.step_id)
+                            } else {
+                                element.clone()
+                            }
+                        })
+                        .collect();
+                    ValueRecord::Sequence {
+                        elements: loaded_elements,
+                        type_id: *type_id,
+                        is_slice: false,
+                    }
+                } else {
+                    compound_value.clone()
+                }
+            } else if let Some(_index) = cell_change.index {
+                if let Some(type_id) = cell_change.type_id {
+                    let elements: Vec<ValueRecord> = (0..cell_change.item_count)
+                        .map(|i| self.load_value_item_by_index(place, i, cell_change.step_id))
+                        .collect();
+                    ValueRecord::Sequence {
+                        elements,
+                        type_id,
+                        is_slice: false,
+                    }
+                } else {
+                    ValueRecord::Error {
+                        msg: "internal error: no type_id for this compound cell change".to_string(),
+                        type_id: TypeId(0),
+                    }
+                }
+            } else {
+                ValueRecord::Error {
+                    msg: "internal error: no cell/compound for this place and step_id".to_string(),
+                    type_id: TypeId(0),
+                }
+            }
+        } else if let Some(_index) = cell_change.index {
+            if let Some(type_id) = cell_change.type_id {
+                let elements: Vec<ValueRecord> = (0..cell_change.item_count)
+                    .map(|i| self.load_value_item_by_index(place, i, cell_change.step_id))
+                    .collect();
+                ValueRecord::Sequence {
+                    elements,
+                    type_id,
+                    is_slice: false,
+                }
+            } else {
+                ValueRecord::Error {
+                    msg: "internal error: no type_id for this compound cell change".to_string(),
+                    type_id: TypeId(0),
+                }
+            }
+        } else {
+            ValueRecord::Error {
+                msg: "internal error: no cell/compound for this place and step_id".to_string(),
+                type_id: TypeId(0),
+            }
+        }
+    }
+
+    /// Load a single element of a compound value by its index within the compound.
+    fn load_value_item_by_index(&self, place: Place, index: usize, step_id: StepId) -> ValueRecord {
+        info!("load_value_by_index {place:?} index {index} #{step_id:?}");
+        if let Some(changes) = self.cell_changes_for(&place) {
+            for cell_change in changes.iter().rev() {
+                if cell_change.step_id <= step_id {
+                    info!("  cell change for index {index}: {cell_change:?}");
+                    if let Some(change_index) = cell_change.index {
+                        if change_index == index {
+                            if let Some(item_place) = cell_change.item_place {
+                                return self.load_value_for_place(item_place, step_id);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        ValueRecord::Error {
+            msg: "internal error: no relevant cell change for this index".to_string(),
+            type_id: TypeId(0),
+        }
+    }
+
+    // ── Fuzzy path resolution ──────────────────────────────────────
+
+    /// Resolve a source path to its `PathId`, trying multiple matching
+    /// strategies beyond exact match.
+    ///
+    /// Strategies tried in order:
+    /// 1. Exact match via `path_id_for`
+    /// 2. Workdir-stripped relative path match
+    /// 3. Suffix match (component-wise)
+    /// 4. Canonicalized path match (resolves symlinks)
+    /// 5. Reverse canonicalize (stored paths may be symlink-resolved)
+    /// 6. Filename-only match (when unambiguous)
+    ///
+    /// On Windows, path separators are normalized at each stage.
+    fn fuzzy_path_id_for(&self, path: &str) -> Option<PathId> {
+        // 1. Exact match (fast path).
+        if let Some(id) = self.path_id_for(path) {
+            return Some(id);
+        }
+
+        // On Windows, normalize separators.
+        #[cfg(windows)]
+        let normalized = path.replace('\\', "/");
+
+        #[cfg(windows)]
+        if normalized != path {
+            if let Some(id) = self.path_id_for(&normalized) {
+                return Some(id);
+            }
+        }
+
+        let abs_path = std::path::Path::new(path);
+        let workdir = self.workdir();
+
+        // 2. Try stripping the workdir prefix to obtain a relative path.
+        if let Ok(relative) = abs_path.strip_prefix(workdir) {
+            if let Some(rel_str) = relative.to_str() {
+                if let Some(id) = self.path_id_for(rel_str) {
+                    return Some(id);
+                }
+                #[cfg(windows)]
+                {
+                    let norm_rel = rel_str.replace('\\', "/");
+                    if norm_rel != rel_str {
+                        if let Some(id) = self.path_id_for(&norm_rel) {
+                            return Some(id);
+                        }
+                    }
+                }
+            }
+        }
+
+        // On Windows, also try stripping the workdir with normalized separators.
+        #[cfg(windows)]
+        {
+            let norm_workdir = workdir.to_string_lossy().replace('\\', "/");
+            if normalized.starts_with(&norm_workdir) {
+                let relative = &normalized[norm_workdir.len()..].trim_start_matches('/');
+                if let Some(id) = self.path_id_for(relative) {
+                    return Some(id);
+                }
+            }
+        }
+
+        // 3. Suffix match: check if the absolute path ends with any stored
+        //    relative path (compared component-wise).
+        for (stored_path, id) in self.path_entries_iter() {
+            if !stored_path.is_empty() && abs_path.ends_with(stored_path) {
+                return Some(id);
+            }
+        }
+
+        // 4. Canonicalize and retry.
+        if let Ok(canonical) = abs_path.canonicalize() {
+            if canonical != abs_path {
+                if let Some(canonical_str) = canonical.to_str() {
+                    if let Some(id) = self.path_id_for(canonical_str) {
+                        return Some(id);
+                    }
+                }
+                for (stored_path, id) in self.path_entries_iter() {
+                    if !stored_path.is_empty() && canonical.ends_with(stored_path) {
+                        return Some(id);
+                    }
+                }
+            }
+        }
+
+        // 5. Reverse canonicalize: stored paths may be symlink-resolved.
+        for (stored_path, id) in self.path_entries_iter() {
+            if stored_path.is_empty() {
+                continue;
+            }
+            let sp = std::path::Path::new(stored_path);
+            if sp.is_absolute() {
+                if let Ok(canonical_stored) = sp.canonicalize() {
+                    if canonical_stored == abs_path {
+                        return Some(id);
+                    }
+                }
+            }
+        }
+
+        // 6. Filename-only match (unambiguous).
+        if let Some(lookup_filename) = abs_path.file_name() {
+            let matches: Vec<PathId> = self
+                .path_entries_iter()
+                .filter_map(|(stored, id)| {
+                    let sp = std::path::Path::new(stored);
+                    if sp.file_name() == Some(lookup_filename) {
+                        Some(id)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            if matches.len() == 1 {
+                return Some(matches[0]);
+            }
+        }
+
+        None
     }
 
     // ── Transitional ───────────────────────────────────────────────
