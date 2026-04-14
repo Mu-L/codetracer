@@ -618,8 +618,8 @@ impl Handler {
                 && location.rr_ticks.0 >= 0
             {
                 let step_id = StepId(location.rr_ticks.0);
-                if (step_id.0 as usize) < self.reader.as_db().steps.len() {
-                    let call_key = self.reader.as_db().steps[step_id].call_key;
+                if (step_id.0 as usize) < self.reader.step_count() {
+                    let call_key = self.reader.step(step_id).expect("step not found").call_key;
                     let enriched =
                         self.reader
                             .as_db()
@@ -2708,7 +2708,7 @@ mod tests {
     }
 
     fn test_step_in_scenario(handler: &mut Handler, path: &Path, sender: Sender<DapMessage>) {
-        for i in 0..handler.reader.as_db().steps.len() - 1 {
+        for i in 0..handler.reader.step_count() - 1 {
             // eprintln!("doing step-in {i}");
             handler.step_in(true).unwrap();
             assert_eq!(handler.step_id, StepId(i as i64 + 1));
