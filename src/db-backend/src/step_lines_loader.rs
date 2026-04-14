@@ -102,7 +102,7 @@ impl StepLinesLoader {
                 // let function_id = db.calls[call_key].function_id;
                 // let function_first = db.functions[function_id].line;
                 let reader: Arc<dyn TraceReader> = Arc::new(InMemoryTraceReader::new(db.clone()));
-                let mut replay = DbReplay::new(Box::new(db.clone()), reader);
+                let mut replay = DbReplay::new(reader);
                 let flow_update = flow_preloader.load(location, FlowMode::Call, TraceKind::DB, &mut replay);
                 if !flow_update.error && !flow_update.view_updates.is_empty() {
                     let flow_view_update = &flow_update.view_updates[0];

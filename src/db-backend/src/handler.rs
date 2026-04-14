@@ -130,7 +130,7 @@ impl Handler {
         let mut expr_loader = ExprLoader::new(trace.clone());
         let step_lines_loader = StepLinesLoader::new(&*reader, &mut expr_loader);
         let replay: Box<dyn Replay> = if trace_kind == TraceKind::DB {
-            Box::new(DbReplay::new(Box::new(reader.as_db().clone()), Arc::clone(&reader)))
+            Box::new(DbReplay::new(Arc::clone(&reader)))
         } else {
             Box::new(RRDispatcher::new(&ct_rr_args.name, 0, ct_rr_args.clone()))
         };
@@ -588,10 +588,7 @@ impl Handler {
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
         let mut flow_replay: Box<dyn Replay> = if self.trace_kind == TraceKind::DB {
-            Box::new(DbReplay::new(
-                Box::new(self.reader.as_db().clone()),
-                Arc::clone(&self.reader),
-            ))
+            Box::new(DbReplay::new(Arc::clone(&self.reader)))
         } else {
             Box::new(RRDispatcher::new("flow", self.load_flow_index, self.ct_rr_args.clone()))
         };

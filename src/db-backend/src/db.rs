@@ -878,17 +878,15 @@ pub enum EndOfProgram {
 
 #[derive(Debug)]
 pub struct DbReplay {
-    // to optimize and prevents problems with too many `.clone()`
-    //   currently mostly in flow;
-    //   we can try to share a readonly version: `Rc`? `RefCell`?
-    //   or we can leave it like this for now and expect that the new format
-    //   will deal with that?
-    pub db: Box<Db>,
     /// Shared, read-only access to trace data via the [`TraceReader`]
-    /// abstraction.  Used for simple lookups (steps, calls, paths, etc.)
-    /// while `self.db` is retained for complex methods that mutate state
-    /// or rely on Db-specific helpers (e.g. `to_call`, `to_ct_value`).
+    /// abstraction.  All read accesses go through this.
     pub reader: Arc<dyn TraceReader>,
+    /// Types registered during expression evaluation (local overlay).
+    ///
+    /// `register_type` pushes new types here.  The `type_record` helper
+    /// checks the overlay first (for ids >= `reader.type_count()`), falling
+    /// back to the reader for base types.
+    local_types: Vec<TypeRecord>,
     pub step_id: StepId,
     pub call_key: CallKey,
     pub breakpoint_list: Vec<HashMap<usize, Breakpoint>>,
@@ -896,12 +894,12 @@ pub struct DbReplay {
 }
 
 impl DbReplay {
-    pub fn new(db: Box<Db>, reader: Arc<dyn TraceReader>) -> DbReplay {
+    pub fn new(reader: Arc<dyn TraceReader>) -> DbReplay {
         let mut breakpoint_list: Vec<HashMap<usize, Breakpoint>> = Default::default();
-        breakpoint_list.resize_with(db.paths.len(), HashMap::new);
+        breakpoint_list.resize_with(reader.path_count(), HashMap::new);
         DbReplay {
-            db,
             reader,
+            local_types: Vec::new(),
             step_id: StepId(0),
             call_key: CallKey(0),
             breakpoint_list,
@@ -911,8 +909,24 @@ impl DbReplay {
 
     pub fn register_type(&mut self, typ: TypeRecord) -> TypeId {
         // for no checking for typ.name logic: eventually in ensure_type?
-        self.db.types.push(typ);
-        TypeId(self.db.types.len() - 1)
+        let base_count = self.reader.type_count();
+        self.local_types.push(typ);
+        TypeId(base_count + self.local_types.len() - 1)
+    }
+
+    /// Look up a type by id, checking the local overlay for types
+    /// registered during this replay session.
+    #[allow(clippy::expect_used)] // idx < base_count guard ensures the id is valid
+    fn type_record(&self, id: TypeId) -> &TypeRecord {
+        let idx: usize = id.into();
+        let base_count = self.reader.type_count();
+        if idx < base_count {
+            self.reader
+                .type_record(id)
+                .expect("type_record: invalid TypeId in base reader")
+        } else {
+            &self.local_types[idx - base_count]
+        }
     }
 
     #[allow(clippy::wrong_self_convention)] // Needs &mut self to register types
@@ -1019,19 +1033,19 @@ impl DbReplay {
         match v {
             ValueRecord::Int { i, type_id } => ValueRecordWithType::Int {
                 i: *i,
-                typ: self.db.types[*type_id].clone(),
+                typ: self.type_record(*type_id).clone(),
             },
             ValueRecord::Float { f, type_id } => ValueRecordWithType::Float {
                 f: *f,
-                typ: self.db.types[*type_id].clone(),
+                typ: self.type_record(*type_id).clone(),
             },
             ValueRecord::Bool { b, type_id } => ValueRecordWithType::Bool {
                 b: *b,
-                typ: self.db.types[*type_id].clone(),
+                typ: self.type_record(*type_id).clone(),
             },
             ValueRecord::String { text, type_id } => ValueRecordWithType::String {
                 text: text.to_string(),
-                typ: self.db.types[*type_id].clone(),
+                typ: self.type_record(*type_id).clone(),
             },
             ValueRecord::Sequence {
                 elements,
@@ -1040,15 +1054,15 @@ impl DbReplay {
             } => ValueRecordWithType::Sequence {
                 elements: elements.iter().map(|e| self.to_value_record_with_type(e)).collect(),
                 is_slice: *is_slice,
-                typ: self.db.types[*type_id].clone(),
+                typ: self.type_record(*type_id).clone(),
             },
             ValueRecord::Tuple { elements, type_id } => ValueRecordWithType::Tuple {
                 elements: elements.iter().map(|e| self.to_value_record_with_type(e)).collect(),
-                typ: self.db.types[*type_id].clone(),
+                typ: self.type_record(*type_id).clone(),
             },
             ValueRecord::Struct { field_values, type_id } => ValueRecordWithType::Struct {
                 field_values: field_values.iter().map(|v| self.to_value_record_with_type(v)).collect(),
-                typ: self.db.types[*type_id].clone(),
+                typ: self.type_record(*type_id).clone(),
             },
             ValueRecord::Variant {
                 discriminator,
@@ -1057,7 +1071,7 @@ impl DbReplay {
             } => ValueRecordWithType::Variant {
                 discriminator: discriminator.clone(),
                 contents: Box::new(self.to_value_record_with_type(contents)),
-                typ: self.db.types[*type_id].clone(),
+                typ: self.type_record(*type_id).clone(),
             },
             ValueRecord::Reference {
                 dereferenced,
@@ -1068,28 +1082,28 @@ impl DbReplay {
                 dereferenced: Box::new(self.to_value_record_with_type(dereferenced)),
                 address: *address,
                 mutable: *mutable,
-                typ: self.db.types[*type_id].clone(),
+                typ: self.type_record(*type_id).clone(),
             },
             ValueRecord::Raw { r, type_id } => ValueRecordWithType::Raw {
                 r: r.clone(),
-                typ: self.db.types[*type_id].clone(),
+                typ: self.type_record(*type_id).clone(),
             },
             ValueRecord::Error { msg, type_id } => ValueRecordWithType::Error {
                 msg: msg.clone(),
-                typ: self.db.types[*type_id].clone(),
+                typ: self.type_record(*type_id).clone(),
             },
             ValueRecord::None { type_id } => ValueRecordWithType::None {
-                typ: self.db.types[*type_id].clone(),
+                typ: self.type_record(*type_id).clone(),
             },
             ValueRecord::Cell { place } => ValueRecordWithType::Cell { place: *place },
             ValueRecord::BigInt { b, negative, type_id } => ValueRecordWithType::BigInt {
                 b: b.clone(),
                 negative: *negative,
-                typ: self.db.types[*type_id].clone(),
+                typ: self.type_record(*type_id).clone(),
             },
             ValueRecord::Char { c, type_id } => ValueRecordWithType::Char {
                 c: *c,
-                typ: self.db.types[*type_id].clone(),
+                typ: self.type_record(*type_id).clone(),
             },
         }
     }
@@ -1100,20 +1114,40 @@ impl DbReplay {
         }
     }
 
+    #[allow(clippy::expect_used)] // step_id != NO_INDEX guard ensures the id is valid
     fn to_program_event(&self, event_record: &DbRecordEvent, index: usize) -> ProgramEvent {
         let step_id_int = event_record.step_id.0;
         let (path, line) = if step_id_int != NO_INDEX {
-            let step_record = &self.db.steps[event_record.step_id];
+            let step_record = self
+                .reader
+                .step(event_record.step_id)
+                .expect("to_program_event: invalid step_id");
             (
-                self.db
-                    .workdir
-                    .join(self.db.load_path_from_id(&step_record.path_id))
+                self.reader
+                    .workdir()
+                    .join(self.reader.path(step_record.path_id).unwrap_or(""))
                     .display()
                     .to_string(),
                 step_record.line.0,
             )
         } else {
             (NO_PATH.to_string(), NO_POSITION)
+        };
+
+        let default_step = DbStep {
+            step_id: StepId(0),
+            path_id: PathId(0),
+            line: Line(0),
+            call_key: CallKey(0),
+            global_call_key: CallKey(0),
+        };
+        let last_step_id = if self.reader.step_count() > 0 {
+            self.reader
+                .step(StepId((self.reader.step_count() - 1) as i64))
+                .unwrap_or(&default_step)
+                .step_id
+        } else {
+            default_step.step_id
         };
 
         ProgramEvent {
@@ -1129,29 +1163,17 @@ impl DbReplay {
             high_level_path: path,
             high_level_line: line,
             base64_encoded: false,
-            max_rr_ticks: self
-                .db
-                .steps
-                .last()
-                .unwrap_or(&DbStep {
-                    step_id: StepId(0),
-                    path_id: PathId(0),
-                    line: Line(0),
-                    call_key: CallKey(0),
-                    global_call_key: CallKey(0),
-                })
-                .step_id
-                .0,
+            max_rr_ticks: last_step_id.0,
         }
     }
 
     fn single_step_line(&self, step_index: usize, forward: bool) -> usize {
         // taking note of db.lines limits: returning a valid step id always
-        if self.db.steps.is_empty() {
+        if self.reader.step_count() == 0 {
             return step_index;
         }
         if forward {
-            if step_index < self.db.steps.len() - 1 {
+            if step_index < self.reader.step_count() - 1 {
                 step_index + 1
             } else {
                 step_index
@@ -1180,23 +1202,24 @@ impl DbReplay {
 
     fn step_out(&mut self, forward: bool) -> Result<bool, Box<dyn Error>> {
         let old_step_id = self.step_id;
-        (self.step_id, _) = self.db.step_out_step_id_relative_to(self.step_id, forward);
+        (self.step_id, _) = self.reader.as_db().step_out_step_id_relative_to(self.step_id, forward);
         Ok(self.step_id != old_step_id)
     }
 
     fn next(&mut self, forward: bool) -> Result<bool, Box<dyn Error>> {
         let step_to_different_line = true; // which is better/should be let the user configure it?
         let moved;
-        (self.step_id, moved) = self
-            .db
-            .next_step_id_relative_to(self.step_id, forward, step_to_different_line);
+        (self.step_id, moved) =
+            self.reader
+                .as_db()
+                .next_step_id_relative_to(self.step_id, forward, step_to_different_line);
         Ok(moved)
     }
 
     // returns if it has hit any breakpoints
     #[allow(clippy::expect_used)] // Trace must have at least one step
     fn step_continue(&mut self, forward: bool) -> Result<bool, Box<dyn Error>> {
-        for step in self.db.step_from(self.step_id, forward) {
+        for step in self.reader.as_db().step_from(self.step_id, forward) {
             if !self.breakpoint_list.is_empty() {
                 if let Some(enabled) = self.breakpoint_list[step.path_id.0]
                     .get(&step.line.into())
@@ -1214,19 +1237,18 @@ impl DbReplay {
         }
 
         // If the continue step doesn't find a valid breakpoint.
+        let step_count = self.reader.step_count();
         if forward {
             self.step_id_jump(
-                self.db
-                    .steps
-                    .last()
+                self.reader
+                    .step(StepId((step_count - 1) as i64))
                     .expect("unexpected 0 steps in trace for step_continue")
                     .step_id,
             );
         } else {
             self.step_id_jump(
-                self.db
-                    .steps
-                    .first()
+                self.reader
+                    .step(StepId(0))
                     .expect("unexpected 0 steps in trace for step_continue")
                     .step_id,
             )
@@ -1249,8 +1271,14 @@ impl DbReplay {
     ///    one where the requested path ends with the stored relative path
     ///    (compared as whole path components via `std::path::Path::ends_with`).
     fn load_path_id(&self, path: &str) -> Option<PathId> {
+        // This method uses as_db() for direct path_map iteration which is
+        // not yet exposed through TraceReader (only exact-match `path_id_for`
+        // is available).  The fuzzy matching strategies below require iterating
+        // the full path_map.
+        let db = self.reader.as_db();
+
         // 1. Exact match (fast path).
-        if let Some(&id) = self.db.path_map.get(path) {
+        if let Some(&id) = db.path_map.get(path) {
             return Some(id);
         }
 
@@ -1262,17 +1290,18 @@ impl DbReplay {
 
         #[cfg(windows)]
         if normalized != path {
-            if let Some(&id) = self.db.path_map.get(&normalized) {
+            if let Some(&id) = db.path_map.get(&normalized) {
                 return Some(id);
             }
         }
 
         let abs_path = std::path::Path::new(path);
+        let workdir = self.reader.workdir();
 
         // 2. Try stripping the workdir prefix to obtain a relative path.
-        if let Ok(relative) = abs_path.strip_prefix(&self.db.workdir) {
+        if let Ok(relative) = abs_path.strip_prefix(workdir) {
             if let Some(rel_str) = relative.to_str() {
-                if let Some(&id) = self.db.path_map.get(rel_str) {
+                if let Some(&id) = db.path_map.get(rel_str) {
                     return Some(id);
                 }
                 // Also try with normalized separators.
@@ -1280,7 +1309,7 @@ impl DbReplay {
                 {
                     let norm_rel = rel_str.replace('\\', "/");
                     if norm_rel != rel_str {
-                        if let Some(&id) = self.db.path_map.get(&norm_rel) {
+                        if let Some(&id) = db.path_map.get(&norm_rel) {
                             return Some(id);
                         }
                     }
@@ -1291,10 +1320,10 @@ impl DbReplay {
         // On Windows, also try stripping the workdir with normalized separators.
         #[cfg(windows)]
         {
-            let norm_workdir = self.db.workdir.to_string_lossy().replace('\\', "/");
+            let norm_workdir = workdir.to_string_lossy().replace('\\', "/");
             if normalized.starts_with(&norm_workdir) {
                 let relative = &normalized[norm_workdir.len()..].trim_start_matches('/');
-                if let Some(&id) = self.db.path_map.get(*relative) {
+                if let Some(&id) = db.path_map.get(*relative) {
                     return Some(id);
                 }
             }
@@ -1305,7 +1334,7 @@ impl DbReplay {
         //    Skip empty stored paths — Path::ends_with("") returns true for any
         //    path (vacuous truth), which would cause every lookup to match the
         //    empty-path entry instead of the correct file.
-        for (stored_path, &id) in &self.db.path_map {
+        for (stored_path, &id) in &db.path_map {
             if !stored_path.is_empty() && abs_path.ends_with(stored_path) {
                 return Some(id);
             }
@@ -1319,13 +1348,13 @@ impl DbReplay {
             if canonical != abs_path {
                 // Retry exact match with the canonical path.
                 if let Some(canonical_str) = canonical.to_str() {
-                    if let Some(&id) = self.db.path_map.get(canonical_str) {
+                    if let Some(&id) = db.path_map.get(canonical_str) {
                         return Some(id);
                     }
                 }
 
                 // Retry suffix match with the canonical path.
-                for (stored_path, &id) in &self.db.path_map {
+                for (stored_path, &id) in &db.path_map {
                     if !stored_path.is_empty() && canonical.ends_with(stored_path) {
                         return Some(id);
                     }
@@ -1336,7 +1365,7 @@ impl DbReplay {
         // 5. Reverse canonicalize: the stored paths themselves may be
         //    symlink-resolved while the lookup path is not.  Try
         //    canonicalizing each stored absolute path against the lookup.
-        for (stored_path, &id) in &self.db.path_map {
+        for (stored_path, &id) in &db.path_map {
             if stored_path.is_empty() {
                 continue;
             }
@@ -1355,8 +1384,7 @@ impl DbReplay {
         //    alone.  Only used when exactly one stored path shares the same
         //    filename to avoid ambiguity.
         if let Some(lookup_filename) = abs_path.file_name() {
-            let matches: Vec<PathId> = self
-                .db
+            let matches: Vec<PathId> = db
                 .path_map
                 .iter()
                 .filter_map(|(stored, &id)| {
@@ -1379,6 +1407,15 @@ impl DbReplay {
     fn id_to_name(&self, variable_id: VariableId) -> &str {
         self.reader.variable_name(variable_id).unwrap_or("<unknown>")
     }
+
+    /// Convenience accessor for the underlying `Db`.
+    ///
+    /// Used for complex Db methods (`step_from`, `load_value_for_place`,
+    /// `next_step_id_relative_to`, etc.) that have not yet been lifted to
+    /// the `TraceReader` trait.
+    fn db(&self) -> &Db {
+        self.reader.as_db()
+    }
 }
 
 impl Replay for DbReplay {
@@ -1390,9 +1427,9 @@ impl Replay for DbReplay {
             info!("  no steps in trace, returning default location");
             return Ok(Location::default());
         }
-        let call_key = self.db.call_key_for_step(self.step_id);
+        let call_key = self.reader.call_key_for_step(self.step_id).unwrap_or(CallKey(0));
         self.call_key = call_key;
-        let location = self.db.load_location(self.step_id, call_key, expr_loader);
+        let location = self.reader.load_location(self.step_id, call_key, expr_loader);
         info!("  location: {location:?}");
         Ok(location)
     }
@@ -1440,27 +1477,38 @@ impl Replay for DbReplay {
     }
 
     fn load_locals(&mut self, arg: CtLoadLocalsArguments) -> Result<Vec<VariableWithRecord>, Box<dyn Error>> {
-        let variables_for_step = self.db.variables[self.step_id].clone();
+        let variables_for_step = self
+            .reader
+            .variables_at(self.step_id)
+            .map(|v| v.to_vec())
+            .unwrap_or_default();
         let full_value_locals: Vec<VariableWithRecord> = variables_for_step
             .iter()
             .map(|v| VariableWithRecord {
-                expression: self.db.variable_name(v.variable_id).to_string(),
+                expression: self
+                    .reader
+                    .variable_name(v.variable_id)
+                    .unwrap_or("<unknown>")
+                    .to_string(),
                 value: self.to_value_record_with_type(&v.value),
                 address: NO_ADDRESS,
-                // &self.db.to_ct_value(&v.value),
             })
             .collect();
 
         // TODO: fix random order here as well: ensure order(or in final locals?)
-        let variable_cells_for_step = self.db.variable_cells[self.step_id].clone();
+        let variable_cells_for_step = self.reader.variable_cells_at(self.step_id).cloned().unwrap_or_default();
         let value_tracking_locals: Vec<VariableWithRecord> = variable_cells_for_step
             .iter()
             .map(|(variable_id, place)| {
-                let name = self.db.variable_name(*variable_id);
+                let name = self.reader.variable_name(*variable_id).unwrap_or("<unknown>");
                 info!("log local {variable_id:?} {name} place: {place:?}");
-                let value = self.db.load_value_for_place(*place, self.step_id);
+                let value = self.db().load_value_for_place(*place, self.step_id);
                 VariableWithRecord {
-                    expression: self.db.variable_name(*variable_id).to_string(),
+                    expression: self
+                        .reader
+                        .variable_name(*variable_id)
+                        .unwrap_or("<unknown>")
+                        .to_string(),
                     value: self.to_value_record_with_type(&value),
                     address: NO_ADDRESS,
                 }
@@ -1494,9 +1542,12 @@ impl Replay for DbReplay {
         // TODO: a more optimal way: cache a hashmap? or change structure?
         // or again start directly loading available values matching all expressions in the same time?:
         //   taking a set of expressions: probably best(maybe add an additional load_values)
-        for variable in &self.db.variables[self.step_id] {
-            if self.db.variable_names[variable.variable_id] == expression {
-                return Ok(self.to_value_record_with_type(&variable.value.clone()));
+        if let Some(variables) = self.reader.variables_at(self.step_id) {
+            for variable in variables {
+                let name = self.reader.variable_name(variable.variable_id).unwrap_or("");
+                if name == expression {
+                    return Ok(self.to_value_record_with_type(&variable.value.clone()));
+                }
             }
         }
         Err(format!("variable {expression} not found on this step").into())
@@ -1510,7 +1561,11 @@ impl Replay for DbReplay {
         _lang: Lang,
     ) -> Result<ValueRecordWithType, Box<dyn Error>> {
         // assumes self.load_location() has been ran, and that we have the current call key
-        Ok(self.to_value_record_with_type(&self.db.calls[self.call_key].return_value.clone()))
+        let call_record = self
+            .reader
+            .call(self.call_key)
+            .ok_or_else(|| format!("load_return_value: invalid call_key {:?}", self.call_key))?;
+        Ok(self.to_value_record_with_type(&call_record.return_value.clone()))
     }
 
     fn load_step_events(&mut self, step_id: StepId, exact: bool) -> Vec<DbRecordEvent> {
@@ -1522,14 +1577,21 @@ impl Replay for DbReplay {
         // call, producing a CallLine for each frame.
         let mut callstack = vec![];
         let step_id = self.step_id;
-        if step_id.0 >= 0 && (step_id.0 as usize) < self.db.steps.len() {
-            let current_step = self.db.steps[step_id];
+        if step_id.0 >= 0 && (step_id.0 as usize) < self.reader.step_count() {
+            let current_step = *self
+                .reader
+                .step(step_id)
+                .ok_or_else(|| format!("load_callstack: invalid step_id {:?}", step_id))?;
             let mut call_key = current_step.call_key;
             let mut expr_loader = ExprLoader::new(CoreTrace::default());
 
             while call_key != NO_KEY {
-                let call_record = self.db.calls[call_key].clone();
-                let call = self.db.to_call(&call_record, &mut expr_loader);
+                let call_record = self
+                    .reader
+                    .call(call_key)
+                    .ok_or_else(|| format!("load_callstack: invalid call_key {:?}", call_key))?
+                    .clone();
+                let call = self.reader.to_call(&call_record, &mut expr_loader);
                 callstack.push(CallLine::call(
                     call,
                     /* hidden_children */ false,
@@ -1551,10 +1613,18 @@ impl Replay for DbReplay {
         //    if not: add to the history
 
         self.jump_to(StepId(arg.location.rr_ticks.0))?;
-        let current_call_key = self.db.steps[self.step_id].call_key;
+        let current_call_key = self
+            .reader
+            .step(self.step_id)
+            .expect("load_history: invalid step_id")
+            .call_key;
 
-        for (step_id, var_list) in self.db.variables.iter().enumerate() {
-            let step = self.db.steps[StepId(step_id as i64)];
+        // Iterate over all steps and their variables.  We use as_db() here
+        // because TraceReader does not expose a bulk variables iterator yet.
+        let step_count = self.reader.step_count();
+        for step_idx in 0..step_count {
+            let sid = StepId(step_idx as i64);
+            let step = *self.reader.step(sid).expect("load_history: step out of range");
             // for now limit to current call: seems most correct
             // TODO: hopefully a more reliable value history for global search
             info!(
@@ -1562,6 +1632,7 @@ impl Replay for DbReplay {
                 step.call_key, current_call_key
             );
             if step.call_key == current_call_key {
+                let var_list = self.reader.variables_at(sid).unwrap_or(&[]);
                 if let Some(var) = var_list
                     .iter()
                     .find(|v| *self.id_to_name(v.variable_id) == arg.expression)
@@ -1571,13 +1642,12 @@ impl Replay for DbReplay {
                         arg.location.line,
                         // assuming usize is always safely
                         // castable as i64 on 64bit arch?
-                        RRTicks(step_id as i64),
+                        RRTicks(step_idx as i64),
                         &arg.location.function_name,
                         &arg.location.key,
                         &arg.location.global_call_key,
                         arg.location.callstack_depth,
                     );
-                    // let ct_value = self.db.to_ct_value(&var.value);
                     let now = SystemTime::now();
                     let time = now
                         .duration_since(UNIX_EPOCH)
@@ -1687,9 +1757,17 @@ impl Replay for DbReplay {
     }
 
     fn jump_to_call(&mut self, location: &Location) -> Result<Location, Box<dyn Error>> {
-        let step = self.db.steps[StepId(location.rr_ticks.0)];
+        let step_id = StepId(location.rr_ticks.0);
+        let step = *self
+            .reader
+            .step(step_id)
+            .ok_or_else(|| format!("jump_to_call: invalid step_id {:?}", step_id))?;
         let call_key = step.call_key;
-        let first_call_step_id = self.db.calls[call_key].step_id;
+        let first_call_step_id = self
+            .reader
+            .call(call_key)
+            .ok_or_else(|| format!("jump_to_call: invalid call_key {:?}", call_key))?
+            .step_id;
         self.jump_to(first_call_step_id)?;
         let mut expr_loader = ExprLoader::new(CoreTrace::default());
         self.load_location(&mut expr_loader)

@@ -122,7 +122,7 @@ fn check_tracepoint_evaluate(
     interpreter.register_tracepoint(0, src)?;
 
     let reader: Arc<dyn TraceReader> = Arc::new(InMemoryTraceReader::new(db.clone()));
-    let mut db_replay = DbReplay::new(Box::new(db.clone()), reader);
+    let mut db_replay = DbReplay::new(reader);
     for step in db.step_from(StepId(0), true) {
         let curr_line = step.line.0 as usize;
         db_replay.jump_to(step.step_id)?;
