@@ -620,10 +620,9 @@ impl Handler {
                 let step_id = StepId(location.rr_ticks.0);
                 if (step_id.0 as usize) < self.reader.step_count() {
                     let call_key = self.reader.step(step_id).expect("step not found").call_key;
-                    let enriched =
-                        self.reader
-                            .as_db()
-                            .load_location(step_id, call_key, &mut self.flow_preloader.expr_loader);
+                    let enriched = self
+                        .reader
+                        .load_location(step_id, call_key, &mut self.flow_preloader.expr_loader);
                     location.function_first = enriched.function_first;
                     location.function_last = enriched.function_last;
                     if location.function_name.is_empty() || location.function_name == "<unknown>" {
@@ -673,8 +672,7 @@ impl Handler {
         count_limit: usize,
     ) -> Result<(Call, usize), Box<dyn Error>> {
         // expanded children count not used here: we add actual children
-        // TODO(Phase 4): migrate to_call to TraceReader or free function
-        let mut call = self.reader.as_db().to_call(db_call, &mut self.expr_loader);
+        let mut call = self.reader.to_call(db_call, &mut self.expr_loader);
         let mut count = 1; // our call
                            // TODO: on depth/count limit
                            // generate something like Calls non-expanded/limited
@@ -983,8 +981,7 @@ impl Handler {
         for db_call in self.reader.calls_iter() {
             if list.contains(&db_call.function_id.0) {
                 // expanded children count not relevant here
-                // TODO(Phase 4): migrate to_call to TraceReader or free function
-                calls.push(self.reader.as_db().to_call(db_call, &mut self.expr_loader));
+                calls.push(self.reader.to_call(db_call, &mut self.expr_loader));
             }
         }
 
@@ -2191,8 +2188,7 @@ impl Handler {
         //   the equivalent of [4, 2]
         //   how to do it efficiently is a non-trivial question: maybe by iterating through previous steps,
         //   or a new kind of index?
-        // TODO(Phase 4): migrate to_call and load_location to TraceReader or free function
-        let call = self.reader.as_db().to_call(call_record, &mut self.expr_loader);
+        let call = self.reader.to_call(call_record, &mut self.expr_loader);
         let current_call_key = self
             .reader
             .step(self.step_id)
@@ -2200,7 +2196,6 @@ impl Handler {
             .call_key;
         let location = if call_record.key == current_call_key {
             self.reader
-                .as_db()
                 .load_location(self.step_id, call_record.key, &mut self.expr_loader)
         } else {
             call.location
@@ -2401,9 +2396,7 @@ impl Handler {
                     .variable_name(v.variable_id)
                     .unwrap_or("<unknown>")
                     .to_string(),
-                // to_ct_value is a Db method that depends on type resolution;
-                // keep using reader.as_db() for it until TraceReader gains value conversion.
-                value: self.reader.as_db().to_ct_value(&v.value),
+                value: self.reader.to_ct_value(&v.value),
                 address: NO_ADDRESS,
             })
             .collect();
@@ -2465,7 +2458,7 @@ mod tests {
     fn test_struct_handling() {
         let db = setup_db();
         let handler: Handler = Handler::new(TraceKind::DB, CtRRArgs::default(), Box::new(db));
-        let value = handler.reader.as_db().to_ct_value(&ValueRecord::Struct {
+        let value = handler.reader.to_ct_value(&ValueRecord::Struct {
             field_values: vec![],
             type_id: TypeId(1),
         });
@@ -2644,7 +2637,6 @@ mod tests {
         let calltrace_load_args = CalltraceLoadArgs {
             location: handler
                 .reader
-                .as_db()
                 .load_location(StepId(4), CallKey(-1), &mut handler.expr_loader),
             start_call_line_index: GlobalCallLineIndex(0),
             depth: 10,
