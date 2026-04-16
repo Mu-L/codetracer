@@ -4,12 +4,15 @@
 ## endpoint group. Authentication is via bearer token in the Authorization header.
 ##
 ## Endpoint reference (from MonolithApiClient.cs):
-## - ``GET  tenants``                                → list user's tenants
-## - ``POST tenants/{tenantId}/traces/upload-url``   → presigned upload URL
-## - ``POST traces/{traceId}/confirm-upload``        → confirm upload with etag
-## - ``GET  traces/{traceId}/download-url``          → presigned download URL
-## - ``GET  billing/license``                        → license info (v2)
-## - ``POST license/issue``                          → signed CTL license blob
+## - ``GET  tenants``                                        → list user's tenants
+## - ``POST tenants/{tenantId}/traces/upload-url``           → presigned upload URL
+## - ``POST traces/{traceId}/confirm-upload``                → confirm upload with etag
+## - ``GET  traces/{traceId}/download-url``                  → presigned download URL
+## - ``GET  billing/license``                                → license info (v2)
+## - ``POST license/issue``                                  → signed CTL license blob
+## - ``POST tenants/{tenantId}/traces/upload-session`` (M18a) → create upload session
+## - ``POST traces/{sessionId}/slice-upload-url``      (M18a) → presigned slice URL
+## - ``POST traces/{sessionId}/finalize``              (M18a) → finalize upload session
 
 import std/[httpclient, json, net, strformat, strutils, uri]
 
@@ -31,6 +34,16 @@ type
 
   LicenseInfoResponse* = object
     licenseInfo*: string
+
+  UploadSessionResponse* = object
+    ## Response from ``POST /tenants/{tenantId}/traces/upload-session``.
+    sessionId*: string
+    s3KeyPrefix*: string
+
+  SliceUploadUrlResponse* = object
+    ## Response from ``POST /traces/{sessionId}/slice-upload-url``.
+    uploadUrl*: string
+    sliceIndex*: int
 
   ApiError* = object of CatchableError
     ## Raised when the server returns a non-success HTTP status.
@@ -189,3 +202,65 @@ proc issueLicense*(client: ApiClient, bearerToken: string): string =
     url, httpMethod = HttpPost, headers = bearerHeaders(bearerToken))
   ensureSuccess(response, "issueLicense")
   result = response.body
+
+# ---------------------------------------------------------------------------
+# Upload-session endpoints (M18a per-slice upload)
+# ---------------------------------------------------------------------------
+
+proc requestUploadSession*(client: ApiClient, tenantId: string,
+    platform: string, recordingMode: string,
+    bearerToken: string): UploadSessionResponse =
+  ## ``POST /api/v1/tenants/{tenantId}/traces/upload-session``
+  ## Creates a new upload session for per-slice streaming upload.
+  ## Returns a session ID and S3 key prefix for the upload.
+  let url = client.baseApiUrl & fmt"tenants/{tenantId}/traces/upload-session"
+  let body = $ %*{
+    "platform": platform,
+    "recordingMode": recordingMode,
+  }
+  let response = client.httpClient.request(
+    url, httpMethod = HttpPost, headers = bearerHeaders(bearerToken), body = body)
+  ensureSuccess(response, "requestUploadSession")
+
+  let jsonBody = parseJson(response.body)
+  result = UploadSessionResponse(
+    sessionId: jsonBody["sessionId"].getStr(),
+    s3KeyPrefix: jsonBody["s3KeyPrefix"].getStr(),
+  )
+
+proc requestSliceUploadUrl*(client: ApiClient, sessionId: string,
+    sliceIndex: int, fileName: string, contentLength: int64,
+    bearerToken: string): SliceUploadUrlResponse =
+  ## ``POST /api/v1/traces/{sessionId}/slice-upload-url``
+  ## Requests a presigned S3 URL for uploading a single slice file.
+  let url = client.baseApiUrl & fmt"traces/{sessionId}/slice-upload-url"
+  let body = $ %*{
+    "sliceIndex": sliceIndex,
+    "fileName": fileName,
+    "contentLength": contentLength,
+  }
+  let response = client.httpClient.request(
+    url, httpMethod = HttpPost, headers = bearerHeaders(bearerToken), body = body)
+  ensureSuccess(response, "requestSliceUploadUrl")
+
+  let jsonBody = parseJson(response.body)
+  result = SliceUploadUrlResponse(
+    uploadUrl: jsonBody["uploadUrl"].getStr(),
+    sliceIndex: jsonBody["sliceIndex"].getInt(),
+  )
+
+proc finalizeUploadSession*(client: ApiClient, sessionId: string,
+    totalSlices: int, totalEvents: int, platform: string,
+    bearerToken: string) =
+  ## ``POST /api/v1/traces/{sessionId}/finalize``
+  ## Marks the upload session as complete after all slices have been uploaded.
+  ## The server will process the uploaded slices and make the trace available.
+  let url = client.baseApiUrl & fmt"traces/{sessionId}/finalize"
+  let body = $ %*{
+    "totalSlices": totalSlices,
+    "totalEvents": totalEvents,
+    "platform": platform,
+  }
+  let response = client.httpClient.request(
+    url, httpMethod = HttpPost, headers = bearerHeaders(bearerToken), body = body)
+  ensureSuccess(response, "finalizeUploadSession")

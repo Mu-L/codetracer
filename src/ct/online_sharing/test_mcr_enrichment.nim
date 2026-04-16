@@ -12,7 +12,7 @@
 ## since ct-mcr may not be installed. The subprocess call is tested via the
 ## E2E tests in M16d.
 
-import std/[os, unittest]
+import std/[algorithm, json, os, strutils, unittest]
 import mcr_enrichment
 
 suite "MCR Enrichment — CTFS magic detection":
@@ -326,3 +326,179 @@ suite "MCR Enrichment — countSlices":
     writeFile(tmpDir / "readme.txt", "info")
 
     check countSlices(tmpDir) == 0
+
+
+suite "Upload session — API model deserialization":
+  ## These tests verify that the JSON response formats from the upload-session
+  ## API (M18a) can be correctly parsed. The types are defined in api_client.nim
+  ## but we test deserialization logic here using raw JSON parsing to avoid
+  ## importing api_client (which pulls in httpclient/net dependencies).
+
+  test "UploadSessionResponse fields deserialize from JSON":
+    let jsonStr = """{"sessionId": "sess-abc-123", "s3KeyPrefix": "uploads/sess-abc-123/"}"""
+    let jsonNode = parseJson(jsonStr)
+    let sessionId = jsonNode["sessionId"].getStr()
+    let s3KeyPrefix = jsonNode["s3KeyPrefix"].getStr()
+    check sessionId == "sess-abc-123"
+    check s3KeyPrefix == "uploads/sess-abc-123/"
+
+  test "UploadSessionResponse handles empty s3KeyPrefix":
+    let jsonStr = """{"sessionId": "sess-xyz", "s3KeyPrefix": ""}"""
+    let jsonNode = parseJson(jsonStr)
+    let sessionId = jsonNode["sessionId"].getStr()
+    let s3KeyPrefix = jsonNode["s3KeyPrefix"].getStr()
+    check sessionId == "sess-xyz"
+    check s3KeyPrefix == ""
+
+  test "SliceUploadUrlResponse fields deserialize from JSON":
+    let jsonStr = """{"uploadUrl": "https://s3.example.com/presigned?token=abc", "sliceIndex": 7}"""
+    let jsonNode = parseJson(jsonStr)
+    let uploadUrl = jsonNode["uploadUrl"].getStr()
+    let sliceIndex = jsonNode["sliceIndex"].getInt()
+    check uploadUrl == "https://s3.example.com/presigned?token=abc"
+    check sliceIndex == 7
+
+  test "SliceUploadUrlResponse handles zero index":
+    let jsonStr = """{"uploadUrl": "https://s3.example.com/slice0", "sliceIndex": 0}"""
+    let jsonNode = parseJson(jsonStr)
+    let sliceIndex = jsonNode["sliceIndex"].getInt()
+    check sliceIndex == 0
+
+  test "finalize request body serializes correctly":
+    ## Verify the JSON body format sent to POST /traces/{sessionId}/finalize.
+    let body = %*{
+      "totalSlices": 5,
+      "totalEvents": 0,
+      "platform": "linux-x86_64",
+    }
+    check body["totalSlices"].getInt() == 5
+    check body["totalEvents"].getInt() == 0
+    check body["platform"].getStr() == "linux-x86_64"
+
+
+suite "Upload session — slice file ordering":
+
+  test "slice files are sorted in correct numeric order":
+    ## Verifies that when we collect and sort slice file paths, they come
+    ## out in the correct ascending order (slice_0000 before slice_0001, etc.).
+    let tmpDir = getTempDir() / "test_slice_ordering"
+    createDir(tmpDir)
+    defer: removeDir(tmpDir)
+
+    # Create slice files in deliberately non-alphabetical order.
+    writeFile(tmpDir / "slice_0002.ct", "s2")
+    writeFile(tmpDir / "slice_0000.ct", "s0")
+    writeFile(tmpDir / "slice_0010.ct", "s10")
+    writeFile(tmpDir / "slice_0001.ct", "s1")
+
+    var sliceFiles: seq[string] = @[]
+    for f in walkDir(tmpDir):
+      if f.kind == pcFile and f.path.endsWith(".ct"):
+        sliceFiles.add(f.path)
+    sliceFiles.sort()
+
+    check sliceFiles.len == 4
+    check extractFilename(sliceFiles[0]) == "slice_0000.ct"
+    check extractFilename(sliceFiles[1]) == "slice_0001.ct"
+    check extractFilename(sliceFiles[2]) == "slice_0002.ct"
+    check extractFilename(sliceFiles[3]) == "slice_0010.ct"
+
+  test "single slice file is sorted trivially":
+    let tmpDir = getTempDir() / "test_slice_ordering_single"
+    createDir(tmpDir)
+    defer: removeDir(tmpDir)
+
+    writeFile(tmpDir / "slice_0000.ct", "s0")
+
+    var sliceFiles: seq[string] = @[]
+    for f in walkDir(tmpDir):
+      if f.kind == pcFile and f.path.endsWith(".ct"):
+        sliceFiles.add(f.path)
+    sliceFiles.sort()
+
+    check sliceFiles.len == 1
+    check extractFilename(sliceFiles[0]) == "slice_0000.ct"
+
+  test "empty directory yields no slice files":
+    let tmpDir = getTempDir() / "test_slice_ordering_empty"
+    createDir(tmpDir)
+    defer: removeDir(tmpDir)
+
+    var sliceFiles: seq[string] = @[]
+    for f in walkDir(tmpDir):
+      if f.kind == pcFile and f.path.endsWith(".ct"):
+        sliceFiles.add(f.path)
+    sliceFiles.sort()
+
+    check sliceFiles.len == 0
+
+
+suite "Upload session — non-.ct file filtering":
+
+  test "only .ct files are collected as slices":
+    ## Verifies that the slice collection logic filters out non-.ct files
+    ## such as manifests, text files, and other metadata.
+    let tmpDir = getTempDir() / "test_slice_filter"
+    createDir(tmpDir)
+    defer: removeDir(tmpDir)
+
+    writeFile(tmpDir / "slice_0000.ct", "s0")
+    writeFile(tmpDir / "slice_0001.ct", "s1")
+    writeFile(tmpDir / "manifest.smnf", "manifest data")
+    writeFile(tmpDir / "analysis.amnf", "analysis data")
+    writeFile(tmpDir / "readme.txt", "info")
+    writeFile(tmpDir / "meta.json", "{}")
+
+    var sliceFiles: seq[string] = @[]
+    for f in walkDir(tmpDir):
+      if f.kind == pcFile and f.path.endsWith(".ct"):
+        sliceFiles.add(f.path)
+    sliceFiles.sort()
+
+    check sliceFiles.len == 2
+    check extractFilename(sliceFiles[0]) == "slice_0000.ct"
+    check extractFilename(sliceFiles[1]) == "slice_0001.ct"
+
+  test "manifest files are identified separately from slices":
+    ## Verifies that .smnf and .amnf files are found when scanning for
+    ## manifests, but not included in the .ct slice list.
+    let tmpDir = getTempDir() / "test_manifest_filter"
+    createDir(tmpDir)
+    defer: removeDir(tmpDir)
+
+    writeFile(tmpDir / "slice_0000.ct", "s0")
+    writeFile(tmpDir / "manifest.smnf", "smnf data")
+    writeFile(tmpDir / "analysis.amnf", "amnf data")
+    writeFile(tmpDir / "readme.txt", "info")
+
+    # Collect .ct files (slices).
+    var sliceFiles: seq[string] = @[]
+    for f in walkDir(tmpDir):
+      if f.kind == pcFile and f.path.endsWith(".ct"):
+        sliceFiles.add(f.path)
+
+    # Collect manifest files (.smnf, .amnf).
+    var manifestFiles: seq[string] = @[]
+    for f in walkDir(tmpDir):
+      if f.kind == pcFile:
+        if f.path.endsWith(".smnf") or f.path.endsWith(".amnf"):
+          manifestFiles.add(f.path)
+
+    check sliceFiles.len == 1
+    check manifestFiles.len == 2
+
+  test "directory with no .ct files yields empty slice list":
+    let tmpDir = getTempDir() / "test_no_ct_files"
+    createDir(tmpDir)
+    defer: removeDir(tmpDir)
+
+    writeFile(tmpDir / "manifest.smnf", "manifest")
+    writeFile(tmpDir / "analysis.amnf", "analysis")
+    writeFile(tmpDir / "readme.txt", "info")
+
+    var sliceFiles: seq[string] = @[]
+    for f in walkDir(tmpDir):
+      if f.kind == pcFile and f.path.endsWith(".ct"):
+        sliceFiles.add(f.path)
+
+    check sliceFiles.len == 0

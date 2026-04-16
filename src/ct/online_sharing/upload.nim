@@ -1,7 +1,7 @@
 import std/[
-  terminal, options, strutils, strformat,
+  algorithm, terminal, options, strutils, strformat,
   os, httpclient, uri, net, json,
-  sequtils, streams, oids
+  sequtils, streams, oids, sugar
 ]
 import ../../common/[ trace_index, types ]
 import ../utilities/[ zip, types, progress_update ]
@@ -67,39 +67,22 @@ proc onProgress(ratio, start: int, message: string, lastPercentSent: ref int): p
       logUpdate(scaled, message)
 
 
-proc uploadSplitTrace*(trace: Trace, slicesDir: string,
+proc uploadSplitTraceFallback(trace: Trace, slicesDir: string,
     org: Option[string],
     token: Option[string] = none(string),
     baseUrl: Option[string] = none(string)): UploadedInfo =
-  ## Upload a pre-split MCR trace by zipping only the slices directory.
-  ##
-  ## When `ct-mcr record --split` produces individual slice .ct files in a
-  ## `_slices/` subdirectory, we zip only that directory instead of the full
-  ## outputFolder. This avoids uploading duplicate data (the original full
-  ## .ct file) and gives the server pre-split files ready for analysis.
-  ##
-  ## The zip uses store-only mode (no compression) because CTFS .ct files
-  ## are already internally compressed. Re-compressing them with deflate
-  ## would waste CPU with negligible size reduction.
-  ##
-  ## The resulting zip contains:
-  ##   slice_0000.ct
-  ##   slice_0001.ct
-  ##   ...
-  ##   analysis.manifest  (if present)
-  ##   manifest.smnf      (if present)
+  ## Fallback for servers that do not support the upload-session API.
+  ## Zips the slices directory (store-only, no compression since CTFS files
+  ## are already internally compressed) and uploads as a single file.
   let sliceCount = countSlices(slicesDir)
-  echo "Uploading " & $sliceCount & " pre-split slices from: " & slicesDir
+  echo "Uploading " & $sliceCount & " pre-split slices (zip fallback) from: " & slicesDir
 
-  # Create a unique temp directory for the zip file.
   let id = $genOid()
   let traceTempUploadZipFolder = codetracerTmpPath / fmt"trace-upload-zips-{id}"
   createDir(traceTempUploadZipFolder)
   let outputZip = traceTempUploadZipFolder / fmt"tmp.zip"
 
   let lastPercentSent = new int
-  # Use storeOnly=true to avoid double-compressing CTFS files that are
-  # already internally compressed.
   zipFolder(slicesDir, outputZip,
     onProgress = onProgress(ratio = 33, start = 0,
       "Zipping slices (store-only, no compression)..", lastPercentSent),
@@ -109,13 +92,108 @@ proc uploadSplitTrace*(trace: Trace, slicesDir: string,
   try:
     uploadInfo = uploadFile(outputZip, org, token, baseUrl)
   except CatchableError as e:
-    echo "uploadSplitTrace error: ", e.msg
+    echo "uploadSplitTrace fallback error: ", e.msg
     uploadInfo.exitCode = 1
   finally:
     removeFile(outputZip)
     removeDir(traceTempUploadZipFolder)
 
   return uploadInfo
+
+
+proc uploadSplitTrace*(trace: Trace, slicesDir: string,
+    org: Option[string],
+    token: Option[string] = none(string),
+    baseUrl: Option[string] = none(string)): UploadedInfo =
+  ## Upload each pre-split slice individually using the upload-session API.
+  ## No zip/tar — each .ct file is uploaded directly to S3 via a presigned URL.
+  ##
+  ## Flow:
+  ## 1. Request an upload session from the server
+  ## 2. For each slice .ct file:
+  ##    a. Request a presigned URL for this slice
+  ##    b. PUT the .ct file directly to the presigned URL
+  ## 3. Upload the manifest (if present) using the same mechanism
+  ## 4. Finalize the session with total slice count
+  ##
+  ## If the upload-session API is not available (older server), falls back
+  ## to the previous zip-based single-file upload with a warning.
+  result = UploadedInfo(exitCode: 0)
+  try:
+    let remoteConf = initRemoteConfig()
+    let bearerToken = remoteConf.getBearerToken(token.get(""))
+    let resolvedBaseUrl = remoteConf.resolveBaseRemoteUrl(baseUrl.get(""))
+
+    var client = initApiClient(resolvedBaseUrl)
+    defer: client.close()
+
+    # Resolve the target tenant/organization.
+    let defaultOrg = remoteConf.readConfigValue(DefaultOrganizationKey)
+    let orgSlug = resolveTenantValueOrSlug(defaultOrg, org.get(""))
+    let (tenantId, _) = resolveTenantId(client, orgSlug, bearerToken)
+
+    # Collect and sort slice .ct files so they upload in the correct order
+    # (slice_0000.ct, slice_0001.ct, ...).
+    let sliceFiles = sorted(collect:
+      for f in walkDir(slicesDir):
+        if f.kind == pcFile and f.path.endsWith(".ct"):
+          f.path)
+
+    let sliceCount = sliceFiles.len
+    echo "Uploading " & $sliceCount & " pre-split slices from: " & slicesDir
+
+    # 1. Create upload session.
+    var session: UploadSessionResponse
+    try:
+      session = client.requestUploadSession(
+        tenantId, "linux-x86_64", "hook", bearerToken)
+    except ApiError as e:
+      # Fallback: the server does not support the upload-session API (older
+      # version). Fall back to the zip-based single-file upload.
+      echo "WARNING: upload-session API not available (" & e.msg & ")"
+      echo "Falling back to zip-based single-file upload."
+      return uploadSplitTraceFallback(trace, slicesDir, org, token, baseUrl)
+
+    echo "Upload session created: " & session.sessionId
+
+    # 2. Upload each slice .ct file individually.
+    for i, slicePath in sliceFiles:
+      let fileName = extractFilename(slicePath)
+      let fileSize = getFileSize(slicePath)
+      echo "  Uploading slice " & $(i + 1) & "/" & $sliceCount &
+        ": " & fileName & " (" & $fileSize & " bytes)"
+
+      let sliceUrl = client.requestSliceUploadUrl(
+        session.sessionId, i, fileName, fileSize, bearerToken)
+
+      discard putFile(sliceUrl.uploadUrl, slicePath)
+
+    # 3. Upload manifest files (.smnf, .amnf) if present. These are not
+    # .ct slice files but belong to the same upload session.
+    var manifestIndex = sliceCount
+    for f in walkDir(slicesDir):
+      if f.kind == pcFile and
+          (f.path.endsWith(".smnf") or f.path.endsWith(".amnf")):
+        let fileName = extractFilename(f.path)
+        let fileSize = getFileSize(f.path)
+        echo "  Uploading manifest: " & fileName &
+          " (" & $fileSize & " bytes)"
+        let manifestUrl = client.requestSliceUploadUrl(
+          session.sessionId, manifestIndex, fileName, fileSize, bearerToken)
+        discard putFile(manifestUrl.uploadUrl, f.path)
+        inc manifestIndex
+
+    # 4. Finalize the upload session. The server will mark the trace as
+    # complete and begin any post-upload processing.
+    client.finalizeUploadSession(
+      session.sessionId, sliceCount, 0, "linux-x86_64", bearerToken)
+    echo "Upload finalized: " & $sliceCount & " slices"
+
+    result.fileId = session.sessionId
+
+  except CatchableError as e:
+    echo "error: uploadSplitTrace exception: ", e.msg
+    result.exitCode = 1
 
 
 proc uploadTrace*(trace: Trace, org: Option[string],
