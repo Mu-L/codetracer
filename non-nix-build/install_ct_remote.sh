@@ -56,7 +56,18 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 ARCHIVE_PATH="${TMP_DIR}/${ARCHIVE}"
 
 echo "Downloading ct-remote (${CT_REMOTE_VERSION}) from ${BASE_URL}/${ARCHIVE}"
-curl -L "${BASE_URL}/${ARCHIVE}" -o "${ARCHIVE_PATH}"
+# Retry with exponential backoff. The downloads server uses a self-signed
+# certificate so we fall back to --insecure if the first attempt fails with
+# an SSL error (exit code 60). DNS failures on GitHub-hosted macOS runners
+# are also retried.
+if ! curl --retry 3 --retry-delay 5 --retry-connrefused \
+         -L --fail --silent --show-error \
+         "${BASE_URL}/${ARCHIVE}" -o "${ARCHIVE_PATH}" 2>/dev/null; then
+  echo "  Retrying with --insecure (self-signed cert fallback)..."
+  curl --retry 3 --retry-delay 5 --retry-connrefused \
+       -L --fail --silent --show-error --insecure \
+       "${BASE_URL}/${ARCHIVE}" -o "${ARCHIVE_PATH}"
+fi
 
 tar -xzf "${ARCHIVE_PATH}" -C "${TMP_DIR}"
 mv "${TMP_DIR}/DesktopClient.App" "${DEST_BINARY}"
