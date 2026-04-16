@@ -5,3 +5,6 @@ src = "src"
 title = "codetracer docs"
 
 [preprocessor.alerts]
+# TODO: add mdbook-alerts to the Nix dev shell (flake.nix)
+# For now, mark as optional so CI doesn't fail if not installed.
+optional = true
