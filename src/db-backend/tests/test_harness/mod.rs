@@ -2464,9 +2464,20 @@ fn record_zsh_trace(source_path: &Path, trace_dir: &Path) -> Result<(), String> 
 fn record_noir_trace(project_dir: &Path, trace_dir: &Path) -> Result<(), String> {
     fs::create_dir_all(trace_dir).map_err(|e| format!("failed to create trace dir: {}", e))?;
 
+    // Give nargo its own temp directory to avoid "Directory not empty" races
+    // when multiple Noir tests run in parallel or in sandboxed Nix builds
+    // where stale temp dirs from previous builds may linger.
+    let nargo_tmp = trace_dir.parent().unwrap_or(trace_dir).join("nargo_tmp");
+    if nargo_tmp.exists() {
+        let _ = fs::remove_dir_all(&nargo_tmp);
+    }
+    fs::create_dir_all(&nargo_tmp)
+        .map_err(|e| format!("failed to create nargo temp dir: {}", e))?;
+
     let output = Command::new("nargo")
         .args(["trace", "--out-dir", trace_dir.to_str().unwrap()])
         .current_dir(project_dir)
+        .env("TMPDIR", &nargo_tmp)
         .output()
         .map_err(|e| format!("failed to run nargo trace: {}", e))?;
 
