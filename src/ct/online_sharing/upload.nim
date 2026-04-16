@@ -10,6 +10,7 @@ import ../cli/interactive_replay
 import ../codetracerconf
 import ../trace/shell
 import remote_config, api_client, file_transfer, tenant_resolver
+import mcr_enrichment
 
 proc uploadFile(
   traceZipPath: string,
@@ -68,7 +69,15 @@ proc onProgress(ratio, start: int, message: string, lastPercentSent: ref int): p
 
 proc uploadTrace*(trace: Trace, org: Option[string],
     token: Option[string] = none(string),
-    baseUrl: Option[string] = none(string)): UploadedInfo =
+    baseUrl: Option[string] = none(string),
+    noPortable: bool = false): UploadedInfo =
+  # Detect and enrich MCR traces before upload. This adds binaries and
+  # debug symbols to the .ct container so the trace is self-contained
+  # and can be replayed on a different machine (e.g. the CI server).
+  let enriched = enrichMcrTraceIfNeeded(trace.outputFolder, noPortable)
+  if enriched:
+    echo "MCR trace detected: added portable payload (binaries + symbols)"
+
   # try to generate a unique path, so even if we don't remove it/clean it up
   #   it's not easy to clash with it on a next upload
   # https://nim-lang.org/docs/oids.html
@@ -105,6 +114,7 @@ proc uploadCommand*(
   uploadOrg: Option[string],
   uploadToken: Option[string] = none(string),
   uploadBaseUrl: Option[string] = none(string),
+  noPortable: bool = false,
 ) =
   let config: Config = loadConfig(folder=getCurrentDir(), inTest=false)
 
@@ -125,7 +135,7 @@ proc uploadCommand*(
     quit(1)
 
   try:
-    uploadInfo = uploadTrace(trace, uploadOrg, uploadToken, uploadBaseUrl)
+    uploadInfo = uploadTrace(trace, uploadOrg, uploadToken, uploadBaseUrl, noPortable)
   except CatchableError as e:
     echo e.msg
     quit(1)

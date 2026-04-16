@@ -288,7 +288,8 @@ proc runInitial*(conf: CodetracerConf) =
         replayInteractive,
         conf.uploadOrg,
         conf.uploadToken,
-        conf.uploadBaseUrl)
+        conf.uploadBaseUrl,
+        conf.uploadNoPortable)
     of StartupCommand.download:
       downloadTraceCommand(conf.traceDownloadUrl,
         conf.downloadToken,

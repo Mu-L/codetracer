@@ -626,6 +626,12 @@ type
         desc: "override the " &
           "remote server URL"
       .}: Option[string]
+      uploadNoPortable* {.
+        name: "no-portable",
+        desc: "skip adding portable " &
+          "binaries/symbols to MCR traces " &
+          "before upload"
+      .}: bool
     of download:
       traceDownloadUrl* {.
         argument,
