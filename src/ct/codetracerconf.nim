@@ -632,6 +632,12 @@ type
           "binaries/symbols to MCR traces " &
           "before upload"
       .}: bool
+      uploadNoSplitUpload* {.
+        name: "no-split-upload",
+        desc: "skip pre-split slice detection " &
+          "and force full trace upload " &
+          "even when slices are present"
+      .}: bool
     of download:
       traceDownloadUrl* {.
         argument,

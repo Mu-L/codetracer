@@ -67,10 +67,55 @@ proc onProgress(ratio, start: int, message: string, lastPercentSent: ref int): p
       logUpdate(scaled, message)
 
 
+proc uploadSplitTrace*(trace: Trace, slicesDir: string,
+    org: Option[string],
+    token: Option[string] = none(string),
+    baseUrl: Option[string] = none(string)): UploadedInfo =
+  ## Upload a pre-split MCR trace by zipping only the slices directory.
+  ##
+  ## When `ct-mcr record --split` produces individual slice .ct files in a
+  ## `_slices/` subdirectory, we zip only that directory instead of the full
+  ## outputFolder. This avoids uploading duplicate data (the original full
+  ## .ct file) and gives the server pre-split files ready for analysis.
+  ##
+  ## The resulting zip contains:
+  ##   slice_0000.ct
+  ##   slice_0001.ct
+  ##   ...
+  ##   analysis.manifest  (if present)
+  ##   manifest.smnf      (if present)
+  let sliceCount = countSlices(slicesDir)
+  echo "Uploading " & $sliceCount & " pre-split slices from: " & slicesDir
+
+  # Create a unique temp directory for the zip file.
+  let id = $genOid()
+  let traceTempUploadZipFolder = codetracerTmpPath / fmt"trace-upload-zips-{id}"
+  createDir(traceTempUploadZipFolder)
+  let outputZip = traceTempUploadZipFolder / fmt"tmp.zip"
+
+  let lastPercentSent = new int
+  zipFolder(slicesDir, outputZip,
+    onProgress = onProgress(ratio = 33, start = 0,
+      "Zipping slices..", lastPercentSent))
+
+  var uploadInfo = UploadedInfo()
+  try:
+    uploadInfo = uploadFile(outputZip, org, token, baseUrl)
+  except CatchableError as e:
+    echo "uploadSplitTrace error: ", e.msg
+    uploadInfo.exitCode = 1
+  finally:
+    removeFile(outputZip)
+    removeDir(traceTempUploadZipFolder)
+
+  return uploadInfo
+
+
 proc uploadTrace*(trace: Trace, org: Option[string],
     token: Option[string] = none(string),
     baseUrl: Option[string] = none(string),
-    noPortable: bool = false): UploadedInfo =
+    noPortable: bool = false,
+    noSplitUpload: bool = false): UploadedInfo =
   # Detect and enrich MCR traces before upload. This adds binaries and
   # debug symbols to the .ct container so the trace is self-contained
   # and can be replayed on a different machine (e.g. the CI server).
@@ -78,6 +123,21 @@ proc uploadTrace*(trace: Trace, org: Option[string],
   if enriched:
     echo "MCR trace detected: added portable payload (binaries + symbols)"
 
+  # Check for pre-split slices. When ct-mcr record --split is used, the trace
+  # output contains a _slices/ directory with individual .ct files. Uploading
+  # just the slices directory avoids duplicating data (the full .ct is the
+  # concatenation of all slices) and gives the server pre-split files.
+  if not noSplitUpload:
+    let slicesDir = findSlicesDir(trace.outputFolder)
+    if slicesDir.len > 0:
+      let sliceCount = countSlices(slicesDir)
+      if sliceCount > 0:
+        echo "MCR trace with pre-split slices detected"
+        let uploadInfo = uploadSplitTrace(
+          trace, slicesDir, org, token, baseUrl)
+        quit(uploadInfo.exitCode)
+
+  # Full upload: zip the entire outputFolder and upload as one file.
   # try to generate a unique path, so even if we don't remove it/clean it up
   #   it's not easy to clash with it on a next upload
   # https://nim-lang.org/docs/oids.html
@@ -115,6 +175,7 @@ proc uploadCommand*(
   uploadToken: Option[string] = none(string),
   uploadBaseUrl: Option[string] = none(string),
   noPortable: bool = false,
+  noSplitUpload: bool = false,
 ) =
   let config: Config = loadConfig(folder=getCurrentDir(), inTest=false)
 
@@ -135,7 +196,8 @@ proc uploadCommand*(
     quit(1)
 
   try:
-    uploadInfo = uploadTrace(trace, uploadOrg, uploadToken, uploadBaseUrl, noPortable)
+    uploadInfo = uploadTrace(trace, uploadOrg, uploadToken, uploadBaseUrl,
+      noPortable, noSplitUpload)
   except CatchableError as e:
     echo e.msg
     quit(1)

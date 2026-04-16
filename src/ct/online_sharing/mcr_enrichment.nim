@@ -1,4 +1,5 @@
-## MCR trace detection and portable enrichment for upload.
+## MCR trace detection, portable enrichment, and pre-split slice detection
+## for upload.
 ##
 ## Before uploading, MCR traces (stored in the CTFS container format) need
 ## to be enriched with binaries and debug symbols via `ct-mcr export --portable`.
@@ -7,6 +8,7 @@
 ## - CTFS magic detection (5-byte header: C0 DE 72 AC E2)
 ## - ct-mcr binary discovery (env var, sibling, PATH)
 ## - Enrichment subprocess invocation
+## - Pre-split slice detection (findSlicesDir, hasPreSplitSlices, countSlices)
 ##
 ## The detection intentionally avoids importing any ct_replayer or ct_recorder
 ## modules — those live in the codetracer-native-recorder repo. We rely solely
@@ -71,6 +73,48 @@ proc findCtMcrBinary*(): string =
       return resolved
 
   return ""
+
+proc findSlicesDir*(outputFolder: string): string =
+  ## Find a pre-split slices directory within the output folder.
+  ##
+  ## When `ct-mcr record --split` is used, the trace output contains both
+  ## the original .ct file and a companion `<name>_slices/` directory with
+  ## individual slice .ct files and a manifest. This proc locates that
+  ## directory by looking for any `.ct` file whose name + "_slices" is an
+  ## existing subdirectory containing at least one `.ct` slice.
+  ##
+  ## Returns the absolute path to the slices directory, or "" if not found.
+  if not dirExists(outputFolder):
+    return ""
+  for kind, path in walkDir(outputFolder):
+    if kind in {pcFile, pcLinkToFile} and path.endsWith(".ct"):
+      # Derive the expected slices directory name: trace.ct → trace.ct_slices/
+      let slicesDir = path & "_slices"
+      if dirExists(slicesDir):
+        # Verify it actually contains .ct slice files (not just an empty dir).
+        var hasSlice = false
+        for sKind, sPath in walkDir(slicesDir):
+          if sKind in {pcFile, pcLinkToFile} and sPath.endsWith(".ct"):
+            hasSlice = true
+            break
+        if hasSlice:
+          return slicesDir
+  return ""
+
+proc hasPreSplitSlices*(outputFolder: string): bool =
+  ## Check if the trace output directory contains a _slices/ subdirectory
+  ## with .ct slice files. This indicates client-side splitting was done
+  ## during recording (via `ct-mcr record --split`).
+  findSlicesDir(outputFolder).len > 0
+
+proc countSlices*(slicesDir: string): int =
+  ## Count the number of .ct slice files in a slices directory.
+  ## Returns 0 if the directory does not exist or contains no .ct files.
+  if not dirExists(slicesDir):
+    return 0
+  for kind, path in walkDir(slicesDir):
+    if kind in {pcFile, pcLinkToFile} and path.endsWith(".ct"):
+      result.inc
 
 proc enrichMcrTraceIfNeeded*(outputFolder: string, noPortable: bool = false): bool =
   ## If `outputFolder` contains an MCR trace (.ct file with CTFS magic), run

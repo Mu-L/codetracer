@@ -1,10 +1,12 @@
-## Unit tests for MCR trace detection and enrichment logic.
+## Unit tests for MCR trace detection, enrichment, and slice detection logic.
 ##
 ## These tests verify:
 ## - CTFS magic detection (positive and negative cases)
 ## - .ct file discovery within a folder
 ## - Enrichment skip behavior for non-MCR traces
 ## - Enrichment skip behavior when noPortable is true
+## - Pre-split slice directory detection (findSlicesDir, hasPreSplitSlices)
+## - Slice counting (countSlices)
 ##
 ## Note: we cannot test the actual ct-mcr subprocess invocation in unit tests
 ## since ct-mcr may not be installed. The subprocess call is tested via the
@@ -182,3 +184,145 @@ suite "MCR Enrichment — findCtMcrBinary":
 
     let binary = findCtMcrBinary()
     check binary == fakeBin
+
+
+suite "MCR Enrichment — slice detection (findSlicesDir)":
+
+  test "detects slices directory when present":
+    let tmpDir = getTempDir() / "test_slices_detect"
+    createDir(tmpDir)
+    defer: removeDir(tmpDir)
+
+    # Create a .ct file with CTFS magic (needed so findSlicesDir finds it).
+    let ctPath = tmpDir / "trace.ct"
+    var f = open(ctPath, fmWrite)
+    let magic: array[5, byte] = [0xC0'u8, 0xDE, 0x72, 0xAC, 0xE2]
+    discard f.writeBytes(magic, 0, 5)
+    f.close()
+
+    # Create the companion _slices directory with slice .ct files.
+    let slicesDir = tmpDir / "trace.ct_slices"
+    createDir(slicesDir)
+    writeFile(slicesDir / "slice_0000.ct", "slice0")
+    writeFile(slicesDir / "slice_0001.ct", "slice1")
+    writeFile(slicesDir / "manifest.smnf", "manifest data")
+
+    let found = findSlicesDir(tmpDir)
+    check found == slicesDir
+
+  test "returns empty when no slices directory exists":
+    let tmpDir = getTempDir() / "test_slices_no_dir"
+    createDir(tmpDir)
+    defer: removeDir(tmpDir)
+
+    # Only a .ct file, no _slices/ directory.
+    let ctPath = tmpDir / "trace.ct"
+    var f = open(ctPath, fmWrite)
+    let magic: array[5, byte] = [0xC0'u8, 0xDE, 0x72, 0xAC, 0xE2]
+    discard f.writeBytes(magic, 0, 5)
+    f.close()
+
+    let found = findSlicesDir(tmpDir)
+    check found == ""
+
+  test "returns empty when slices directory is empty":
+    let tmpDir = getTempDir() / "test_slices_empty_dir"
+    createDir(tmpDir)
+    defer: removeDir(tmpDir)
+
+    let ctPath = tmpDir / "trace.ct"
+    var f = open(ctPath, fmWrite)
+    let magic: array[5, byte] = [0xC0'u8, 0xDE, 0x72, 0xAC, 0xE2]
+    discard f.writeBytes(magic, 0, 5)
+    f.close()
+
+    # Create the _slices directory but without any .ct files — only a manifest.
+    let slicesDir = tmpDir / "trace.ct_slices"
+    createDir(slicesDir)
+    writeFile(slicesDir / "manifest.smnf", "manifest data")
+
+    let found = findSlicesDir(tmpDir)
+    check found == ""
+
+  test "returns empty for non-existent folder":
+    let found = findSlicesDir("/tmp/this_path_should_not_exist_slices_42")
+    check found == ""
+
+  test "ignores _slices dir when no matching .ct file":
+    let tmpDir = getTempDir() / "test_slices_orphan"
+    createDir(tmpDir)
+    defer: removeDir(tmpDir)
+
+    # Create a _slices directory without the parent .ct file.
+    let slicesDir = tmpDir / "trace.ct_slices"
+    createDir(slicesDir)
+    writeFile(slicesDir / "slice_0000.ct", "slice0")
+
+    let found = findSlicesDir(tmpDir)
+    check found == ""
+
+
+suite "MCR Enrichment — hasPreSplitSlices":
+
+  test "returns true when slices are present":
+    let tmpDir = getTempDir() / "test_has_slices_true"
+    createDir(tmpDir)
+    defer: removeDir(tmpDir)
+
+    let ctPath = tmpDir / "trace.ct"
+    var f = open(ctPath, fmWrite)
+    let magic: array[5, byte] = [0xC0'u8, 0xDE, 0x72, 0xAC, 0xE2]
+    discard f.writeBytes(magic, 0, 5)
+    f.close()
+
+    let slicesDir = tmpDir / "trace.ct_slices"
+    createDir(slicesDir)
+    writeFile(slicesDir / "slice_0000.ct", "slice0")
+
+    check hasPreSplitSlices(tmpDir) == true
+
+  test "returns false when no slices":
+    let tmpDir = getTempDir() / "test_has_slices_false"
+    createDir(tmpDir)
+    defer: removeDir(tmpDir)
+
+    writeFile(tmpDir / "trace.db", "not a ct file")
+
+    check hasPreSplitSlices(tmpDir) == false
+
+
+suite "MCR Enrichment — countSlices":
+
+  test "counts .ct files in slices directory":
+    let tmpDir = getTempDir() / "test_count_slices"
+    createDir(tmpDir)
+    defer: removeDir(tmpDir)
+
+    writeFile(tmpDir / "slice_0000.ct", "s0")
+    writeFile(tmpDir / "slice_0001.ct", "s1")
+    writeFile(tmpDir / "slice_0002.ct", "s2")
+    writeFile(tmpDir / "manifest.smnf", "manifest")
+    writeFile(tmpDir / "analysis.manifest", "analysis")
+
+    check countSlices(tmpDir) == 3
+
+  test "returns zero for empty directory":
+    let tmpDir = getTempDir() / "test_count_slices_empty"
+    createDir(tmpDir)
+    defer: removeDir(tmpDir)
+
+    check countSlices(tmpDir) == 0
+
+  test "returns zero for non-existent directory":
+    check countSlices("/tmp/this_path_should_not_exist_count_42") == 0
+
+  test "does not count non-.ct files":
+    let tmpDir = getTempDir() / "test_count_slices_noct"
+    createDir(tmpDir)
+    defer: removeDir(tmpDir)
+
+    writeFile(tmpDir / "manifest.smnf", "manifest")
+    writeFile(tmpDir / "analysis.manifest", "analysis")
+    writeFile(tmpDir / "readme.txt", "info")
+
+    check countSlices(tmpDir) == 0

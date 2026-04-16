@@ -289,7 +289,8 @@ proc runInitial*(conf: CodetracerConf) =
         conf.uploadOrg,
         conf.uploadToken,
         conf.uploadBaseUrl,
-        conf.uploadNoPortable)
+        conf.uploadNoPortable,
+        conf.uploadNoSplitUpload)
     of StartupCommand.download:
       downloadTraceCommand(conf.traceDownloadUrl,
         conf.downloadToken,
