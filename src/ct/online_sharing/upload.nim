@@ -78,6 +78,10 @@ proc uploadSplitTrace*(trace: Trace, slicesDir: string,
   ## outputFolder. This avoids uploading duplicate data (the original full
   ## .ct file) and gives the server pre-split files ready for analysis.
   ##
+  ## The zip uses store-only mode (no compression) because CTFS .ct files
+  ## are already internally compressed. Re-compressing them with deflate
+  ## would waste CPU with negligible size reduction.
+  ##
   ## The resulting zip contains:
   ##   slice_0000.ct
   ##   slice_0001.ct
@@ -94,9 +98,12 @@ proc uploadSplitTrace*(trace: Trace, slicesDir: string,
   let outputZip = traceTempUploadZipFolder / fmt"tmp.zip"
 
   let lastPercentSent = new int
+  # Use storeOnly=true to avoid double-compressing CTFS files that are
+  # already internally compressed.
   zipFolder(slicesDir, outputZip,
     onProgress = onProgress(ratio = 33, start = 0,
-      "Zipping slices..", lastPercentSent))
+      "Zipping slices (store-only, no compression)..", lastPercentSent),
+    storeOnly = true)
 
   var uploadInfo = UploadedInfo()
   try:
