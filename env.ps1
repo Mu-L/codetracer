@@ -596,6 +596,10 @@ $toolchain = Parse-ToolchainVersions -Path $toolchainPath
 . "$windowsDir/ensure-ct-remote.ps1"
 . "$windowsDir/ensure-nargo.ps1"
 . "$windowsDir/ensure-ttd.ps1"
+. "$windowsDir/ensure-gcc.ps1"
+. "$windowsDir/ensure-go.ps1"
+. "$windowsDir/ensure-zstd.ps1"
+. "$windowsDir/ensure-llvm.ps1"
 
 $preferGitBash = ConvertTo-BoolFromEnv -Name "WINDOWS_DIY_PREFER_GIT_BASH" -Default $true
 $gitBashBinDir = ""
@@ -644,6 +648,10 @@ if ($doSync) {
   if (Test-BootstrapStepEnabled "TTD")  { Ensure-Ttd }
   if (Test-BootstrapStepEnabled "NODE") { Ensure-Node -Root $installRoot -Arch $arch -Toolchain $toolchain }
   if (Test-BootstrapStepEnabled "UV")   { Ensure-Uv   -Root $installRoot -Arch $arch -Toolchain $toolchain }
+  if (Test-BootstrapStepEnabled "GCC")  { Ensure-Gcc  -Root $installRoot -Toolchain $toolchain }
+  if (Test-BootstrapStepEnabled "GO")   { Ensure-Go   -Root $installRoot -Arch $arch -Toolchain $toolchain }
+  if (Test-BootstrapStepEnabled "ZSTD") { Ensure-Zstd -Root $installRoot -Arch $arch -Toolchain $toolchain }
+  if (Test-BootstrapStepEnabled "LLVM") { Ensure-Llvm -Root $installRoot -Arch $arch -Toolchain $toolchain }
 
   # Phase 2: Rust (no deps on other managed tools)
   if (Test-BootstrapStepEnabled "RUST") { Ensure-Rust -Root $installRoot -Arch $arch -Toolchain $toolchain }
@@ -808,6 +816,19 @@ $shimsDir = Join-Path $installRoot "shims"
 $nargoRoot = Join-Path $installRoot "nargo"
 $nargoDir = Resolve-InstallDirFromRelativePathFile -InstallRoot $installRoot -RelativePathFile (Join-Path $nargoRoot "nargo.install.relative-path")
 
+$gccDir = Join-Path $installRoot ("gcc\" + $toolchain["GCC_VERSION"])
+$gccBinDir = Join-Path $gccDir "bin"
+
+$goDir = Join-Path $installRoot ("go\" + $toolchain["GO_VERSION"] + "\go")
+$goBinDir = Join-Path $goDir "bin"
+
+$zstdArch = ConvertTo-ZstdFileArch -Arch $arch
+$zstdDir = Join-Path $installRoot ("zstd\" + $toolchain["ZSTD_VERSION"] + "\zstd-v" + $toolchain["ZSTD_VERSION"] + "-" + $zstdArch)
+
+$llvmTarget = ConvertTo-LlvmFileArch -Arch $arch
+$llvmDir = Join-Path $installRoot ("llvm\" + $toolchain["LLVM_VERSION"] + "\LLVM-" + $toolchain["LLVM_VERSION"] + "-" + $llvmTarget)
+$llvmBinDir = Join-Path $llvmDir "bin"
+
 Ensure-NodeTooling -RepoRoot $repoRoot -NodePackagesBin $nodePackagesBin -NodeDir $nodeDir
 
 $msvcBlob = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $windowsDir "export-msvc-env.ps1")
@@ -858,6 +879,11 @@ function Resolve-ClExePath {
 [Environment]::SetEnvironmentVariable("TUP_DIR", $tupDir, "Process")
 [Environment]::SetEnvironmentVariable("TUP", $tupExe, "Process")
 [Environment]::SetEnvironmentVariable("NARGO_DIR", $nargoDir, "Process")
+[Environment]::SetEnvironmentVariable("GCC_DIR", $gccDir, "Process")
+[Environment]::SetEnvironmentVariable("GO_DIR", $goDir, "Process")
+[Environment]::SetEnvironmentVariable("GOROOT", $goDir, "Process")
+[Environment]::SetEnvironmentVariable("ZSTD_DIR", $zstdDir, "Process")
+[Environment]::SetEnvironmentVariable("LLVM_DIR", $llvmDir, "Process")
 [Environment]::SetEnvironmentVariable("WINDOWS_DIY_SHIMS_DIR", $shimsDir, "Process")
 
 $clExe = Resolve-ClExePath
@@ -887,6 +913,13 @@ Set-ExecutableAliasIfPresent -Name "rustup" -ExePath (Join-Path ([Environment]::
 Set-ExecutableAliasIfPresent -Name "just" -ExePath (Join-Path ([Environment]::GetEnvironmentVariable("CARGO_HOME")) "bin\\just.exe")
 Set-ExecutableAliasIfPresent -Name "cargo-nextest" -ExePath (Join-Path ([Environment]::GetEnvironmentVariable("CARGO_HOME")) "bin\\cargo-nextest.exe")
 Set-ExecutableAliasIfPresent -Name "cl" -ExePath $clExe
+Set-ExecutableAliasIfPresent -Name "gcc" -ExePath (Join-Path $gccBinDir "gcc.exe")
+Set-ExecutableAliasIfPresent -Name "g++" -ExePath (Join-Path $gccBinDir "g++.exe")
+Set-ExecutableAliasIfPresent -Name "gdb" -ExePath (Join-Path $gccBinDir "gdb.exe")
+Set-ExecutableAliasIfPresent -Name "gfortran" -ExePath (Join-Path $gccBinDir "gfortran.exe")
+Set-ExecutableAliasIfPresent -Name "go" -ExePath (Join-Path $goBinDir "go.exe")
+Set-ExecutableAliasIfPresent -Name "clang" -ExePath (Join-Path $llvmBinDir "clang.exe")
+Set-ExecutableAliasIfPresent -Name "clang++" -ExePath (Join-Path $llvmBinDir "clang++.exe")
 if (-not [string]::IsNullOrWhiteSpace($ttdExe)) {
   Set-ExecutableAliasIfPresent -Name "ttd" -ExePath $ttdExe
 }
@@ -920,6 +953,13 @@ if (-not [string]::IsNullOrWhiteSpace($ttdExe)) {
 if (-not [string]::IsNullOrWhiteSpace($cdbExe)) {
   New-BashExeShim -ShimsDir $shimsDir -CommandName "cdb" -ExePath $cdbExe
 }
+New-BashExeShim -ShimsDir $shimsDir -CommandName "gcc" -ExePath (Join-Path $gccBinDir "gcc.exe")
+New-BashExeShim -ShimsDir $shimsDir -CommandName "g++" -ExePath (Join-Path $gccBinDir "g++.exe")
+New-BashExeShim -ShimsDir $shimsDir -CommandName "gdb" -ExePath (Join-Path $gccBinDir "gdb.exe")
+New-BashExeShim -ShimsDir $shimsDir -CommandName "gfortran" -ExePath (Join-Path $gccBinDir "gfortran.exe")
+New-BashExeShim -ShimsDir $shimsDir -CommandName "go" -ExePath (Join-Path $goBinDir "go.exe")
+New-BashExeShim -ShimsDir $shimsDir -CommandName "clang" -ExePath (Join-Path $llvmBinDir "clang.exe")
+New-BashExeShim -ShimsDir $shimsDir -CommandName "clang++" -ExePath (Join-Path $llvmBinDir "clang++.exe")
 
 Prepend-PathEntries -Entries @(
   $(if (-not [string]::IsNullOrWhiteSpace($ttdExe)) { Split-Path -Parent $ttdExe }),
@@ -938,7 +978,10 @@ Prepend-PathEntries -Entries @(
   $capnpBinDir,
   $capnpDir,
   $tupDir,
-  $nargoDir
+  $nargoDir,
+  $gccBinDir,
+  $goBinDir,
+  $llvmBinDir
 )
 
 $ensureParser = ConvertTo-BoolFromEnv -Name "WINDOWS_DIY_ENSURE_TREE_SITTER_NIM_PARSER" -Default $true
@@ -1000,6 +1043,11 @@ Write-Host "TUP_WINDOWS_MSYS2_PACKAGES=$env:TUP_WINDOWS_MSYS2_PACKAGES"
 Write-Host "TUP_DIR=$tupDir"
 Write-Host "TUP=$tupExe"
 Write-Host "NARGO_DIR=$nargoDir"
+Write-Host "GCC_DIR=$gccDir"
+Write-Host "GO_DIR=$goDir"
+Write-Host "GOROOT=$env:GOROOT"
+Write-Host "ZSTD_DIR=$zstdDir"
+Write-Host "LLVM_DIR=$llvmDir"
 Write-Host "WINDOWS_DIY_SHIMS_DIR=$shimsDir"
 Write-Host "CODETRACER_REPO_ROOT_PATH=$env:CODETRACER_REPO_ROOT_PATH"
 Write-Host "CODETRACER_PREFIX=$env:CODETRACER_PREFIX"
