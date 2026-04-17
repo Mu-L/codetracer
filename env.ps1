@@ -598,6 +598,9 @@ $toolchain = Parse-ToolchainVersions -Path $toolchainPath
 . "$windowsDir/ensure-ttd.ps1"
 . "$windowsDir/ensure-gcc.ps1"
 . "$windowsDir/ensure-go.ps1"
+. "$windowsDir/ensure-ldc.ps1"
+. "$windowsDir/ensure-vlang.ps1"
+. "$windowsDir/ensure-fpc.ps1"
 . "$windowsDir/ensure-zstd.ps1"
 . "$windowsDir/ensure-llvm.ps1"
 
@@ -649,7 +652,10 @@ if ($doSync) {
   if (Test-BootstrapStepEnabled "NODE") { Ensure-Node -Root $installRoot -Arch $arch -Toolchain $toolchain }
   if (Test-BootstrapStepEnabled "UV")   { Ensure-Uv   -Root $installRoot -Arch $arch -Toolchain $toolchain }
   if (Test-BootstrapStepEnabled "GCC")  { Ensure-Gcc  -Root $installRoot -Toolchain $toolchain }
-  if (Test-BootstrapStepEnabled "GO")   { Ensure-Go   -Root $installRoot -Arch $arch -Toolchain $toolchain }
+  if (Test-BootstrapStepEnabled "GO")    { Ensure-Go    -Root $installRoot -Arch $arch -Toolchain $toolchain }
+  if (Test-BootstrapStepEnabled "LDC")   { Ensure-Ldc   -Root $installRoot -Arch $arch -Toolchain $toolchain }
+  if (Test-BootstrapStepEnabled "VLANG") { Ensure-Vlang -Root $installRoot -Arch $arch -Toolchain $toolchain }
+  if (Test-BootstrapStepEnabled "FPC")   { Ensure-Fpc   -Root $installRoot -Arch $arch -Toolchain $toolchain }
   if (Test-BootstrapStepEnabled "ZSTD") { Ensure-Zstd -Root $installRoot -Arch $arch -Toolchain $toolchain }
   if (Test-BootstrapStepEnabled "LLVM") { Ensure-Llvm -Root $installRoot -Arch $arch -Toolchain $toolchain }
 
@@ -822,6 +828,16 @@ $gccBinDir = Join-Path $gccDir "bin"
 $goDir = Join-Path $installRoot ("go\" + $toolchain["GO_VERSION"] + "\go")
 $goBinDir = Join-Path $goDir "bin"
 
+$ldcArch = ConvertTo-LdcFileArch -Arch $arch
+$ldcDir = Join-Path $installRoot ("ldc\" + $toolchain["LDC_VERSION"] + "\ldc2-" + $toolchain["LDC_VERSION"] + "-windows-" + $ldcArch)
+$ldcBinDir = Join-Path $ldcDir "bin"
+
+$vlangDir = Join-Path $installRoot ("vlang\" + $toolchain["VLANG_VERSION"] + "\v")
+$vlangBinDir = $vlangDir
+
+$fpcDir = Join-Path $installRoot ("fpc\" + $toolchain["FPC_VERSION"])
+$fpcBinDir = Join-Path $fpcDir "bin/x86_64-win64"
+
 $zstdArch = ConvertTo-ZstdFileArch -Arch $arch
 $zstdDir = Join-Path $installRoot ("zstd\" + $toolchain["ZSTD_VERSION"] + "\zstd-v" + $toolchain["ZSTD_VERSION"] + "-" + $zstdArch)
 
@@ -882,6 +898,9 @@ function Resolve-ClExePath {
 [Environment]::SetEnvironmentVariable("GCC_DIR", $gccDir, "Process")
 [Environment]::SetEnvironmentVariable("GO_DIR", $goDir, "Process")
 [Environment]::SetEnvironmentVariable("GOROOT", $goDir, "Process")
+[Environment]::SetEnvironmentVariable("LDC_DIR", $ldcDir, "Process")
+[Environment]::SetEnvironmentVariable("VLANG_DIR", $vlangDir, "Process")
+[Environment]::SetEnvironmentVariable("FPC_DIR", $fpcDir, "Process")
 [Environment]::SetEnvironmentVariable("ZSTD_DIR", $zstdDir, "Process")
 [Environment]::SetEnvironmentVariable("LLVM_DIR", $llvmDir, "Process")
 [Environment]::SetEnvironmentVariable("WINDOWS_DIY_SHIMS_DIR", $shimsDir, "Process")
@@ -918,6 +937,11 @@ Set-ExecutableAliasIfPresent -Name "g++" -ExePath (Join-Path $gccBinDir "g++.exe
 Set-ExecutableAliasIfPresent -Name "gdb" -ExePath (Join-Path $gccBinDir "gdb.exe")
 Set-ExecutableAliasIfPresent -Name "gfortran" -ExePath (Join-Path $gccBinDir "gfortran.exe")
 Set-ExecutableAliasIfPresent -Name "go" -ExePath (Join-Path $goBinDir "go.exe")
+Set-ExecutableAliasIfPresent -Name "ldc2" -ExePath (Join-Path $ldcBinDir "ldc2.exe")
+Set-ExecutableAliasIfPresent -Name "dub" -ExePath (Join-Path $ldcBinDir "dub.exe")
+Set-ExecutableAliasIfPresent -Name "rdmd" -ExePath (Join-Path $ldcBinDir "rdmd.exe")
+Set-ExecutableAliasIfPresent -Name "v" -ExePath (Join-Path $vlangBinDir "v.exe")
+Set-ExecutableAliasIfPresent -Name "fpc" -ExePath (Join-Path $fpcBinDir "fpc.exe")
 Set-ExecutableAliasIfPresent -Name "clang" -ExePath (Join-Path $llvmBinDir "clang.exe")
 Set-ExecutableAliasIfPresent -Name "clang++" -ExePath (Join-Path $llvmBinDir "clang++.exe")
 if (-not [string]::IsNullOrWhiteSpace($ttdExe)) {
@@ -958,6 +982,11 @@ New-BashExeShim -ShimsDir $shimsDir -CommandName "g++" -ExePath (Join-Path $gccB
 New-BashExeShim -ShimsDir $shimsDir -CommandName "gdb" -ExePath (Join-Path $gccBinDir "gdb.exe")
 New-BashExeShim -ShimsDir $shimsDir -CommandName "gfortran" -ExePath (Join-Path $gccBinDir "gfortran.exe")
 New-BashExeShim -ShimsDir $shimsDir -CommandName "go" -ExePath (Join-Path $goBinDir "go.exe")
+New-BashExeShim -ShimsDir $shimsDir -CommandName "ldc2" -ExePath (Join-Path $ldcBinDir "ldc2.exe")
+New-BashExeShim -ShimsDir $shimsDir -CommandName "dub" -ExePath (Join-Path $ldcBinDir "dub.exe")
+New-BashExeShim -ShimsDir $shimsDir -CommandName "rdmd" -ExePath (Join-Path $ldcBinDir "rdmd.exe")
+New-BashExeShim -ShimsDir $shimsDir -CommandName "v" -ExePath (Join-Path $vlangBinDir "v.exe")
+New-BashExeShim -ShimsDir $shimsDir -CommandName "fpc" -ExePath (Join-Path $fpcBinDir "fpc.exe")
 New-BashExeShim -ShimsDir $shimsDir -CommandName "clang" -ExePath (Join-Path $llvmBinDir "clang.exe")
 New-BashExeShim -ShimsDir $shimsDir -CommandName "clang++" -ExePath (Join-Path $llvmBinDir "clang++.exe")
 
@@ -981,6 +1010,9 @@ Prepend-PathEntries -Entries @(
   $nargoDir,
   $gccBinDir,
   $goBinDir,
+  $ldcBinDir,
+  $vlangBinDir,
+  $fpcBinDir,
   $llvmBinDir
 )
 
