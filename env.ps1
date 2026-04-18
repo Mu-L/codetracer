@@ -146,6 +146,19 @@ function Resolve-TtdExe {
     $candidates += $override.Trim()
   }
 
+  # Check DIY cache first — these are regular files accessible from SSH/CI
+  $diyRoot = [Environment]::GetEnvironmentVariable("WINDOWS_DIY_INSTALL_ROOT")
+  if (-not [string]::IsNullOrWhiteSpace($diyRoot)) {
+    $ttdCacheRoot = Join-Path $diyRoot "ttd"
+    if (Test-Path -LiteralPath $ttdCacheRoot -PathType Container) {
+      $versionDirs = Get-ChildItem -LiteralPath $ttdCacheRoot -Directory -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending
+      foreach ($vd in $versionDirs) {
+        $candidates += (Join-Path $vd.FullName "TTD.exe")
+      }
+    }
+  }
+
   $ttdPackage = Get-AppxPackage -Name "Microsoft.TimeTravelDebugging" -ErrorAction SilentlyContinue | Sort-Object Version -Descending | Select-Object -First 1
   if ($null -ne $ttdPackage -and -not [string]::IsNullOrWhiteSpace($ttdPackage.InstallLocation)) {
     $candidates += (Join-Path $ttdPackage.InstallLocation "TTD.exe")
@@ -317,7 +330,23 @@ function Resolve-TtdRuntimeInfo {
 
   $ttdInstallDir = ""
   $ttdVersion = ""
-  if ($null -ne $ttdPackage) {
+
+  # Prefer DIY cache directory (works from SSH/CI sessions)
+  if (-not [string]::IsNullOrWhiteSpace($ttdExe)) {
+    $ttdExeDir = Split-Path -Parent $ttdExe
+    $metaFile = Join-Path $ttdExeDir "ttd.install.meta"
+    if (Test-Path -LiteralPath $metaFile -PathType Leaf) {
+      # This is a DIY-cached copy — use its directory and read version from meta
+      $ttdInstallDir = $ttdExeDir
+      $meta = Read-KeyValueFile -Path $metaFile
+      if ($meta.ContainsKey("ttd_version")) {
+        $ttdVersion = [string]$meta["ttd_version"]
+      }
+    }
+  }
+
+  # Fall back to AppX package info if DIY cache didn't provide version
+  if ([string]::IsNullOrWhiteSpace($ttdVersion) -and $null -ne $ttdPackage) {
     $ttdInstallDir = [string]$ttdPackage.InstallLocation
     $ttdVersion = [string]$ttdPackage.Version
   }
@@ -648,7 +677,7 @@ if ($doSync) {
   $arch = Get-WindowsArch
 
   # Phase 1: No dependencies
-  if (Test-BootstrapStepEnabled "TTD")  { Ensure-Ttd }
+  if (Test-BootstrapStepEnabled "TTD")  { Ensure-Ttd -Root $installRoot }
   if (Test-BootstrapStepEnabled "NODE") { Ensure-Node -Root $installRoot -Arch $arch -Toolchain $toolchain }
   if (Test-BootstrapStepEnabled "UV")   { Ensure-Uv   -Root $installRoot -Arch $arch -Toolchain $toolchain }
   if (Test-BootstrapStepEnabled "GCC")  { Ensure-Gcc  -Root $installRoot -Toolchain $toolchain }
