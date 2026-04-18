@@ -626,6 +626,7 @@ $toolchain = Parse-ToolchainVersions -Path $toolchainPath
 . "$windowsDir/ensure-nargo.ps1"
 . "$windowsDir/ensure-ttd.ps1"
 . "$windowsDir/ensure-gcc.ps1"
+. "$windowsDir/ensure-gnat.ps1"
 . "$windowsDir/ensure-go.ps1"
 . "$windowsDir/ensure-ldc.ps1"
 . "$windowsDir/ensure-vlang.ps1"
@@ -681,6 +682,7 @@ if ($doSync) {
   if (Test-BootstrapStepEnabled "NODE") { Ensure-Node -Root $installRoot -Arch $arch -Toolchain $toolchain }
   if (Test-BootstrapStepEnabled "UV")   { Ensure-Uv   -Root $installRoot -Arch $arch -Toolchain $toolchain }
   if (Test-BootstrapStepEnabled "GCC")  { Ensure-Gcc  -Root $installRoot -Toolchain $toolchain }
+  if (Test-BootstrapStepEnabled "GNAT") { Ensure-Gnat -Root $installRoot -Toolchain $toolchain }
   if (Test-BootstrapStepEnabled "GO")    { Ensure-Go    -Root $installRoot -Arch $arch -Toolchain $toolchain }
   if (Test-BootstrapStepEnabled "LDC")   { Ensure-Ldc   -Root $installRoot -Arch $arch -Toolchain $toolchain }
   if (Test-BootstrapStepEnabled "VLANG") { Ensure-Vlang -Root $installRoot -Arch $arch -Toolchain $toolchain }
@@ -854,6 +856,10 @@ $nargoDir = Resolve-InstallDirFromRelativePathFile -InstallRoot $installRoot -Re
 $gccDir = Join-Path $installRoot ("gcc\" + $toolchain["GCC_VERSION"])
 $gccBinDir = Join-Path $gccDir "bin"
 
+$gnatVersion = if (-not [string]::IsNullOrWhiteSpace($toolchain["GNAT_VERSION"])) { $toolchain["GNAT_VERSION"] } else { $toolchain["GCC_VERSION"] }
+$gnatDir = Join-Path $installRoot ("gnat\" + $gnatVersion)
+$gnatBinDir = Join-Path $gnatDir "bin"
+
 $goDir = Join-Path $installRoot ("go\" + $toolchain["GO_VERSION"] + "\go")
 $goBinDir = Join-Path $goDir "bin"
 
@@ -925,6 +931,7 @@ function Resolve-ClExePath {
 [Environment]::SetEnvironmentVariable("TUP", $tupExe, "Process")
 [Environment]::SetEnvironmentVariable("NARGO_DIR", $nargoDir, "Process")
 [Environment]::SetEnvironmentVariable("GCC_DIR", $gccDir, "Process")
+[Environment]::SetEnvironmentVariable("GNAT_DIR", $gnatDir, "Process")
 [Environment]::SetEnvironmentVariable("GO_DIR", $goDir, "Process")
 [Environment]::SetEnvironmentVariable("GOROOT", $goDir, "Process")
 [Environment]::SetEnvironmentVariable("LDC_DIR", $ldcDir, "Process")
@@ -965,6 +972,7 @@ Set-ExecutableAliasIfPresent -Name "gcc" -ExePath (Join-Path $gccBinDir "gcc.exe
 Set-ExecutableAliasIfPresent -Name "g++" -ExePath (Join-Path $gccBinDir "g++.exe")
 Set-ExecutableAliasIfPresent -Name "gdb" -ExePath (Join-Path $gccBinDir "gdb.exe")
 Set-ExecutableAliasIfPresent -Name "gfortran" -ExePath (Join-Path $gccBinDir "gfortran.exe")
+Set-ExecutableAliasIfPresent -Name "gnatmake" -ExePath (Join-Path $gnatBinDir "gnatmake.exe")
 Set-ExecutableAliasIfPresent -Name "go" -ExePath (Join-Path $goBinDir "go.exe")
 Set-ExecutableAliasIfPresent -Name "ldc2" -ExePath (Join-Path $ldcBinDir "ldc2.exe")
 Set-ExecutableAliasIfPresent -Name "dub" -ExePath (Join-Path $ldcBinDir "dub.exe")
@@ -1010,6 +1018,7 @@ New-BashExeShim -ShimsDir $shimsDir -CommandName "gcc" -ExePath (Join-Path $gccB
 New-BashExeShim -ShimsDir $shimsDir -CommandName "g++" -ExePath (Join-Path $gccBinDir "g++.exe")
 New-BashExeShim -ShimsDir $shimsDir -CommandName "gdb" -ExePath (Join-Path $gccBinDir "gdb.exe")
 New-BashExeShim -ShimsDir $shimsDir -CommandName "gfortran" -ExePath (Join-Path $gccBinDir "gfortran.exe")
+New-BashExeShim -ShimsDir $shimsDir -CommandName "gnatmake" -ExePath (Join-Path $gnatBinDir "gnatmake.exe")
 New-BashExeShim -ShimsDir $shimsDir -CommandName "go" -ExePath (Join-Path $goBinDir "go.exe")
 New-BashExeShim -ShimsDir $shimsDir -CommandName "ldc2" -ExePath (Join-Path $ldcBinDir "ldc2.exe")
 New-BashExeShim -ShimsDir $shimsDir -CommandName "dub" -ExePath (Join-Path $ldcBinDir "dub.exe")
@@ -1038,6 +1047,7 @@ Prepend-PathEntries -Entries @(
   $tupDir,
   $nargoDir,
   $gccBinDir,
+  $gnatBinDir,
   $goBinDir,
   $ldcBinDir,
   $vlangBinDir,
