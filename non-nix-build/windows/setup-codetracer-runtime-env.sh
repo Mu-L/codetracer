@@ -76,6 +76,28 @@ fi
 [[ -n "${FPC_VERSION:-}" && -d "$INSTALL_ROOT/fpc/$FPC_VERSION/bin/x86_64-win64" ]] && \
 	_tool_dirs+=("$INSTALL_ROOT/fpc/$FPC_VERSION/bin/x86_64-win64")
 
+# LLVM (provides clang, lldb, llvm-config)
+if [[ -n "${LLVM_VERSION:-}" ]]; then
+	for _llvm_cand in \
+		"$INSTALL_ROOT/llvm/$LLVM_VERSION/LLVM-$LLVM_VERSION-x86_64-pc-windows-msvc/bin" \
+		"$INSTALL_ROOT/llvm/$LLVM_VERSION/LLVM-$LLVM_VERSION-aarch64-pc-windows-msvc/bin"; do
+		[[ -d "$_llvm_cand" ]] && { _tool_dirs+=("$_llvm_cand"); break; }
+	done
+fi
+
+# Export LLVM_CONFIG and LLDB_LIB_PATH for lldb-sys crate build.rs
+if [[ -n "${LLVM_VERSION:-}" ]]; then
+	for _llvm_dir in \
+		"$INSTALL_ROOT/llvm/$LLVM_VERSION/LLVM-$LLVM_VERSION-x86_64-pc-windows-msvc" \
+		"$INSTALL_ROOT/llvm/$LLVM_VERSION/LLVM-$LLVM_VERSION-aarch64-pc-windows-msvc"; do
+		if [[ -f "$_llvm_dir/bin/llvm-config.exe" ]]; then
+			export LLVM_CONFIG="$_llvm_dir/bin/llvm-config.exe"
+			export LLDB_LIB_PATH="$_llvm_dir/lib"
+			break
+		fi
+	done
+fi
+
 # Prepend shims first, then tool dirs (shims take precedence).
 for _d in "${_tool_dirs[@]}"; do
 	case ":$PATH:" in

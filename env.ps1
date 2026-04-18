@@ -939,6 +939,16 @@ function Resolve-ClExePath {
 [Environment]::SetEnvironmentVariable("FPC_DIR", $fpcDir, "Process")
 [Environment]::SetEnvironmentVariable("ZSTD_DIR", $zstdDir, "Process")
 [Environment]::SetEnvironmentVariable("LLVM_DIR", $llvmDir, "Process")
+# LLVM_CONFIG and LLDB_LIB_PATH are used by the lldb-sys crate's build.rs
+# to locate the LLDB shared library and LLVM headers for FFI compilation.
+$llvmConfigExe = Join-Path $llvmBinDir "llvm-config.exe"
+if (Test-Path -LiteralPath $llvmConfigExe -PathType Leaf) {
+  [Environment]::SetEnvironmentVariable("LLVM_CONFIG", $llvmConfigExe, "Process")
+}
+$llvmLibDir = Join-Path $llvmDir "lib"
+if (Test-Path -LiteralPath $llvmLibDir -PathType Container) {
+  [Environment]::SetEnvironmentVariable("LLDB_LIB_PATH", $llvmLibDir, "Process")
+}
 [Environment]::SetEnvironmentVariable("WINDOWS_DIY_SHIMS_DIR", $shimsDir, "Process")
 
 $clExe = Resolve-ClExePath
@@ -981,6 +991,8 @@ Set-ExecutableAliasIfPresent -Name "v" -ExePath (Join-Path $vlangBinDir "v.exe")
 Set-ExecutableAliasIfPresent -Name "fpc" -ExePath (Join-Path $fpcBinDir "fpc.exe")
 Set-ExecutableAliasIfPresent -Name "clang" -ExePath (Join-Path $llvmBinDir "clang.exe")
 Set-ExecutableAliasIfPresent -Name "clang++" -ExePath (Join-Path $llvmBinDir "clang++.exe")
+Set-ExecutableAliasIfPresent -Name "lldb" -ExePath (Join-Path $llvmBinDir "lldb.exe")
+Set-ExecutableAliasIfPresent -Name "llvm-config" -ExePath (Join-Path $llvmBinDir "llvm-config.exe")
 if (-not [string]::IsNullOrWhiteSpace($ttdExe)) {
   Set-ExecutableAliasIfPresent -Name "ttd" -ExePath $ttdExe
 }
@@ -1027,6 +1039,8 @@ New-BashExeShim -ShimsDir $shimsDir -CommandName "v" -ExePath (Join-Path $vlangB
 New-BashExeShim -ShimsDir $shimsDir -CommandName "fpc" -ExePath (Join-Path $fpcBinDir "fpc.exe")
 New-BashExeShim -ShimsDir $shimsDir -CommandName "clang" -ExePath (Join-Path $llvmBinDir "clang.exe")
 New-BashExeShim -ShimsDir $shimsDir -CommandName "clang++" -ExePath (Join-Path $llvmBinDir "clang++.exe")
+New-BashExeShim -ShimsDir $shimsDir -CommandName "lldb" -ExePath (Join-Path $llvmBinDir "lldb.exe")
+New-BashExeShim -ShimsDir $shimsDir -CommandName "llvm-config" -ExePath (Join-Path $llvmBinDir "llvm-config.exe")
 
 Prepend-PathEntries -Entries @(
   $(if (-not [string]::IsNullOrWhiteSpace($ttdExe)) { Split-Path -Parent $ttdExe }),
