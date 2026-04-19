@@ -22,7 +22,7 @@ echo "## checking the build of db-backend parts"
 pushd src/db-backend
 
 # threat warnings as errors here!
-env RUSTFLAGS="-D warnings" cargo check --release --bin db-backend
+env RUSTFLAGS="-D warnings" cargo check --release --bin replay-server
 env RUSTFLAGS="-D warnings" cargo check --release --bin virtualization-layers
 env RUSTFLAGS="-D warnings" cargo check --release --bin schema-generator
 
