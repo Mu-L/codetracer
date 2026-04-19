@@ -1,7 +1,8 @@
 import
   std / [ options, strformat, strutils, osproc, os, json ],
   ../../common/[ types, trace_index, paths, lang ],
-  storage_and_import
+  storage_and_import,
+  ../online_sharing/mcr_enrichment
 
 
 # hosts a codetracer server that can be accessed in the browser
@@ -68,33 +69,76 @@ proc parseIdleTimeoutMs*(raw: string): IdleTimeoutResult =
 
   return okResult(base * multiplier)
 
+proc copyDirContents(srcDir, destDir: string) =
+  ## Recursively copy all contents of srcDir into destDir.
+  ## Creates destDir if it does not exist.
+  createDir(destDir)
+  for entry in walkDir(srcDir):
+    let destPath = destDir / entry.path.extractFilename
+    case entry.kind
+    of pcFile, pcLinkToFile:
+      copyFile(entry.path, destPath)
+    of pcDir, pcLinkToDir:
+      copyDirContents(entry.path, destPath)
+
 proc importCtFile(ctFilePath: string): int =
   ## Import a standalone .ct file by creating a minimal trace folder
   ## around it and importing into the database.
+  ##
+  ## Copies the entire parent directory contents (not just the .ct file)
+  ## so that companion files such as `binaries/` and source files are
+  ## preserved. After copying, MCR trace enrichment is attempted via
+  ## `ct-mcr export --portable` (best-effort — skipped when ct-mcr is
+  ## not available).
+  ##
   ## Returns the assigned trace ID.
   let tempDir = getTempDir() / "ct-host-" & $getCurrentProcessId()
   createDir(tempDir)
-  copyFile(ctFilePath, tempDir / "trace.ct")
 
-  # Create minimal trace_db_metadata.json so importTrace can read it.
-  let metaJson = %*{
-    "program": "imported",
-    "args": newJArray(),
-    "workdir": tempDir,
-    "lang": "c"
-  }
-  writeFile(tempDir / "trace_db_metadata.json", $metaJson)
-  writeFile(tempDir / "trace_paths.json", "[]")
-
-  # Copy source files if present alongside the .ct file.
+  # Copy the entire source directory into the temp folder so that
+  # companion artifacts (binaries/, source files, etc.) are available
+  # for enrichment and import.
   let sourceDir = ctFilePath.parentDir
-  for entry in walkDir(sourceDir):
-    if entry.kind == pcFile and entry.path != ctFilePath:
-      let ext = entry.path.splitFile.ext.toLowerAscii
-      if ext in [".c", ".cpp", ".h", ".hpp", ".rs", ".py", ".rb", ".nim", ".js", ".ts"]:
-        let filesDir = tempDir / "files" / sourceDir.strip(chars = {'/'})
-        createDir(filesDir)
-        copyFile(entry.path, filesDir / entry.path.extractFilename)
+  copyDirContents(sourceDir, tempDir)
+
+  # Ensure the .ct file is named trace.ct for the import machinery.
+  let ctFileName = ctFilePath.extractFilename
+  if ctFileName != "trace.ct":
+    let copiedCtPath = tempDir / ctFileName
+    if fileExists(copiedCtPath):
+      moveFile(copiedCtPath, tempDir / "trace.ct")
+
+  # Attempt MCR trace enrichment (adds binaries and debug symbols to the
+  # .ct container). This is best-effort: if ct-mcr is not found or the
+  # file is not an MCR trace, we continue without enrichment.
+  let enriched = enrichMcrTraceIfNeeded(tempDir)
+  if enriched:
+    echo "ct host: MCR trace enriched with portable binaries/symbols"
+
+  # Create minimal trace_db_metadata.json so importTrace can read it
+  # (only if enrichment or a prior recording step did not already produce one).
+  if not fileExists(tempDir / "trace_db_metadata.json"):
+    let metaJson = %*{
+      "program": "imported",
+      "args": newJArray(),
+      "workdir": tempDir,
+      "lang": "c"
+    }
+    writeFile(tempDir / "trace_db_metadata.json", $metaJson)
+
+  if not fileExists(tempDir / "trace_paths.json"):
+    writeFile(tempDir / "trace_paths.json", "[]")
+
+  # Copy source files into files/ subdirectory if not already present.
+  # This mirrors the layout expected by the frontend for source display.
+  if not dirExists(tempDir / "files"):
+    for entry in walkDir(tempDir):
+      if entry.kind == pcFile:
+        let ext = entry.path.splitFile.ext.toLowerAscii
+        if ext in [".c", ".cpp", ".h", ".hpp", ".rs", ".py", ".rb", ".nim", ".js", ".ts"]:
+          let filesDir = tempDir / "files" / sourceDir.strip(chars = {'/'})
+          createDir(filesDir)
+          copyFile(entry.path, filesDir / entry.path.extractFilename)
 
   let trace = importTrace(
     tempDir,
@@ -112,8 +156,20 @@ proc importCtFile(ctFilePath: string): int =
 proc importTraceFolder(traceFolderPath: string): int =
   ## Import a trace folder into the database.
   ## The folder should contain trace_metadata.json or trace_db_metadata.json.
+  ##
+  ## If the folder contains an MCR trace (.ct file with CTFS magic),
+  ## enrichment via `ct-mcr export --portable` is attempted first
+  ## (best-effort).
+  ##
   ## Returns the assigned trace ID.
   let fullPath = expandFilename(expandTilde(traceFolderPath))
+
+  # Attempt MCR trace enrichment before import. This adds binaries and
+  # debug symbols to the .ct container in-place. Best-effort: if ct-mcr
+  # is not found or the folder has no MCR trace, this is a no-op.
+  let enriched = enrichMcrTraceIfNeeded(fullPath)
+  if enriched:
+    echo "ct host: MCR trace enriched with portable binaries/symbols"
 
   let traceKind =
     if fileExists(fullPath / "trace_metadata.json"):
@@ -127,8 +183,21 @@ proc importTraceFolder(traceFolderPath: string): int =
     else:
       fullPath / "trace_db_metadata.json"
   if not fileExists(metaFile):
-    echo "ct host: error: trace folder missing metadata file: ", metaFile
-    quit(1)
+    # For MCR trace folders that lack metadata, create a minimal one
+    # so the import can proceed.
+    if findCtFileInFolder(fullPath).len > 0:
+      let metaJson = %*{
+        "program": "imported",
+        "args": newJArray(),
+        "workdir": fullPath,
+        "lang": "c"
+      }
+      writeFile(fullPath / "trace_db_metadata.json", $metaJson)
+      if not fileExists(fullPath / "trace_paths.json"):
+        writeFile(fullPath / "trace_paths.json", "[]")
+    else:
+      echo "ct host: error: trace folder missing metadata file: ", metaFile
+      quit(1)
 
   let trace = importTrace(
     fullPath,
