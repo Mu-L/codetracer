@@ -1,6 +1,8 @@
 #ifndef TREE_SITTER_WASM_WCTYPE_H_
 #define TREE_SITTER_WASM_WCTYPE_H_
 
+#include <stdbool.h>
+
 typedef int wint_t;
 
 static inline bool iswalpha(wint_t wch) {
@@ -167,5 +169,19 @@ static inline bool iswspace(wint_t wch) {
 
 static inline int iswlower(wint_t c) { return (c >= 'a' && c <= 'z'); }
 static inline int iswupper(wint_t c) { return (c >= 'A' && c <= 'Z'); }
+
+static inline bool iswxdigit(wint_t c) {
+    return (c >= '0' && c <= '9') ||
+           (c >= 'a' && c <= 'f') ||
+           (c >= 'A' && c <= 'F');
+}
+
+static inline wint_t towlower(wint_t c) {
+    return iswupper(c) ? c + ('a' - 'A') : c;
+}
+
+static inline wint_t towupper(wint_t c) {
+    return iswlower(c) ? c - ('a' - 'A') : c;
+}
 
 #endif // TREE_SITTER_WASM_WCTYPE_H_
