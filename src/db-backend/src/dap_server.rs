@@ -98,18 +98,20 @@ pub fn socket_path_for(pid: usize) -> PathBuf {
     )
 }
 
-/// Resolve the `ct-rr-support` binary path from the launch arguments,
+/// Resolve the `ct-native-replay` binary path from the launch arguments,
 /// falling back to environment variable and PATH search when the provided
 /// path is empty or absent.
 ///
 /// The fallback chain mirrors the discovery logic used in backend-manager's
 /// `ct/open-trace` handler:
 ///   1. Use the value from the DAP launch `ctRRWorkerExe` argument (if non-empty)
-///   2. Check `CODETRACER_CT_RR_SUPPORT_CMD` environment variable
-///   3. Search for `ct-rr-support` on `PATH`
+///   2. Check `CODETRACER_CT_NATIVE_REPLAY_CMD` environment variable
+///      (falls back to legacy `CODETRACER_CT_RR_SUPPORT_CMD`)
+///   3. Search for `ct-native-replay` on `PATH`
+///      (falls back to legacy `ct-rr-support`)
 ///
 /// This is necessary because the Nim/Electron frontend's config loader
-/// does not auto-discover `ct-rr-support` (the auto-discovery in
+/// does not auto-discover `ct-native-replay` (the auto-discovery in
 /// `common/config.nim` only runs in the native CLI context), so the
 /// frontend typically sends an empty `ctRRWorkerExe` in the DAP launch
 /// request for RR-based traces.
@@ -117,30 +119,35 @@ fn resolve_recreator_exe(from_launch_args: Option<PathBuf>) -> PathBuf {
     // 1. Use the provided path if it's non-empty.
     if let Some(ref path) = from_launch_args {
         if !path.as_os_str().is_empty() {
-            info!("ct-rr-support: using path from launch args: {}", path.display());
+            info!("ct-native-replay: using path from launch args: {}", path.display());
             return path.clone();
         }
     }
 
-    // 2. Check CODETRACER_CT_RR_SUPPORT_CMD environment variable.
-    if let Ok(env_path) = std::env::var("CODETRACER_CT_RR_SUPPORT_CMD") {
-        if !env_path.is_empty() {
-            info!(
-                "ct-rr-support: using path from CODETRACER_CT_RR_SUPPORT_CMD: {}",
-                env_path
-            );
-            return PathBuf::from(env_path);
+    // 2. Check CODETRACER_CT_NATIVE_REPLAY_CMD environment variable,
+    //    falling back to the legacy CODETRACER_CT_RR_SUPPORT_CMD.
+    for var_name in &["CODETRACER_CT_NATIVE_REPLAY_CMD", "CODETRACER_CT_RR_SUPPORT_CMD"] {
+        if let Ok(env_path) = std::env::var(var_name) {
+            if !env_path.is_empty() {
+                info!(
+                    "ct-native-replay: using path from {}: {}",
+                    var_name, env_path
+                );
+                return PathBuf::from(env_path);
+            }
         }
     }
 
-    // 3. Search for ct-rr-support on PATH.
-    if let Some(path) = find_on_path("ct-rr-support") {
-        info!("ct-rr-support: discovered on PATH: {}", path.display());
-        return path;
+    // 3. Search for ct-native-replay on PATH, falling back to legacy ct-rr-support.
+    for exe_name in &["ct-native-replay", "ct-rr-support"] {
+        if let Some(path) = find_on_path(exe_name) {
+            info!("ct-native-replay: discovered '{}' on PATH: {}", exe_name, path.display());
+            return path;
+        }
     }
 
     warn!(
-        "ct-rr-support: not found via launch args, environment, or PATH; \
+        "ct-native-replay: not found via launch args, environment, or PATH; \
          RR-based traces will fail to replay"
     );
     PathBuf::new()
@@ -335,7 +342,7 @@ fn setup(
     let is_ttd_run_trace = trace_path
         .extension()
         .is_some_and(|ext| ext == std::ffi::OsStr::new("run"));
-    // MCR traces (.ct files) are handled by ct-rr-support replay-worker,
+    // MCR traces (.ct files) are handled by ct-native-replay replay-worker,
     // not by the DB trace reader. Skip DB metadata loading for them.
     let is_mcr_trace = trace_folder.is_file()
         && trace_folder
@@ -406,7 +413,7 @@ fn setup(
 fn resolve_replay_trace_path(trace_folder: &Path, trace_file: &Path) -> Option<PathBuf> {
     // MCR traces: if trace_folder itself is a .ct file, use it directly.
     // The ct-dap-client test runner passes the .ct file path as trace_folder
-    // for MCR traces. ct-rr-support detects .ct files and routes them to
+    // for MCR traces. ct-native-replay detects .ct files and routes them to
     // the MCR debugserver.
     if trace_folder.is_file()
         && trace_folder

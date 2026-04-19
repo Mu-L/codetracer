@@ -102,7 +102,7 @@ impl ReplayWorker {
         // Redirect worker stderr to a log file for debugging.
         let log_dir = std::env::temp_dir().join("codetracer");
         let _ = std::fs::create_dir_all(&log_dir);
-        let log_path = log_dir.join(format!("ct-rr-support-{}-{}.log", self.name, self.index));
+        let log_path = log_dir.join(format!("ct-native-replay-{}-{}.log", self.name, self.index));
         info!("worker stderr log: {}", log_path.display());
         let stderr_file = std::fs::File::create(&log_path)?;
 
@@ -178,7 +178,7 @@ impl ReplayWorker {
         let deadline = Instant::now() + Duration::from_secs(10);
         let poll_interval = Duration::from_millis(25);
         let mut last_error: Option<String> = None;
-        let manifest_name = format!("ct_rr_support_{}_{}_from_.sock", self.name, self.index);
+        let manifest_name = format!("ct_native_replay_{}_{}_from_.sock", self.name, self.index);
         let worker_pid = self.process.as_ref().map(std::process::Child::id);
         let tmp_path = {
             CODETRACER_PATHS
@@ -402,7 +402,7 @@ impl ReplayWorker {
             // and return a clear error rather than an empty string that would
             // fail JSON parsing downstream.
             self.active = false;
-            return Err("ct-rr-support replay worker disconnected (EOF on response)".into());
+            return Err("ct-native-replay worker disconnected (EOF on response)".into());
         }
 
         if res.starts_with("error:") {

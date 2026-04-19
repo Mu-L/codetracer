@@ -80,7 +80,7 @@ proc parseArgs* =
       elif arg == cstring"--deepreview":
         # Load a DeepReview JSON export file for offline review mode.
         # The JSON structure matches the DeepReviewData type produced
-        # by ct-rr-support's json_export module.
+        # by ct-native-replay's json_export module.
         if i + 1 < args.len:
           data.startOptions.deepReview = cast[DeepReviewData](JSON.parse(fs.readFileSync(args[i + 1], cstring"utf8")))
           data.startOptions.withDeepReview = true

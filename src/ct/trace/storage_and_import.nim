@@ -284,7 +284,7 @@ proc importTrace*(
       trace_index.recordTrace(trace, test=false)
     except CatchableError as e:
       # Fallback for replay metadata that is not a serialized Trace object
-      # (for example Windows TTD sidecar metadata from ct-rr-support).
+      # (for example Windows TTD sidecar metadata from ct-native-replay).
       echo "[codetracer importTrace warning]: fallback metadata parse: ", e.msg
       trace_index.recordTrace(
         traceID,

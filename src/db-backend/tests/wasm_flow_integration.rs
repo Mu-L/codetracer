@@ -5,7 +5,7 @@
 //! for Rust programs compiled to WASM and recorded by wazero.
 //!
 //! WASM programs use DB-based traces produced by `wazero run --out-dir`,
-//! so this test does NOT require `ct-rr-support` or `rr`.
+//! so this test does NOT require `ct-native-replay` or `rr`.
 //!
 //! Prerequisites:
 //! - `wazero` must be on PATH or set via CODETRACER_WASM_VM_PATH

@@ -8,7 +8,7 @@
 ## - 64 bytes: Ed25519 signature
 ##
 ## Minimum valid size is 74 bytes (4 + 4 + 2 + 64).
-## The Nim side does NOT verify the signature — that's done by ct-rr-support
+## The Nim side does NOT verify the signature — that's done by ct-native-replay
 ## (Rust) at replay time.
 
 import std/[os, strformat]

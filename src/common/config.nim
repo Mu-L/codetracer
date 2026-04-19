@@ -93,11 +93,11 @@ proc rrBackendMissingGuidanceLines*: seq[string] =
   ## Standard guidance for missing rr backend installations, including the user config path.
   let configFile = userConfigFilePath()
   @[
-    "This functionality requires a ct-rr-support installation.",
-    fmt"To fix this issue either add ct-rr-support to your PATH or open {configFile} and set:",
+    "This functionality requires a ct-native-replay installation.",
+    fmt"To fix this issue either add ct-native-replay to your PATH or open {configFile} and set:",
     "rrBackend:",
     "  enabled: true",
-    "  path:<ct-rr-support binary or AppImage location>",
+    "  path:<ct-native-replay binary or AppImage location>",
   ]
 
 func normalize(shortcut: string): string =
@@ -169,9 +169,12 @@ proc loadConfig*(folder: string, inTest: bool): Config =
     c[] = config
     c.shortcutMap = initShortcutMap(config.bindings)
 
-    # Auto-discover ct-rr-support from PATH if not configured
+    # Auto-discover ct-native-replay from PATH if not configured,
+    # falling back to legacy ct-rr-support name.
     if c.rrBackend.path == "":
-      let ctRrPath = findExe("ct-rr-support")
+      var ctRrPath = findExe("ct-native-replay")
+      if ctRrPath == "":
+        ctRrPath = findExe("ct-rr-support")  # legacy fallback
       if ctRrPath != "":
         c.rrBackend.enabled = true
         c.rrBackend.path = ctRrPath

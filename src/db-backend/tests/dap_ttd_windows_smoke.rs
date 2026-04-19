@@ -193,7 +193,7 @@ fn should_skip_ttd_tests() -> Option<String> {
         return Some("only supported on Windows".to_string());
     }
     if resolve_ct_rr_support().is_err() {
-        return Some("ct-rr-support binary not found".to_string());
+        return Some("ct-native-replay binary not found".to_string());
     }
     None
 }
@@ -217,7 +217,7 @@ fn resolve_manifest_path() -> Result<PathBuf, String> {
         .join("..")
         .join("..")
         .join("..")
-        .join("codetracer-rr-backend")
+        .join("codetracer-native-backend")
         .join(&manifest_path);
     if candidate.exists() {
         Ok(candidate)
@@ -357,21 +357,21 @@ fn record_ttd_trace(ct_rr_support: &Path, exe: &Path, output_trace: &Path) -> Re
             exe.to_str().ok_or_else(|| "exe path is not utf-8".to_string())?,
         ])
         .output()
-        .map_err(|e| format!("failed to run ct-rr-support record: {e}"))?;
+        .map_err(|e| format!("failed to run ct-native-replay record: {e}"))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         if is_access_denied_output(&stderr) {
             return Ok(None);
         }
-        return Err(format!("ct-rr-support record failed: {stderr}"));
+        return Err(format!("ct-native-replay record failed: {stderr}"));
     }
 
     if output_trace.is_file() {
         return Ok(Some(output_trace.to_path_buf()));
     }
     Err(format!(
-        "ct-rr-support record succeeded but trace not found at {}",
+        "ct-native-replay record succeeded but trace not found at {}",
         output_trace.display()
     ))
 }
@@ -382,7 +382,7 @@ fn auto_record_tracepoint_fixture() -> Result<Option<TtdFixture>, String> {
         .join("..")
         .join("..")
         .join("..")
-        .join("codetracer-rr-backend")
+        .join("codetracer-native-backend")
         .join("tests")
         .join("programs")
         .join("c")
@@ -469,7 +469,7 @@ fn parse_ttd_fixture_by_program_suffix(
 
 fn resolve_ct_rr_support() -> Result<PathBuf, String> {
     test_harness::find_ct_rr_support().ok_or_else(|| {
-        "ct-rr-support binary not found. Set CT_RR_SUPPORT_PATH or build codetracer-rr-backend first".to_string()
+        "ct-native-replay binary not found. Set CT_NATIVE_REPLAY_PATH or build codetracer-native-backend first".to_string()
     })
 }
 

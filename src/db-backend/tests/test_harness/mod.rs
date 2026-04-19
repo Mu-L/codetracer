@@ -255,7 +255,7 @@ impl TestRecording {
         let build_output = Command::new(ct_rr_support)
             .args(["build", source_path.to_str().unwrap(), binary_path.to_str().unwrap()])
             .output()
-            .map_err(|e| format!("failed to run ct-rr-support build: {}", e))?;
+            .map_err(|e| format!("failed to run ct-native-replay build: {}", e))?;
 
         if !build_output.status.success() {
             return Err(format!(
@@ -274,7 +274,7 @@ impl TestRecording {
                 binary_path.to_str().unwrap(),
             ])
             .output()
-            .map_err(|e| format!("failed to run ct-rr-support record: {}", e))?;
+            .map_err(|e| format!("failed to run ct-native-replay record: {}", e))?;
 
         if !record_output.status.success() {
             return Err(format!(
@@ -936,7 +936,7 @@ pub struct FlowTestConfig {
 }
 
 /// Look up a tool on the system PATH.
-/// Uses `which` on Unix (already used by existing find_ct_rr_support and find_wazero).
+/// Uses `which` on Unix (already used by existing find_ct_native_replay and find_wazero).
 fn find_on_path(name: &str) -> Option<PathBuf> {
     #[cfg(unix)]
     {
@@ -968,59 +968,78 @@ fn find_on_path(name: &str) -> Option<PathBuf> {
     None
 }
 
-/// Find ct-rr-support binary.
+/// Find ct-native-replay binary (formerly ct-rr-support).
 ///
 /// Search order:
-/// 1. `CT_RR_SUPPORT_PATH` env var (explicit override)
-/// 2. System PATH lookup (via `which`/`where`)
+/// 1. `CT_NATIVE_REPLAY_PATH` env var (explicit override),
+///    falling back to legacy `CT_RR_SUPPORT_PATH`
+/// 2. System PATH lookup (via `which`/`where`) for `ct-native-replay`,
+///    falling back to legacy `ct-rr-support`
 /// 3. Common development locations relative to CARGO_MANIFEST_DIR
 /// 4. Home directory locations
 pub fn find_ct_rr_support() -> Option<PathBuf> {
-    // Highest priority: explicit CT_RR_SUPPORT_PATH environment variable.
+    // Highest priority: explicit env var override.
     // Used by cross-repo test scripts to communicate the binary location.
-    if let Ok(path) = env::var("CT_RR_SUPPORT_PATH") {
-        let p = PathBuf::from(&path);
-        if p.exists() && p.is_file() {
-            return Some(p);
+    for var_name in &["CT_NATIVE_REPLAY_PATH", "CT_RR_SUPPORT_PATH"] {
+        if let Ok(path) = env::var(var_name) {
+            let p = PathBuf::from(&path);
+            if p.exists() && p.is_file() {
+                return Some(p);
+            }
+            eprintln!(
+                "WARNING: {}='{}' but file does not exist; falling back",
+                var_name, path
+            );
         }
-        eprintln!(
-            "WARNING: CT_RR_SUPPORT_PATH='{}' but file does not exist; falling back",
-            path
-        );
     }
 
-    // Check PATH
-    let exe_name = format!("ct-rr-support{}", std::env::consts::EXE_SUFFIX);
-    if let Some(path) = find_on_path(&exe_name) {
-        return Some(path);
+    // Check PATH — try new name first, then legacy name
+    for bin_name in &["ct-native-replay", "ct-rr-support"] {
+        let exe_name = format!("{}{}", bin_name, std::env::consts::EXE_SUFFIX);
+        if let Some(path) = find_on_path(&exe_name) {
+            return Some(path);
+        }
     }
 
-    // Check common development locations
+    // Check common development locations (try both repo names)
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let dev_locations = [
-        format!("../../codetracer-rr-backend/target/debug/{}", exe_name),
-        format!("../../codetracer-rr-backend/target/release/{}", exe_name),
-        format!("../../../codetracer-rr-backend/target/debug/{}", exe_name),
-    ];
+    let new_exe = format!("ct-native-replay{}", std::env::consts::EXE_SUFFIX);
+    let old_exe = format!("ct-rr-support{}", std::env::consts::EXE_SUFFIX);
+    for exe_name in &[&new_exe, &old_exe] {
+        let dev_locations = [
+            format!("../../codetracer-native-backend/target/debug/{}", exe_name),
+            format!("../../codetracer-native-backend/target/release/{}", exe_name),
+            format!("../../../codetracer-native-backend/target/debug/{}", exe_name),
+            // Legacy repo name fallbacks
+            format!("../../codetracer-rr-backend/target/debug/{}", exe_name),
+            format!("../../codetracer-rr-backend/target/release/{}", exe_name),
+            format!("../../../codetracer-rr-backend/target/debug/{}", exe_name),
+        ];
 
-    for loc in &dev_locations {
-        let path = manifest_dir.join(loc);
-        if path.exists() {
-            return Some(safe_canonicalize(&path));
+        for loc in &dev_locations {
+            let path = manifest_dir.join(loc);
+            if path.exists() {
+                return Some(safe_canonicalize(&path));
+            }
         }
     }
 
     // Check from home directory
     if let Some(home) = env::var_os("HOME").or_else(|| env::var_os("USERPROFILE")) {
         let home_path = PathBuf::from(home);
-        let home_locations = [
-            format!("metacraft/codetracer-rr-backend/target/debug/{}", exe_name),
-            format!("codetracer-rr-backend/target/debug/{}", exe_name),
-        ];
-        for loc in &home_locations {
-            let path = home_path.join(loc);
-            if path.exists() {
-                return Some(path);
+        for exe_name in &[&new_exe, &old_exe] {
+            let home_locations = [
+                format!("metacraft/codetracer-native-backend/target/debug/{}", exe_name),
+                format!("codetracer-native-backend/target/debug/{}", exe_name),
+                // Legacy repo name fallbacks
+                format!("metacraft/codetracer-rr-backend/target/debug/{}", exe_name),
+                format!("codetracer-rr-backend/target/debug/{}", exe_name),
+            ];
+            for loc in &home_locations {
+                let path = home_path.join(loc);
+                if path.exists() {
+                    return Some(path);
+                }
             }
         }
     }
@@ -1042,7 +1061,7 @@ pub fn is_rr_available() -> bool {
 
 /// Check if TTD (Time Travel Debugging) is available (Windows only).
 ///
-/// Checks that ct-rr-support is present, the Microsoft.TimeTravelDebugging
+/// Checks that ct-native-replay is present, the Microsoft.TimeTravelDebugging
 /// package is installed, AND the process is running elevated (Admin).
 /// TTD recording requires elevation on Windows.
 #[cfg(windows)]
@@ -3239,7 +3258,7 @@ fn record_cadence_trace(source_path: &Path, trace_dir: &Path) -> Result<(), Stri
 }
 
 impl TestRecording {
-    /// Create a new DB-based test recording (Python/Ruby/Noir) without rr or ct-rr-support.
+    /// Create a new DB-based test recording (Python/Ruby/Noir) without rr or ct-native-replay.
     ///
     /// For interpreted languages, the "binary_path" is the source path itself.
     pub fn create_db_trace(source_path: &Path, language: Language, version_label: &str) -> Result<Self, String> {
@@ -3342,7 +3361,7 @@ impl TestRecording {
 
 /// Run a flow integration test for a DB-based language (Python, Ruby, JS, Noir, WASM, Bash, Zsh).
 ///
-/// Similar to `run_flow_test()` but does not require ct-rr-support or rr.
+/// Similar to `run_flow_test()` but does not require ct-native-replay or rr.
 /// Uses `create_db_trace()` for recording and `DapStdioTestClient` for
 /// DAP communication (cross-platform, no Unix sockets needed).
 ///
@@ -3446,18 +3465,18 @@ pub fn run_db_flow_test_with_format(
 /// On Unix, uses `DapTestClient` (Unix sockets). On Windows (and as a fallback),
 /// uses `DapStdioTestClient` (cross-platform stdio pipes).
 ///
-/// Returns an error if ct-rr-support is not found or the replay backend (rr/TTD) is
+/// Returns an error if ct-native-replay is not found or the replay backend (rr/TTD) is
 /// not available, which allows tests to skip gracefully.
 pub fn run_flow_test(config: &FlowTestConfig, version_label: &str) -> Result<(), String> {
-    // Find ct-rr-support
+    // Find ct-native-replay (formerly ct-rr-support)
     let ct_rr_support =
-        find_ct_rr_support().ok_or("ct-rr-support not found in PATH or development locations".to_string())?;
+        find_ct_rr_support().ok_or("ct-native-replay not found in PATH or development locations".to_string())?;
 
     if !is_replay_backend_available() {
         return Err("replay backend not available (rr on Unix, TTD on Windows)".to_string());
     }
 
-    println!("Using ct-rr-support: {}", ct_rr_support.display());
+    println!("Using ct-native-replay: {}", ct_rr_support.display());
     println!("Source: {}", config.source_path.display());
     println!("Version: {}", version_label);
 

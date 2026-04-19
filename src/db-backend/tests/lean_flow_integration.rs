@@ -6,11 +6,11 @@
 //! breakpoints cannot be used yet.
 //!
 //! This test verifies:
-//! 1. ct-rr-support can build a Lean program (lake build)
-//! 2. ct-rr-support can record its execution with RR
+//! 1. ct-native-replay can build a Lean program (lake build)
+//! 2. ct-native-replay can record its execution with RR
 //! 3. db-backend can connect to the replay and initialize a DAP session
 //!
-//! The test is skipped if `ct-rr-support`, `rr`, or `lake` is not available.
+//! The test is skipped if `ct-native-replay`, `rr`, or `lake` is not available.
 //!
 //! Lean uses rr-based traces on Unix and TTD-based traces on Windows.
 
@@ -38,7 +38,7 @@ fn test_lean_build_and_record() {
     let ct_rr_support = match find_ct_rr_support() {
         Some(p) => p,
         None => {
-            eprintln!("SKIPPED: ct-rr-support not found");
+            eprintln!("SKIPPED: ct-native-replay not found");
             return;
         }
     };
@@ -98,7 +98,7 @@ fn test_lean_dap_replay_connects() {
     let ct_rr_support = match find_ct_rr_support() {
         Some(p) => p,
         None => {
-            eprintln!("SKIPPED: ct-rr-support not found");
+            eprintln!("SKIPPED: ct-native-replay not found");
             return;
         }
     };

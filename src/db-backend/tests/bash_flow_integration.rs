@@ -4,7 +4,7 @@
 //! and filters out command names when loading flow data for Bash scripts.
 //!
 //! Bash programs use DB-based traces (not rr), so this test does NOT require
-//! `ct-rr-support` or `rr`. It uses the codetracer-shell-recorders sibling repo.
+//! `ct-native-replay` or `rr`. It uses the codetracer-shell-recorders sibling repo.
 //!
 //! The test gracefully skips if the Bash recorder is not found.
 

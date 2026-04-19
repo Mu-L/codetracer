@@ -71,7 +71,7 @@ struct RawTraceMetadata {
 /// deserialized; the rest are ignored via `deny_unknown_fields = false`
 /// (the serde default).
 ///
-/// The full schema is defined in `codetracer-rr-backend/src/trace.rs` as the
+/// The full schema is defined in `codetracer-native-backend/src/trace.rs` as the
 /// `Trace` struct.  See also:
 /// `codetracer-specs/Trace-Files/RR-Trace-Folders.md#trace_db_metadatajson`
 #[derive(Deserialize)]
@@ -85,7 +85,7 @@ struct RawTraceDbMetadata {
     #[serde(default)]
     #[allow(dead_code)]
     args: Vec<String>,
-    /// Language enum value as defined in `codetracer-rr-backend/src/lang.rs`.
+    /// Language enum value as defined in `codetracer-native-backend/src/lang.rs`.
     /// Serialized as an integer by `serde_repr` (0=C, 1=Cpp, 2=Rust, 3=Nim,
     /// 4=Go, 5=Pascal, …).  Used as a fallback when `detect_language` cannot
     /// determine the language from the program's file extension (e.g. for
@@ -147,7 +147,7 @@ fn detect_language(program: &str) -> String {
 /// `serde_repr`) to a language name string.
 ///
 /// This must stay in sync with the `Lang` enum defined in
-/// `codetracer-rr-backend/src/lang.rs`.  Only languages that can appear in
+/// `codetracer-native-backend/src/lang.rs`.  Only languages that can appear in
 /// RR-recorded traces are mapped; the rest fall through to `"unknown"`.
 fn lang_id_to_name(id: u8) -> &'static str {
     match id {

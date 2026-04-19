@@ -5,7 +5,7 @@
 //! function calls when loading flow data for Noir programs.
 //!
 //! Noir programs use DB-based traces produced by `nargo trace`, so this test
-//! does NOT require `ct-rr-support` or `rr`.
+//! does NOT require `ct-native-replay` or `rr`.
 //!
 //! Prerequisites:
 //! - `nargo` must be on PATH (provided by the codetracer nix shell)

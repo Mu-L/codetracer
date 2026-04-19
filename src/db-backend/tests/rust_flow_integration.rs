@@ -3,7 +3,7 @@
 //! This test verifies that tree-sitter correctly extracts variables
 //! and filters out function calls when loading flow data for Rust programs.
 //!
-//! The test is skipped if `ct-rr-support` or `rr` is not available.
+//! The test is skipped if `ct-native-replay` or `rr` is not available.
 //!
 //! Rust uses rr-based traces on Unix and TTD-based traces on Windows.
 
@@ -49,7 +49,7 @@ fn create_rust_flow_config() -> FlowTestConfig {
 fn test_rust_flow_integration() {
     // Check prerequisites
     if find_ct_rr_support().is_none() {
-        eprintln!("SKIPPED: ct-rr-support not found in PATH or development locations");
+        eprintln!("SKIPPED: ct-native-replay not found in PATH or development locations");
         return;
     }
 

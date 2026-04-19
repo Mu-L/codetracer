@@ -8,7 +8,7 @@ import os
 
 type
   Lang* = enum ## Identifies a programming language implementation
-    ## Ordinals MUST match the Rust `Lang` enum in codetracer-rr-backend/src/lang.rs
+    ## Ordinals MUST match the Rust `Lang` enum in codetracer-native-backend/src/lang.rs
     ## which uses `#[repr(u8)]` with `serde_repr` for trace_metadata.json serialization.
     LangC,        # 0
     LangCpp,      # 1

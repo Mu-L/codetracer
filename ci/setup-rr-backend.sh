@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Clone and build codetracer-rr-backend for CI.
+# Clone and build codetracer-native-backend (formerly codetracer-rr-backend) for CI.
 #
 # Resolves the rr-backend ref from (in order):
 #   1. $RR_BACKEND_REF env var (explicit override)
@@ -17,7 +17,7 @@ set -euo pipefail
 REPO_ROOT="$(pwd)"
 # Clone as a sibling directory so that path deps in rr-backend's Cargo.toml
 # (../codetracer/libs/ct-dap-client) resolve correctly.
-CLONE_DIR="${CLONE_DIR:-$(pwd)/../codetracer-rr-backend}"
+CLONE_DIR="${CLONE_DIR:-$(pwd)/../codetracer-native-backend}"
 
 resolve_ref() {
 	# 1. Explicit override
@@ -29,7 +29,7 @@ resolve_ref() {
 	# 2. sibling-pins (plain text: name sha branch)
 	if [[ -f .github/sibling-pins ]]; then
 		local pin
-		pin=$(grep '^codetracer-rr-backend ' .github/sibling-pins | cut -d' ' -f2) || true
+		pin=$(grep '^codetracer-native-backend ' .github/sibling-pins | cut -d' ' -f2) || true
 		if [[ -n $pin ]]; then
 			echo "$pin"
 			return
@@ -52,10 +52,10 @@ resolve_ref() {
 
 clone_rr_backend() {
 	local ref="$1"
-	echo "Cloning codetracer-rr-backend at ref: $ref"
+	echo "Cloning codetracer-native-backend at ref: $ref"
 
 	if [[ -z ${GH_TOKEN:-} ]]; then
-		echo "Error: GH_TOKEN must be set to clone the private rr-backend repo" >&2
+		echo "Error: GH_TOKEN must be set to clone the private native-backend repo" >&2
 		exit 1
 	fi
 
@@ -68,7 +68,7 @@ clone_rr_backend() {
 	git config --global --replace-all url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/" || true
 
 	git clone \
-		"https://x-access-token:${GH_TOKEN}@github.com/metacraft-labs/codetracer-rr-backend.git" \
+		"https://x-access-token:${GH_TOKEN}@github.com/metacraft-labs/codetracer-native-backend.git" \
 		"$CLONE_DIR"
 
 	(
@@ -93,10 +93,10 @@ clone_rr_backend() {
 }
 
 build_rr_support() {
-	echo "Building ct-rr-support via nix build..."
+	echo "Building ct-native-replay via nix build..."
 
 	nix build \
-		"${CLONE_DIR}?submodules=1#codetracer-rr-support" \
+		"${CLONE_DIR}?submodules=1#ct-native-replay" \
 		--override-input rr-soft "path:${CLONE_DIR}/libs/rr" \
 		--override-input delve-patched "path:${CLONE_DIR}/libs/delve" \
 		--out-link "${CLONE_DIR}/result" \
@@ -109,18 +109,22 @@ build_rr_support() {
 
 	# Verify the binary exists
 	local binary=""
-	if [[ -x "${CLONE_DIR}/result/bin/ct-rr-support" ]]; then
-		binary="${CLONE_DIR}/result/bin/ct-rr-support"
+	if [[ -x "${CLONE_DIR}/result/bin/ct-native-replay" ]]; then
+		binary="${CLONE_DIR}/result/bin/ct-native-replay"
+	elif [[ -x "${CLONE_DIR}/target/debug/ct-native-replay" ]]; then
+		binary="${CLONE_DIR}/target/debug/ct-native-replay"
+	elif [[ -x "${CLONE_DIR}/result/bin/ct-rr-support" ]]; then
+		binary="${CLONE_DIR}/result/bin/ct-rr-support"  # legacy fallback
 	elif [[ -x "${CLONE_DIR}/target/debug/ct-rr-support" ]]; then
-		binary="${CLONE_DIR}/target/debug/ct-rr-support"
+		binary="${CLONE_DIR}/target/debug/ct-rr-support"  # legacy fallback
 	fi
 
 	if [[ -z $binary ]]; then
-		echo "Error: ct-rr-support binary not found after build" >&2
+		echo "Error: ct-native-replay binary not found after build" >&2
 		exit 1
 	fi
 
-	echo "ct-rr-support binary: $binary"
+	echo "ct-native-replay binary: $binary"
 }
 
 resolve_runtime_deps() {
@@ -158,10 +162,14 @@ resolve_runtime_deps() {
 
 export_to_github_env() {
 	local ct_rr_support=""
-	if [[ -x "${CLONE_DIR}/result/bin/ct-rr-support" ]]; then
-		ct_rr_support="$(cd "${CLONE_DIR}/result/bin" && pwd)/ct-rr-support"
+	if [[ -x "${CLONE_DIR}/result/bin/ct-native-replay" ]]; then
+		ct_rr_support="$(cd "${CLONE_DIR}/result/bin" && pwd)/ct-native-replay"
+	elif [[ -x "${CLONE_DIR}/target/debug/ct-native-replay" ]]; then
+		ct_rr_support="$(cd "${CLONE_DIR}/target/debug" && pwd)/ct-native-replay"
+	elif [[ -x "${CLONE_DIR}/result/bin/ct-rr-support" ]]; then
+		ct_rr_support="$(cd "${CLONE_DIR}/result/bin" && pwd)/ct-rr-support"  # legacy
 	elif [[ -x "${CLONE_DIR}/target/debug/ct-rr-support" ]]; then
-		ct_rr_support="$(cd "${CLONE_DIR}/target/debug" && pwd)/ct-rr-support"
+		ct_rr_support="$(cd "${CLONE_DIR}/target/debug" && pwd)/ct-rr-support"  # legacy
 	fi
 
 	if [[ -n ${GITHUB_ENV:-} ]]; then
@@ -182,7 +190,7 @@ export_to_github_env() {
 
 	echo ""
 	echo "=== rr-backend setup complete ==="
-	echo "  ct-rr-support: $ct_rr_support"
+	echo "  ct-native-replay: $ct_rr_support"
 	echo "  CODETRACER_RR_BACKEND_PRESENT=1"
 }
 

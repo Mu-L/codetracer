@@ -69,10 +69,10 @@ proc recordWithCtRrSupport(
   )
   let code = waitForExit(process)
   if code != 0:
-    echo fmt"error: ct-rr-support returned exit code ", code
+    echo fmt"error: ct-native-replay returned exit code ", code
     quit(code)
 
-  # import replay trace metadata written by ct-rr-support.
+  # import replay trace metadata written by ct-native-replay.
   result = importTrace(traceFolder, traceId, NO_PID, LangUnknown, DB_SELF_CONTAINED_DEFAULT, traceKind=traceKind)
 
 

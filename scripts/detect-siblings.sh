@@ -50,7 +50,8 @@ _CT_WORKSPACE_ROOT=""
 _ct_try_workspace_root() {
 	local candidate="$1"
 	# A valid workspace root should contain at least one known sibling directory.
-	if [ -d "$candidate/codetracer-rr-backend" ] ||
+	if [ -d "$candidate/codetracer-native-backend" ] ||
+		[ -d "$candidate/codetracer-rr-backend" ] ||
 		[ -d "$candidate/codetracer-python-recorder" ] ||
 		[ -d "$candidate/codetracer-ruby-recorder" ] ||
 		[ -d "$candidate/codetracer-js-recorder" ] ||
@@ -102,12 +103,17 @@ _ct_detect_summary() {
 # Sibling detection
 # ---------------------------------------------------------------------------
 
-# --- codetracer-rr-backend ---
+# --- codetracer-native-backend (formerly codetracer-rr-backend) ---
 # Exports: CODETRACER_RR_BACKEND_PATH, prepends to PATH
-if [ -n "$_CT_WORKSPACE_ROOT" ] && [ -x "$_CT_WORKSPACE_ROOT/codetracer-rr-backend/target/debug/ct-rr-support" ]; then
+if [ -n "$_CT_WORKSPACE_ROOT" ] && [ -x "$_CT_WORKSPACE_ROOT/codetracer-native-backend/target/debug/ct-native-replay" ]; then
+	export CODETRACER_RR_BACKEND_PATH="$_CT_WORKSPACE_ROOT/codetracer-native-backend"
+	export PATH="$_CT_WORKSPACE_ROOT/codetracer-native-backend/target/debug:$PATH"
+	_ct_detect_summary "codetracer-native-backend (ct-native-replay available)"
+elif [ -n "$_CT_WORKSPACE_ROOT" ] && [ -x "$_CT_WORKSPACE_ROOT/codetracer-rr-backend/target/debug/ct-rr-support" ]; then
+	# Legacy fallback
 	export CODETRACER_RR_BACKEND_PATH="$_CT_WORKSPACE_ROOT/codetracer-rr-backend"
 	export PATH="$_CT_WORKSPACE_ROOT/codetracer-rr-backend/target/debug:$PATH"
-	_ct_detect_summary "codetracer-rr-backend (ct-rr-support available)"
+	_ct_detect_summary "codetracer-rr-backend (ct-rr-support available, legacy)"
 fi
 
 # --- codetracer-native-test-programs ---

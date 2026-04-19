@@ -17,7 +17,7 @@
 
     # Use the toolchains flake's nixpkgs pin. This ensures binaries built in
     # this shell are link-compatible with binaries from sibling repos that also
-    # follow the same pin (e.g. codetracer-rr-backend).
+    # follow the same pin (e.g. codetracer-native-backend).
     nixpkgs.follows = "codetracer-toolchains/nixpkgs";
     nixpkgs-unstable.follows = "nixpkgs";
 

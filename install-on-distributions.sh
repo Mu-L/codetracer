@@ -68,7 +68,7 @@ install_apt() {
 	"$super" apt install -y codetracer || eprint_install_fail
 
 	eprint_note "Installing CodeTracer RR Backend (optional)!"
-	"$super" apt install -y codetracer-rr-backend || eprint_warning "Couldn't install RR backend. C/C++/Rust/Go support will not be available."
+	"$super" apt install -y codetracer-native-backend || eprint_warning "Couldn't install RR backend. C/C++/Rust/Go support will not be available."
 
 	eprint_success
 }
@@ -102,7 +102,7 @@ install_dnf() {
 	"$super" dnf -y install codetracer || eprint_install_fail
 
 	eprint_note "Installing CodeTracer RR Backend (optional)"
-	"$super" dnf -y install codetracer-rr-backend || eprint_warning "Couldn't install RR backend. C/C++/Rust/Go support will not be available."
+	"$super" dnf -y install codetracer-native-backend || eprint_warning "Couldn't install RR backend. C/C++/Rust/Go support will not be available."
 
 	eprint_success
 }
@@ -121,7 +121,7 @@ install_yum() {
 	"$super" yum -y install codetracer || eprint_install_fail
 
 	eprint_note "Installing CodeTracer RR Backend (optional)"
-	"$super" yum -y install codetracer-rr-backend || eprint_warning "Couldn't install RR backend. C/C++/Rust/Go support will not be available."
+	"$super" yum -y install codetracer-native-backend || eprint_warning "Couldn't install RR backend. C/C++/Rust/Go support will not be available."
 
 	eprint_success
 }
@@ -151,7 +151,7 @@ install_portage() {
 	"$super" emerge codetracer-bin || eprint_install_fail
 
 	eprint_note "Installing CodeTracer RR Backend (optional)"
-	"$super" emerge codetracer-rr-backend-bin || eprint_warning "Couldn't install RR backend. C/C++/Rust/Go support will not be available."
+	"$super" emerge codetracer-native-backend || eprint_warning "Couldn't install RR backend. C/C++/Rust/Go support will not be available."
 
 	eprint_success
 }
@@ -161,7 +161,7 @@ install_pamac() {
 	pamac build codetracer --no-confirm || eprint_install_fail
 
 	eprint_note "Installing CodeTracer RR Backend (optional)"
-	pamac build codetracer-rr-backend --no-confirm || eprint_warning "Couldn't install RR backend. C/C++/Rust/Go support will not be available."
+	pamac build codetracer-native-backend --no-confirm || eprint_warning "Couldn't install RR backend. C/C++/Rust/Go support will not be available."
 
 	eprint_success
 }
@@ -171,7 +171,7 @@ install_yay() {
 	yay -S codetracer --noconfirm || eprint_install_fail
 
 	eprint_note "Installing CodeTracer RR Backend (optional)"
-	yay -S codetracer-rr-backend --noconfirm || eprint_warning "Couldn't install RR backend. C/C++/Rust/Go support will not be available."
+	yay -S codetracer-native-backend --noconfirm || eprint_warning "Couldn't install RR backend. C/C++/Rust/Go support will not be available."
 
 	eprint_success
 }
@@ -181,7 +181,7 @@ install_paru() {
 	paru -S codetracer --noconfirm || eprint_install_fail
 
 	eprint_note "Installing CodeTracer RR Backend (optional)"
-	paru -S codetracer-rr-backend --noconfirm || eprint_warning "Couldn't install RR backend. C/C++/Rust/Go support will not be available."
+	paru -S codetracer-native-backend --noconfirm || eprint_warning "Couldn't install RR backend. C/C++/Rust/Go support will not be available."
 
 	eprint_success
 }
@@ -297,8 +297,8 @@ install_appimage() {
 	curl -fL --output "CodeTracer-RR-Backend.AppImage" "https://downloads.codetracer.com/CodeTracer-RR-Backend-latest-amd64.AppImage" || eprint_warning "Couldn't download RR backend. C/C++/Rust/Go support will not be available."
 
 	if [ -f "CodeTracer-RR-Backend.AppImage" ]; then
-		mv CodeTracer-RR-Backend.AppImage "$HOME/.local/bin/ct-rr-support" || eprint_warning "Couldn't install ct-rr-support in $HOME/.local/bin/"
-		chmod +x "$HOME/.local/bin/ct-rr-support" || eprint_warning "Couldn't make ct-rr-support executable!"
+		mv CodeTracer-RR-Backend.AppImage "$HOME/.local/bin/ct-native-replay" || eprint_warning "Couldn't install ct-native-replay in $HOME/.local/bin/"
+		chmod +x "$HOME/.local/bin/ct-native-replay" || eprint_warning "Couldn't make ct-native-replay executable!"
 		rm -f CodeTracer-RR-Backend.AppImage
 	fi
 

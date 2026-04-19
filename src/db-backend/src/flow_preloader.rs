@@ -422,7 +422,7 @@ impl<'a> CallFlowPreloader<'a> {
             // For RR traces: if we already have a valid location (e.g., from a breakpoint),
             // jump to that location instead of using jump_to_call which may not work correctly.
             // Check both rr_ticks and event: Delve (Go) can't provide ticks but does
-            // provide event numbers, which ct-rr-support uses as a fallback for seeking.
+            // provide event numbers, which ct-native-replay uses as a fallback for seeking.
             if (self.location.rr_ticks.0 > 0 || self.location.event > 0) && self.location.line > 0 {
                 info!(
                     "  move_to_first_step: jumping to location at line {} rr_ticks={} event={}",
@@ -576,7 +576,7 @@ impl<'a> CallFlowPreloader<'a> {
                 let mut load_return_value = false;
 
                 // for now return value loading not working well for RR!
-                //   should be fixed/improved in ct-rr-support
+                //   should be fixed/improved in ct-native-replay
                 if self.trace_kind == TraceKind::Materialized {
                     replay.step(Action::StepIn, false)?; // hopefully go back to the end of our original function
                     let return_location = replay.load_location(&mut expr_loader)?;

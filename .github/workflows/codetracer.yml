@@ -1138,7 +1138,7 @@ jobs:
       - name: Run TypeScript Playwright UI tests (RR-based only)
         env:
           CODETRACER_E2E_CT_PATH: ${{ github.workspace }}/result/bin/ct
-          CODETRACER_RR_BACKEND_PATH: ${{ github.workspace }}/../codetracer-rr-backend
+          CODETRACER_RR_BACKEND_PATH: ${{ github.workspace }}/../codetracer-native-backend
           CODETRACER_RR_BACKEND_PRESENT: "1"
           CODETRACER_RR_TESTS_ONLY: "1"
           PLAYWRIGHT_GLOBAL_TIMEOUT: "10800000"

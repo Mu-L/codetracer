@@ -5,7 +5,7 @@
 //! Go programs are debugged through Delve (not LLDB), which is transparent
 //! to the DAP flow infrastructure.
 //!
-//! The test is skipped if `ct-rr-support`, `rr`, or `dlv` is not available.
+//! The test is skipped if `ct-native-replay`, `rr`, or `dlv` is not available.
 //!
 //! Go uses rr-based traces on Unix and TTD-based traces on Windows.
 
@@ -59,7 +59,7 @@ fn is_delve_available() -> bool {
 fn test_go_flow_integration() {
     // Check prerequisites
     if find_ct_rr_support().is_none() {
-        eprintln!("SKIPPED: ct-rr-support not found in PATH or development locations");
+        eprintln!("SKIPPED: ct-native-replay not found in PATH or development locations");
         return;
     }
 

@@ -230,7 +230,7 @@ proc nativeReplayTraceKindForHost(): string =
   when defined(windows):
     "ttd"
   elif defined(macosx):
-    "rr"  # MCR backend in ct-rr-support handles macOS via --backend mcr
+    "rr"  # MCR backend in ct-native-replay handles macOS via --backend mcr
   else:
     "rr"
 

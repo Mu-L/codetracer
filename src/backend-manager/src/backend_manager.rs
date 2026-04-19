@@ -5383,12 +5383,13 @@ impl BackendManager {
 
         // Build DAP launch options.  If the trace directory contains an `rr/`
         // subdirectory (Linux RR traces) or `.run` files (Windows TTD traces),
-        // we need to tell db-backend where `ct-rr-support` is so it can spawn
+        // we need to tell db-backend where ct-native-replay is so it can spawn
         // the replay worker.
         //
-        // The `ct-rr-support` path is resolved from (in priority order):
-        //   1. `CODETRACER_CT_RR_SUPPORT_CMD` environment variable
-        //   2. `ct-rr-support` on PATH
+        // The ct-native-replay path is resolved from (in priority order):
+        //   1. `CODETRACER_CT_NATIVE_REPLAY_CMD` environment variable
+        //      (falls back to legacy `CODETRACER_CT_RR_SUPPORT_CMD`)
+        //   2. `ct-native-replay` on PATH (falls back to legacy `ct-rr-support`)
         //
         // Reference: db-backend/src/dap.rs — `LaunchRequestArguments.ctRRWorkerExe`
         let dap_launch_opts = {
@@ -5398,52 +5399,63 @@ impl BackendManager {
                 || trace_path.extension().is_some_and(|ext| ext == "ct")
                 || has_ctfs_magic(&trace_path);
             if needs_rr_support {
-                let rr_support_cmd = std::env::var("CODETRACER_CT_RR_SUPPORT_CMD")
+                // Try new env var first, then legacy.
+                let rr_support_cmd = std::env::var("CODETRACER_CT_NATIVE_REPLAY_CMD")
+                    .or_else(|_| std::env::var("CODETRACER_CT_RR_SUPPORT_CMD"))
                     .ok()
                     .map(PathBuf::from)
                     .or_else(|| {
                         // Try sibling of the current executable first (same bin/ dir).
-                        let exe_name = if cfg!(windows) {
-                            "ct-rr-support.exe"
-                        } else {
-                            "ct-rr-support"
-                        };
-                        if let Ok(self_exe) = std::env::current_exe()
-                            && let Some(sibling) = self_exe
-                                .parent()
-                                .map(|dir| dir.join(exe_name))
-                                .filter(|p| p.is_file())
-                        {
-                            return Some(sibling);
+                        // Check new binary name first, then legacy.
+                        let exe_suffix = std::env::consts::EXE_SUFFIX;
+                        let exe_names = [
+                            format!("ct-native-replay{}", exe_suffix),
+                            format!("ct-rr-support{}", exe_suffix),
+                        ];
+                        for exe_name in &exe_names {
+                            if let Ok(self_exe) = std::env::current_exe()
+                                && let Some(sibling) = self_exe
+                                    .parent()
+                                    .map(|dir| dir.join(exe_name))
+                                    .filter(|p| p.is_file())
+                            {
+                                return Some(sibling);
+                            }
                         }
                         // Fall back to PATH search.
                         let which_cmd = if cfg!(windows) { "where" } else { "which" };
-                        std::process::Command::new(which_cmd)
-                            .arg(exe_name)
-                            .output()
-                            .ok()
-                            .filter(|o| o.status.success())
-                            .and_then(|o| {
-                                let s = String::from_utf8_lossy(&o.stdout)
-                                    .lines()
-                                    .next()
-                                    .unwrap_or("")
-                                    .trim()
-                                    .to_string();
-                                if s.is_empty() {
-                                    None
-                                } else {
-                                    Some(PathBuf::from(s))
-                                }
-                            })
+                        for exe_name in &exe_names {
+                            if let Some(path) = std::process::Command::new(which_cmd)
+                                .arg(exe_name)
+                                .output()
+                                .ok()
+                                .filter(|o| o.status.success())
+                                .and_then(|o| {
+                                    let s = String::from_utf8_lossy(&o.stdout)
+                                        .lines()
+                                        .next()
+                                        .unwrap_or("")
+                                        .trim()
+                                        .to_string();
+                                    if s.is_empty() {
+                                        None
+                                    } else {
+                                        Some(PathBuf::from(s))
+                                    }
+                                })
+                            {
+                                return Some(path);
+                            }
+                        }
+                        None
                     });
 
                 if let Some(ref exe) = rr_support_cmd {
-                    info!("RR trace detected, using ct-rr-support: {}", exe.display());
+                    info!("RR trace detected, using ct-native-replay: {}", exe.display());
                     opts.ct_rr_worker_exe = rr_support_cmd;
                 } else {
                     warn!(
-                        "RR trace detected at {} but ct-rr-support not found; \
+                        "RR trace detected at {} but ct-native-replay not found; \
                          DAP init may fail",
                         trace_path.display()
                     );

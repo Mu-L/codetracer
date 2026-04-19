@@ -70,16 +70,21 @@ pub(crate) fn prepare_trace_folder(
     Ok((wrapper.clone(), Some(wrapper)))
 }
 
-/// Find the ct-rr-support binary (needed by db-backend as replay-worker).
+/// Find the ct-native-replay binary (needed by db-backend as replay-worker).
 ///
 /// Search order:
-/// 1. `CT_RR_SUPPORT_BIN` environment variable
-/// 2. `CODETRACER_CT_RR_SUPPORT_CMD` environment variable
-/// 3. Next to CARGO_MANIFEST_DIR's target/debug/ct-rr-support
-/// 4. PATH search
+/// 1. `CT_NATIVE_REPLAY_BIN` / `CODETRACER_CT_NATIVE_REPLAY_CMD` environment variables
+///    (falls back to legacy `CT_RR_SUPPORT_BIN` / `CODETRACER_CT_RR_SUPPORT_CMD`)
+/// 2. Sibling repo build output (new name first, then legacy)
+/// 3. PATH search (new name first, then legacy)
 pub(crate) fn find_ct_rr_support() -> Result<PathBuf, BoxError> {
-    // 1. Explicit env var
-    for var in &["CT_RR_SUPPORT_BIN", "CODETRACER_CT_RR_SUPPORT_CMD"] {
+    // 1. Explicit env var — new names first, then legacy
+    for var in &[
+        "CT_NATIVE_REPLAY_BIN",
+        "CODETRACER_CT_NATIVE_REPLAY_CMD",
+        "CT_RR_SUPPORT_BIN",            // backwards compat
+        "CODETRACER_CT_RR_SUPPORT_CMD",  // backwards compat
+    ] {
         if let Ok(val) = std::env::var(var) {
             let p = PathBuf::from(&val);
             if p.is_file() {
@@ -88,34 +93,43 @@ pub(crate) fn find_ct_rr_support() -> Result<PathBuf, BoxError> {
         }
     }
 
-    // 2. Sibling rr-backend repo's build output
+    // 2. Sibling repo build output — try new names first, then legacy
     if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
         let manifest = PathBuf::from(&manifest_dir);
-        let exe_name = format!("ct-rr-support{}", std::env::consts::EXE_SUFFIX);
-        // When running from rr-backend: target/debug/ct-rr-support
-        let candidate = manifest.join("target/debug").join(&exe_name);
-        if candidate.is_file() {
-            return Ok(candidate);
-        }
-        // When running from codetracer: ../codetracer-rr-backend/target/debug/ct-rr-support
-        if let Some(ws) = manifest.parent() {
-            let sibling = ws.join("codetracer-rr-backend/target/debug").join(&exe_name);
-            if sibling.is_file() {
-                return Ok(sibling);
-            }
-        }
-    }
-
-    // 3. PATH search
-    let exe_name = format!("ct-rr-support{}", std::env::consts::EXE_SUFFIX);
-    if let Some(paths) = std::env::var_os("PATH") {
-        for dir in std::env::split_paths(&paths) {
-            let candidate = dir.join(&exe_name);
+        let names_and_repos: &[(&str, &str)] = &[
+            ("ct-native-replay", "codetracer-native-backend"),
+            ("ct-native-replay", "codetracer-rr-backend"),   // legacy repo name
+            ("ct-rr-support", "codetracer-rr-backend"),      // legacy binary name
+        ];
+        for &(bin, repo) in names_and_repos {
+            let exe_name = format!("{bin}{}", std::env::consts::EXE_SUFFIX);
+            // When running from the backend repo itself
+            let candidate = manifest.join("target/debug").join(&exe_name);
             if candidate.is_file() {
                 return Ok(candidate);
             }
+            // When running from a sibling (e.g. codetracer)
+            if let Some(ws) = manifest.parent() {
+                let sibling = ws.join(format!("{repo}/target/debug")).join(&exe_name);
+                if sibling.is_file() {
+                    return Ok(sibling);
+                }
+            }
         }
     }
 
-    Err("ct-rr-support binary not found (set CT_RR_SUPPORT_BIN or build rr-backend)".into())
+    // 3. PATH search — new name first, then legacy
+    for bin in &["ct-native-replay", "ct-rr-support"] {
+        let exe_name = format!("{bin}{}", std::env::consts::EXE_SUFFIX);
+        if let Some(paths) = std::env::var_os("PATH") {
+            for dir in std::env::split_paths(&paths) {
+                let candidate = dir.join(&exe_name);
+                if candidate.is_file() {
+                    return Ok(candidate);
+                }
+            }
+        }
+    }
+
+    Err("ct-native-replay binary not found (set CT_NATIVE_REPLAY_BIN or build native-backend)".into())
 }

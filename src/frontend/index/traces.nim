@@ -622,7 +622,7 @@ proc onNewRecord*(sender: js, response: jsobject(filename=cstring, args=seq[cstr
 
     if response.projectOnly:
       buildArg = cstring(($buildArg).parentDir)
-      # for now `ct build` => `ct-rr-support build` tries just use project logic when passed a folder and
+      # for now `ct build` => `ct-native-replay build` tries just use project logic when passed a folder and
       #   simpler file-based compile logic when passed a file
       #   e.g. project logic is look up for a folder with Cargo.toml for rust
       # we do this for now instead of having an explicit `--project` argument

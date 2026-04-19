@@ -1,12 +1,12 @@
 ## DeepReview data types for the CodeTracer GUI.
 ##
-## These types map to the JSON export format produced by the ct-rr-support
+## These types map to the JSON export format produced by the ct-native-replay
 ## crate's ``json_export`` module. Field names use camelCase to match the
 ## JSON keys directly, so that Nim's ``cast[T](JSON.parse(...))`` pattern
 ## (used elsewhere in the frontend, e.g. for ``Diff``) works without any
 ## manual field-name mapping.
 ##
-## Reference: codetracer-rr-backend/src/deepreview/json_export.rs
+## Reference: codetracer-native-backend/src/deepreview/json_export.rs
 
 type
   DeepReviewData* = ref object

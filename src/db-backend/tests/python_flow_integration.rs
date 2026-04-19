@@ -4,7 +4,7 @@
 //! and filters out function calls when loading flow data for Python programs.
 //!
 //! Python programs use DB-based traces (not rr), so this test does NOT require
-//! `ct-rr-support` or `rr`. It uses the pure-Python recorder submodule.
+//! `ct-native-replay` or `rr`. It uses the pure-Python recorder submodule.
 //!
 //! The test gracefully skips if the Python recorder is not found.
 

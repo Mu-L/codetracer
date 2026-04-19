@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
 # run-cross-repo-tests.sh — Run codetracer flow integration tests against
-# a built ct-rr-support binary from the rr-backend repo.
+# a built ct-native-replay binary from the native-backend repo.
 #
 # Usage:
 #   ./scripts/run-cross-repo-tests.sh [OPTIONS] [SELECTOR...]
 #
-# Selectors (db-backend tests, need ct-rr-support):
+# Selectors (db-backend tests, need ct-native-replay):
 #   nim-flow    Run Nim flow integration tests
 #   rust-flow   Run Rust flow integration tests
 #   go-flow     Run Go flow integration tests
@@ -25,8 +25,9 @@
 #   --help, -h            Show this help message
 #
 # Environment variables (optional overrides):
-#   CT_RR_SUPPORT_PATH           Path to a pre-built ct-rr-support binary
-#   METACRAFT_WORKSPACE_ROOT     Workspace root containing codetracer-rr-backend
+#   CT_NATIVE_REPLAY_PATH        Path to a pre-built ct-native-replay binary
+#                                (legacy: CT_RR_SUPPORT_PATH also accepted)
+#   METACRAFT_WORKSPACE_ROOT     Workspace root containing codetracer-native-backend
 #   RR_BACKEND_REF               Git ref to clone (CI only, default: from pin file)
 #
 set -euo pipefail
@@ -174,76 +175,86 @@ resolve_pin_ref() {
 }
 
 # ---------------------------------------------------------------------------
-# Find or build ct-rr-support
+# Find or build ct-native-replay (formerly ct-rr-support)
 # ---------------------------------------------------------------------------
 find_rr_backend_repo() {
-	# 1. METACRAFT_WORKSPACE_ROOT
+	# 1. METACRAFT_WORKSPACE_ROOT — try new name first, then legacy
 	if [[ -n ${METACRAFT_WORKSPACE_ROOT:-} ]]; then
-		local candidate="$METACRAFT_WORKSPACE_ROOT/codetracer-rr-backend"
-		if [[ -d $candidate ]]; then
-			echo "$candidate"
-			return 0
-		fi
+		for repo_name in codetracer-native-backend codetracer-rr-backend; do
+			local candidate="$METACRAFT_WORKSPACE_ROOT/$repo_name"
+			if [[ -d $candidate ]]; then
+				echo "$candidate"
+				return 0
+			fi
+		done
 	fi
 
-	# 2. Sibling directory
-	local sibling="$REPO_ROOT/../codetracer-rr-backend"
-	if [[ -d $sibling ]]; then
-		(cd "$sibling" && pwd)
-		return 0
-	fi
+	# 2. Sibling directory — try new name first, then legacy
+	for repo_name in codetracer-native-backend codetracer-rr-backend; do
+		local sibling="$REPO_ROOT/../$repo_name"
+		if [[ -d $sibling ]]; then
+			(cd "$sibling" && pwd)
+			return 0
+		fi
+	done
 
 	return 1
 }
 
 find_binary_in_repo() {
 	local repo_dir="$1"
-	# Prefer release, then debug
-	for profile in release debug; do
-		local bin="$repo_dir/target/$profile/ct-rr-support"
-		if [[ -x $bin ]]; then
-			echo "$bin"
-			return 0
-		fi
+	# Prefer new name, then legacy; prefer release, then debug
+	for bin_name in ct-native-replay ct-rr-support; do
+		for profile in release debug; do
+			local bin="$repo_dir/target/$profile/$bin_name"
+			if [[ -x $bin ]]; then
+				echo "$bin"
+				return 0
+			fi
+		done
 	done
 	return 1
 }
 
 resolve_ct_rr_support() {
-	# 1. Explicit env var
-	if [[ -n ${CT_RR_SUPPORT_PATH:-} ]]; then
-		if [[ -x $CT_RR_SUPPORT_PATH ]]; then
-			log "Using CT_RR_SUPPORT_PATH=$CT_RR_SUPPORT_PATH"
-			return 0
-		else
-			warn "CT_RR_SUPPORT_PATH='$CT_RR_SUPPORT_PATH' is not executable; searching further"
+	# 1. Explicit env var (new name first, then legacy)
+	for var_name in CT_NATIVE_REPLAY_PATH CT_RR_SUPPORT_PATH; do
+		local val="${!var_name:-}"
+		if [[ -n $val ]]; then
+			if [[ -x $val ]]; then
+				log "Using $var_name=$val"
+				export CT_RR_SUPPORT_PATH="$val"
+				return 0
+			else
+				warn "$var_name='$val' is not executable; searching further"
+			fi
 		fi
-	fi
+	done
 
-	# 2. Find rr-backend repo locally
+	# 2. Find native-backend repo locally
 	local rr_repo
 	if rr_repo="$(find_rr_backend_repo)"; then
-		log "Found rr-backend repo at $rr_repo"
+		log "Found native-backend repo at $rr_repo"
 		local bin
 		if bin="$(find_binary_in_repo "$rr_repo")"; then
 			export CT_RR_SUPPORT_PATH="$bin"
-			log "Using ct-rr-support: $CT_RR_SUPPORT_PATH"
+			log "Using ct-native-replay: $CT_RR_SUPPORT_PATH"
 			return 0
 		fi
 
 		# In CI, build it
 		if [[ ${CI:-} == "true" ]]; then
-			log "CI mode: building ct-rr-support in $rr_repo ..."
+			log "CI mode: building ct-native-replay in $rr_repo ..."
 			(cd "$rr_repo" && cargo build)
 			if bin="$(find_binary_in_repo "$rr_repo")"; then
 				export CT_RR_SUPPORT_PATH="$bin"
-				log "Built ct-rr-support: $CT_RR_SUPPORT_PATH"
+				log "Built ct-native-replay: $CT_RR_SUPPORT_PATH"
 				return 0
 			fi
-			die "cargo build succeeded but ct-rr-support binary not found in $rr_repo/target/"
+			die "cargo build succeeded but ct-native-replay binary not found in $rr_repo/target/"
 		fi
 
-		die "ct-rr-support binary not found in $rr_repo/target/{debug,release}/. Please build it first:
+		die "ct-native-replay binary not found in $rr_repo/target/{debug,release}/. Please build it first:
   cd $rr_repo && cargo build"
 	fi
 
@@ -251,7 +262,7 @@ resolve_ct_rr_support() {
 	if [[ ${CI:-} == "true" ]]; then
 		local ref
 		ref="$(resolve_pin_ref)"
-		log "CI mode: cloning codetracer-rr-backend at ref '$ref' into $CLONE_DIR ..."
+		log "CI mode: cloning codetracer-native-backend at ref '$ref' into $CLONE_DIR ..."
 
 		if [[ -d "$CLONE_DIR/.git" ]]; then
 			log "Reusing existing clone, fetching and checking out $ref ..."
@@ -259,47 +270,48 @@ resolve_ct_rr_support() {
 		else
 			rm -rf "$CLONE_DIR"
 			git clone --recursive \
-				"https://github.com/metacraft-labs/codetracer-rr-backend.git" \
+				"https://github.com/metacraft-labs/codetracer-native-backend.git" \
 				"$CLONE_DIR"
 			(cd "$CLONE_DIR" && git checkout "$ref" && git submodule update --init --recursive)
 		fi
 
-		log "Building ct-rr-support ..."
+		log "Building ct-native-replay ..."
 		(cd "$CLONE_DIR" && cargo build)
 
 		local bin
 		if bin="$(find_binary_in_repo "$CLONE_DIR")"; then
 			export CT_RR_SUPPORT_PATH="$bin"
-			log "Built ct-rr-support: $CT_RR_SUPPORT_PATH"
+			log "Built ct-native-replay: $CT_RR_SUPPORT_PATH"
 			return 0
 		fi
-		die "Build succeeded but ct-rr-support binary not found"
+		die "Build succeeded but ct-native-replay binary not found"
 	fi
 
 	# 4. Local: error
-	die "Could not find codetracer-rr-backend repository.
+	die "Could not find codetracer-native-backend repository.
 Please either:
-  - Set CT_RR_SUPPORT_PATH to a pre-built ct-rr-support binary
-  - Clone codetracer-rr-backend next to this repo and build it:
-      cd .. && git clone <rr-backend-url> codetracer-rr-backend
-      cd codetracer-rr-backend && cargo build
+  - Set CT_NATIVE_REPLAY_PATH to a pre-built ct-native-replay binary
+  - Clone codetracer-native-backend next to this repo and build it:
+      cd .. && git clone <native-backend-url> codetracer-native-backend
+      cd codetracer-native-backend && cargo build
   - Set METACRAFT_WORKSPACE_ROOT to the parent of both repos"
 }
 
 resolve_ct_rr_support
 
 # ---------------------------------------------------------------------------
-# Resolve LD_LIBRARY_PATH for ct-rr-support
+# Resolve LD_LIBRARY_PATH for ct-native-replay
 # ---------------------------------------------------------------------------
-# ct-rr-support is typically built inside the rr-backend's nix shell, which
+# ct-native-replay is typically built inside the native-backend's nix shell, which
 # provides shared libraries (e.g. liblldb, libstdc++) that are not present in
 # the codetracer nix shell. We need to capture those library paths and export
 # them so the binary can run.
 resolve_rr_backend_lib_path() {
-	# If CT_RR_SUPPORT_LD_LIBRARY_PATH is already set explicitly, use it.
-	if [[ -n ${CT_RR_SUPPORT_LD_LIBRARY_PATH:-} ]]; then
-		log "Using explicit CT_RR_SUPPORT_LD_LIBRARY_PATH"
-		export LD_LIBRARY_PATH="${CT_RR_SUPPORT_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH:-}"
+	# If CT_NATIVE_REPLAY_LD_LIBRARY_PATH or legacy CT_RR_SUPPORT_LD_LIBRARY_PATH is set, use it.
+	local explicit_ld="${CT_NATIVE_REPLAY_LD_LIBRARY_PATH:-${CT_RR_SUPPORT_LD_LIBRARY_PATH:-}}"
+	if [[ -n $explicit_ld ]]; then
+		log "Using explicit LD_LIBRARY_PATH override"
+		export LD_LIBRARY_PATH="${explicit_ld}:${LD_LIBRARY_PATH:-}"
 		return 0
 	fi
 
@@ -336,9 +348,9 @@ resolve_rr_backend_lib_path() {
 	local missing
 	missing="$(ldd "$CT_RR_SUPPORT_PATH" 2>/dev/null | grep 'not found' || true)"
 	if [[ -n $missing ]]; then
-		warn "ct-rr-support has missing shared libraries:"
+		warn "ct-native-replay has missing shared libraries:"
 		warn "$missing"
-		warn "Set CT_RR_SUPPORT_LD_LIBRARY_PATH to provide them, or run from the rr-backend nix shell"
+		warn "Set CT_NATIVE_REPLAY_LD_LIBRARY_PATH to provide them, or run from the native-backend nix shell"
 	fi
 }
 

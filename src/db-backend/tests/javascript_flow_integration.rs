@@ -4,7 +4,7 @@
 //! and filters out function calls when loading flow data for JavaScript programs.
 //!
 //! JavaScript programs use DB-based traces (not rr), so this test does NOT require
-//! `ct-rr-support` or `rr`. It uses the codetracer-js-recorder sibling repo.
+//! `ct-native-replay` or `rr`. It uses the codetracer-js-recorder sibling repo.
 //!
 //! The test gracefully skips if the JavaScript recorder is not found.
 

@@ -4,7 +4,7 @@
 //! and filters out method calls when loading flow data for Ruby programs.
 //!
 //! Ruby programs use DB-based traces (not rr), so this test does NOT require
-//! `ct-rr-support` or `rr`. It uses the pure-Ruby recorder submodule.
+//! `ct-native-replay` or `rr`. It uses the pure-Ruby recorder submodule.
 //!
 //! The test gracefully skips if the Ruby recorder is not found.
 

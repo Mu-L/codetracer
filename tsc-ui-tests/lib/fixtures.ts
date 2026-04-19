@@ -311,7 +311,7 @@ function killStrayCodetracerProcesses(): void {
     "backend_manager.exe",
     "db-backend.exe",
     "db-backend-record.exe",
-    "ct-rr-support.exe",
+    "ct-native-replay.exe",
     "TTD.exe",
     "TTDInject.exe",
   ]) {
@@ -914,7 +914,7 @@ export const test = base.extend<CodetracerFixtures & CodetracerOptions>({
       const recordingLimit = needsRR ? LIMIT_RR_RECORDING_MS : LIMIT_SMALL_RECORDING_MS;
 
       if (needsRR && !process.env.CODETRACER_RR_BACKEND_PATH && !process.env.CODETRACER_RR_BACKEND_PRESENT) {
-        testInfo.skip(true, "requires ct-rr-support (RR-based language)");
+        testInfo.skip(true, "requires ct-native-replay (RR-based language)");
       }
       if (needsRR && process.env.CODETRACER_DB_TESTS_ONLY === "1") {
         testInfo.skip(true, "RR test skipped — running DB-based tests only");

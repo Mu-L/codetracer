@@ -145,7 +145,7 @@ proc replay*(
         if fileExists(traceFolder / "trace_metadata.json"):
           "db"
         elif traceFolder.endsWith(".ct") or fileExists(traceFolder / "mcr"):
-          "rr"  # MCR uses same replay-worker as RR (via ct-rr-support)
+          "rr"  # MCR uses same replay-worker as RR (via ct-native-replay)
         else:
           # replay traces (RR/TTD) carry trace_db_metadata.json
           "rr"

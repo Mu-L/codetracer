@@ -9,7 +9,7 @@ let
   preCommit = config.pre-commit;
 
   # Import toolchains from the codetracer-toolchains flake for multi-language support.
-  # These provide compilers needed by `ct record` → `ct-rr-support build` for new languages.
+  # These provide compilers needed by `ct record` → `ct-native-replay build` for new languages.
   toolchainsPkgs = inputs'."codetracer-toolchains".packages;
 in
 with pkgs;
@@ -150,7 +150,7 @@ mkShell {
     # Using toolchains from codetracer-toolchains
     # ============================================
 
-    # Go (needed by ct-rr-support build for Go programs)
+    # Go (needed by ct-native-replay build for Go programs)
     toolchainsPkgs.go-default
 
     # Pascal

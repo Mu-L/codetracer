@@ -277,31 +277,41 @@ fn find_db_backend() -> Option<PathBuf> {
     None
 }
 
-/// Finds the `ct-rr-support` binary (same logic as db-backend test harness).
+/// Finds the `ct-native-replay` binary (formerly ct-rr-support; same logic as db-backend test harness).
 fn find_ct_rr_support() -> Option<PathBuf> {
     // Explicit environment variable (used by cross-repo test scripts).
-    if let Ok(path) = std::env::var("CT_RR_SUPPORT_PATH") {
-        let p = PathBuf::from(&path);
-        if p.exists() && p.is_file() {
-            return Some(p);
+    // Try new name first, then legacy.
+    for var_name in ["CT_NATIVE_REPLAY_PATH", "CT_RR_SUPPORT_PATH"] {
+        if let Ok(path) = std::env::var(var_name) {
+            let p = PathBuf::from(&path);
+            if p.exists() && p.is_file() {
+                return Some(p);
+            }
         }
     }
 
-    // Check PATH.
-    if let Ok(output) = std::process::Command::new("which")
-        .arg("ct-rr-support")
-        .output()
-        && output.status.success()
-    {
-        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if !path.is_empty() {
-            return Some(PathBuf::from(path));
+    // Check PATH — try new name first, then legacy.
+    for bin_name in ["ct-native-replay", "ct-rr-support"] {
+        if let Ok(output) = std::process::Command::new("which")
+            .arg(bin_name)
+            .output()
+            && output.status.success()
+        {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() {
+                return Some(PathBuf::from(path));
+            }
         }
     }
 
     // Check common development locations relative to the backend-manager crate.
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    // Try both new and legacy binary/repo names
     let dev_locations = [
+        "../../../codetracer-native-backend/target/debug/ct-native-replay",
+        "../../../codetracer-native-backend/target/release/ct-native-replay",
+        "../../codetracer-native-backend/target/debug/ct-native-replay",
+        // Legacy fallbacks
         "../../../codetracer-rr-backend/target/debug/ct-rr-support",
         "../../../codetracer-rr-backend/target/release/ct-rr-support",
         "../../codetracer-rr-backend/target/debug/ct-rr-support",
@@ -318,6 +328,10 @@ fn find_ct_rr_support() -> Option<PathBuf> {
     if let Some(home) = std::env::var_os("HOME") {
         let home_path = PathBuf::from(home);
         let home_locations = [
+            "metacraft/codetracer-native-backend/target/debug/ct-native-replay",
+            "metacraft/codetracer-main/codetracer-native-backend/target/debug/ct-native-replay",
+            "codetracer-native-backend/target/debug/ct-native-replay",
+            // Legacy fallbacks
             "metacraft/codetracer-rr-backend/target/debug/ct-rr-support",
             "metacraft/codetracer-main/codetracer-rr-backend/target/debug/ct-rr-support",
             "codetracer-rr-backend/target/debug/ct-rr-support",
@@ -785,12 +799,12 @@ fn create_rr_recording_from_source(
 /// When `REQUIRE_REAL_RECORDINGS=1` is set, missing prerequisites cause a
 /// panic rather than a silent skip, so CI catches configuration problems.
 fn check_rr_prerequisites() -> Result<(PathBuf, PathBuf), String> {
-    // Gate: the codetracer-rr-backend sibling repo must be detected by
+    // Gate: the codetracer-native-backend sibling repo must be detected by
     // detect-siblings.sh (which sets CODETRACER_RR_BACKEND_PATH). The legacy
     // CODETRACER_RR_BACKEND_PRESENT=1 is also accepted for backward compat.
     // This ensures we have the correct rr wrapper and libraries. Without it,
     // tests would find a system rr that may lack soft-mode support, or an
-    // incompatible ct-rr-support.
+    // incompatible ct-native-replay.
     // See: codetracer-specs/Working-with-the-CodeTracer-Repos.md
     let rr_backend_detected = std::env::var("CODETRACER_RR_BACKEND_PATH")
         .map(|v| !v.is_empty())
@@ -801,7 +815,7 @@ fn check_rr_prerequisites() -> Result<(PathBuf, PathBuf), String> {
     if !rr_backend_detected && !require_real_recordings() {
         return Err(
             "CODETRACER_RR_BACKEND_PATH not set \
-             (codetracer-rr-backend sibling not detected, skipping RR tests)"
+             (codetracer-native-backend sibling not detected, skipping RR tests)"
                 .to_string(),
         );
     }
