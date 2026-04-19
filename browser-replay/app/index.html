@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CodeTracer Browser Replay</title>
+  <style>
+    body { font-family: monospace; margin: 2em; background: #1e1e1e; color: #d4d4d4; }
+    #log { white-space: pre-wrap; border: 1px solid #444; padding: 1em; max-height: 60vh; overflow-y: auto; }
+    button { margin: 0.5em; padding: 0.5em 1em; }
+    .pass { color: #4ec9b0; }
+    .fail { color: #f44747; }
+    .info { color: #569cd6; }
+  </style>
+</head>
+<body>
+  <h1>CodeTracer Browser Replay Test</h1>
+  <div>
+    <button onclick="sendInitialize()">Send DAP Initialize</button>
+    <button onclick="clearLog()">Clear Log</button>
+  </div>
+  <div id="log"></div>
+
+  <script>
+    const logEl = document.getElementById('log');
+    function log(msg, cls) {
+      const line = document.createElement('div');
+      line.className = cls || '';
+      line.textContent = msg;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    let worker = null;
+    let seq = 1;
+
+    function startWorker() {
+      log('[info] Creating WebWorker...', 'info');
+      worker = new Worker('worker.js', { type: 'module' });
+
+      worker.onmessage = (e) => {
+        if (e.data === 'ready') {
+          log('[pass] WebWorker ready — WASM loaded', 'pass');
+        } else if (e.data && e.data.error) {
+          log('[fail] Worker error: ' + e.data.error, 'fail');
+        } else {
+          // DAP response/event from the WASM module
+          const msg = typeof e.data === 'string' ? e.data : JSON.stringify(e.data);
+          log('[recv] ' + msg, 'info');
+        }
+      };
+
+      worker.onerror = (e) => {
+        log('[fail] Worker error: ' + e.message, 'fail');
+      };
+    }
+
+    function sendInitialize() {
+      if (!worker) {
+        log('[fail] Worker not started', 'fail');
+        return;
+      }
+      const req = {
+        seq: seq++,
+        type: 'request',
+        command: 'initialize',
+        arguments: {
+          clientID: 'codetracer-browser',
+          clientName: 'CodeTracer Browser',
+          adapterID: 'codetracer',
+          linesStartAt1: true,
+          columnsStartAt1: true,
+          pathFormat: 'path'
+        }
+      };
+      log('[send] ' + JSON.stringify(req));
+      worker.postMessage(JSON.stringify(req));
+    }
+
+    function clearLog() {
+      logEl.innerHTML = '';
+    }
+
+    // Auto-start the worker on page load
+    startWorker();
+  </script>
+</body>
+</html>

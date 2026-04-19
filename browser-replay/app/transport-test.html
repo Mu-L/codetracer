@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Transport Test</title>
+</head>
+<body>
+  <h1>WebWorker Transport Test</h1>
+  <pre id="output"></pre>
+
+  <script>
+    const output = document.getElementById('output');
+    function log(msg) { output.textContent += msg + '\n'; }
+
+    // Create a mock worker using a Blob URL to validate the postMessage
+    // transport contract without requiring the real WASM module.
+    const workerCode = `
+      self.onmessage = function(e) {
+        const msg = JSON.parse(e.data);
+        if (msg.command === 'initialize') {
+          const response = JSON.stringify({
+            seq: 0,
+            type: 'response',
+            request_seq: msg.seq,
+            success: true,
+            command: 'initialize',
+            body: { supportsConfigurationDoneRequest: true }
+          });
+          self.postMessage(response);
+        }
+      };
+      self.postMessage('ready');
+    `;
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    const worker = new Worker(URL.createObjectURL(blob));
+
+    let testsPassed = 0;
+    let testsFailed = 0;
+
+    worker.onmessage = (e) => {
+      if (e.data === 'ready') {
+        log('PASS: Worker ready');
+        testsPassed++;
+
+        // Send a DAP initialize request to the mock worker
+        const req = JSON.stringify({
+          seq: 1,
+          type: 'request',
+          command: 'initialize',
+          arguments: {}
+        });
+        worker.postMessage(req);
+      } else {
+        // Parse DAP response
+        try {
+          const resp = JSON.parse(e.data);
+          if (resp.type === 'response' && resp.command === 'initialize' && resp.success) {
+            log('PASS: DAP initialize response received');
+            testsPassed++;
+          } else {
+            log('FAIL: unexpected response: ' + e.data);
+            testsFailed++;
+          }
+        } catch (err) {
+          log('FAIL: could not parse response: ' + e.data);
+          testsFailed++;
+        }
+
+        log('');
+        log('Results: ' + testsPassed + ' passed, ' + testsFailed + ' failed');
+      }
+    };
+  </script>
+</body>
+</html>
