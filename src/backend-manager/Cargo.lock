@@ -98,19 +98,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
-name = "backend-manager"
-version = "0.1.0"
-dependencies = [
- "clap",
- "flexi_logger",
- "libc",
- "log",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "backtrace"
 version = "0.3.75"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -530,6 +517,19 @@ dependencies = [
  "memchr",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "session-manager"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "flexi_logger",
+ "libc",
+ "log",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

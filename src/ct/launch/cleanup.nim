@@ -46,13 +46,13 @@ proc stopCoreProcess*(process: Process, recordCore: bool) =
     # so rr can finish the recording
     # of our core process correctly
     #
-    # TODO: adapt for rr/gdb backend? here assuming db-backend
-    # TODO: stops all db-backend processes
+    # TODO: adapt for rr/gdb backend? here assuming replay-server
+    # TODO: stops all replay-server processes
     # so it would break other running codetracer instances
     # stop only our one: getting the pid from process/output/file?
     echo ""
     echo "stopping dispatcher:"
-    stopProcess("db-backend", arg="-SIGINT")
+    stopProcess("replay-server", arg="-SIGINT")
     echo ""
     echo "stopping dispatcher: might show an exception.."
     echo "(if it's not from dispatcher, then probably it's a codetracer bug)"

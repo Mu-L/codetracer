@@ -38,7 +38,7 @@ mod distinct_vec;
 mod event_db;
 mod expr_loader;
 mod flow_preloader;
-mod handler;
+mod dap_handler;
 mod in_memory_trace_reader;
 mod lang;
 mod nim_mangling;
@@ -46,7 +46,7 @@ mod paths;
 mod program_search_tool;
 mod query;
 mod replay;
-mod rr_dispatcher;
+mod recreator_session;
 mod step_lines_loader;
 mod task;
 mod trace_processor;
@@ -58,8 +58,8 @@ mod value;
 
 use crate::paths::{run_dir_for, CODETRACER_PATHS};
 
-/// a custom backend for ruby (maybe others) support
-/// based on db-like approach based on trace instead of rr/gdb
+/// The replay server: a DAP-based replay backend for trace-based languages
+/// (Ruby, Python, JS, shell, Wasm, etc.) as opposed to rr/gdb-based replay
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -108,7 +108,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let run_dir = run_dir_for(&tmp_path, run_id)?;
     create_dir_all(&run_dir)?;
 
-    let log_path = run_dir.join("db-backend.log");
+    let log_path = run_dir.join("replay-server.log");
 
     let target = Box::new(File::create(&log_path)?);
 
@@ -137,7 +137,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .init();
 
     let cli = Args::parse();
-    info!("logging from db-backend");
+    info!("logging from replay-server");
 
     info!("pid {:?}", std::process::id());
 

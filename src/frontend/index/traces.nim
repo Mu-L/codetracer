@@ -43,9 +43,9 @@ proc handleReplayStartResponse(body: JsObject) =
       replayId = bodyNode["replayId"].to(int)
 
   if replayId >= 0:
-    debugPrint("index: backend-manager reported replayId ", $replayId)
+    debugPrint("index: session-manager reported replayId ", $replayId)
   else:
-    debugPrint("index: backend-manager failed to start replay: ", body)
+    debugPrint("index: session-manager failed to start replay: ", body)
 
   replayStartResolver(replayId)
   replayStartResolver = nil
@@ -698,7 +698,7 @@ proc restartDbBackend {.async.} =
   await loadExistingRecord(data.trace.id)
 
 proc onRestartSubsystem*(sender: JsObject, name: cstring) {.async.} =
-  if name == "db-backend":
+  if name == "replay-server" or name == "db-backend":
     # sends notice to frontend client, when available
     #   and it sends back ct/restore, with the last location and breakpoints?
     await restartDbBackend()

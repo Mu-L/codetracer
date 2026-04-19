@@ -1,7 +1,7 @@
-//! Real-recording integration tests for the backend-manager daemon.
+//! Real-recording integration tests for the session-manager daemon.
 //!
 //! These tests replace the former mock-based tests (daemon_integration.rs, mcp_integration.rs)
-//! by exercising the daemon's flows against real `db-backend` instances processing
+//! by exercising the daemon's flows against real `replay-server` instances processing
 //! real trace recordings.
 //!
 //! ## M2 — Trace-Path Session Management
@@ -81,7 +81,7 @@
 //!   - `ct/py-processes` -> `ct/list-processes` -> response with process list
 //!   - `ct/py-select-process` -> `ct/select-replay` -> response confirming switch
 //!
-//! **Note on real backend support:** The current `db-backend` does not
+//! **Note on real backend support:** The current `replay-server` does not
 //! implement `ct/list-processes`, so both RR and custom trace tests expect
 //! an error response.  The tests are written to accept both success (if
 //! future backend versions add support) and error (current behavior),
@@ -110,11 +110,11 @@
 //!
 //! Tests for the MCP (Model Context Protocol) server that exercise the full
 //! pipeline against real traces: MCP JSON-RPC over stdio -> daemon DAP ->
-//! db-backend -> real trace data.
+//! replay-server -> real trace data.
 //!
-//! The MCP server is started via `backend-manager trace mcp` with
+//! The MCP server is started via `session-manager trace mcp` with
 //! `CODETRACER_DAEMON_SOCK` pointing to a real daemon instance that has
-//! already been started with a real `db-backend`.
+//! already been started with a real `replay-server`.
 //!
 //! These tests verify:
 //! - `trace_info` returns language and source file information from real traces.
@@ -195,12 +195,17 @@ async fn connect_to_daemon_socket(socket_path: &Path) -> Result<UnixStream, Box<
     }
 }
 
-/// Returns the path to the compiled `backend-manager` binary.
+/// Returns the path to the compiled `session-manager` (formerly `backend-manager`) binary.
 fn binary_path() -> PathBuf {
     let mut path = std::env::current_exe().expect("cannot determine test binary path");
     path.pop();
     if path.ends_with("deps") {
         path.pop();
+    }
+    // Try the new name first, fall back to the old one.
+    let new_name = path.join("session-manager");
+    if new_name.exists() {
+        return new_name;
     }
     path.push("backend-manager");
     path
@@ -209,7 +214,7 @@ fn binary_path() -> PathBuf {
 /// Returns `true` when `REQUIRE_REAL_RECORDINGS=1` (or `true`) is set.
 ///
 /// When this env var is set, tests MUST NOT silently skip when prerequisites
-/// (db-backend, ct-rr-support, rr, nargo) are missing.  Instead they panic,
+/// (replay-server, ct-rr-support, rr, nargo) are missing.  Instead they panic,
 /// making CI catch configuration problems rather than reporting green with
 /// zero assertions executed.
 ///
@@ -221,30 +226,35 @@ fn require_real_recordings() -> bool {
         .unwrap_or(false)
 }
 
-/// Returns the path to the compiled `db-backend` binary, if available.
+/// Returns the path to the compiled `replay-server` (formerly `db-backend`) binary, if available.
 ///
-/// The db-backend binary may be built in the same target directory (if this
+/// The replay-server binary may be built in the same target directory (if this
 /// is a workspace build) or in the db-backend crate's own target directory.
 /// We also check the PATH.
 ///
-/// When `REQUIRE_REAL_RECORDINGS=1` is set and db-backend is not found,
+/// When `REQUIRE_REAL_RECORDINGS=1` is set and replay-server is not found,
 /// this function panics instead of returning `None`.
 fn find_db_backend() -> Option<PathBuf> {
-    // Check same target directory as backend-manager (workspace build).
+    // Check same target directory as session-manager (workspace build).
     let mut target_dir = std::env::current_exe().expect("cannot determine test binary path");
     target_dir.pop();
     if target_dir.ends_with("deps") {
         target_dir.pop();
     }
-    let same_target = target_dir.join("db-backend");
-    if same_target.exists() {
-        return Some(same_target);
+    // Try new name first, then legacy.
+    for name in ["replay-server", "db-backend"] {
+        let same_target = target_dir.join(name);
+        if same_target.exists() {
+            return Some(same_target);
+        }
     }
 
     // Check the db-backend crate's target directories relative to
     // CARGO_MANIFEST_DIR.
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let relative_locations = [
+        "../db-backend/target/debug/replay-server",
+        "../db-backend/target/release/replay-server",
         "../db-backend/target/debug/db-backend",
         "../db-backend/target/release/db-backend",
     ];
@@ -255,29 +265,31 @@ fn find_db_backend() -> Option<PathBuf> {
         }
     }
 
-    // Check PATH.
-    if let Ok(output) = std::process::Command::new("which")
-        .arg("db-backend")
-        .output()
-        && output.status.success()
-    {
-        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if !path.is_empty() {
-            return Some(PathBuf::from(path));
+    // Check PATH (try new name first, then legacy).
+    for name in ["replay-server", "db-backend"] {
+        if let Ok(output) = std::process::Command::new("which")
+            .arg(name)
+            .output()
+            && output.status.success()
+        {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() {
+                return Some(PathBuf::from(path));
+            }
         }
     }
 
     if require_real_recordings() {
         panic!(
-            "REQUIRE_REAL_RECORDINGS is set but db-backend was not found \
+            "REQUIRE_REAL_RECORDINGS is set but replay-server was not found \
              in the workspace target directory or PATH.  Either build \
-             db-backend first or unset the environment variable."
+             replay-server first or unset the environment variable."
         );
     }
     None
 }
 
-/// Finds the `ct-native-replay` binary (formerly ct-rr-support; same logic as db-backend test harness).
+/// Finds the `ct-native-replay` binary (formerly ct-rr-support; same logic as replay-server test harness).
 fn find_ct_rr_support() -> Option<PathBuf> {
     // Explicit environment variable (used by cross-repo test scripts).
     // Try new name first, then legacy.
@@ -304,7 +316,7 @@ fn find_ct_rr_support() -> Option<PathBuf> {
         }
     }
 
-    // Check common development locations relative to the backend-manager crate.
+    // Check common development locations relative to the session-manager crate.
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     // Try both new and legacy binary/repo names
     let dev_locations = [
@@ -455,7 +467,7 @@ fn daemon_paths_in(test_dir: &Path) -> PathBuf {
 
 /// Starts the daemon process with the given test directory as its tmp root.
 ///
-/// Passes CODETRACER_DB_BACKEND_CMD to point to the real db-backend binary.
+/// Passes CODETRACER_REPLAY_SERVER_CMD to point to the real replay-server binary.
 async fn start_daemon_with_real_backend(
     test_dir: &Path,
     log_path: &Path,
@@ -479,7 +491,7 @@ async fn start_daemon_with_real_backend(
     log_line(
         log_path,
         &format!(
-            "starting daemon, TMPDIR={}, db-backend={}",
+            "starting daemon, TMPDIR={}, replay-server={}",
             test_dir.display(),
             db_backend_path.display()
         ),
@@ -496,7 +508,7 @@ async fn start_daemon_with_real_backend(
         // path (~/Library/Caches/…) ignores TMPDIR and would collide with
         // a running production daemon.
         .env("CODETRACER_DAEMON_SOCKET", socket_path.to_string_lossy().as_ref())
-        .env("CODETRACER_DB_BACKEND_CMD", &db_backend_str)
+        .env("CODETRACER_REPLAY_SERVER_CMD", &db_backend_str)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -528,7 +540,7 @@ async fn shutdown_daemon(stream: &mut UnixStream, child: &mut tokio::process::Ch
 
 /// Sends `ct/open-trace` and returns the response.
 ///
-/// Uses a longer timeout (60s) to allow for real db-backend initialization
+/// Uses a longer timeout (60s) to allow for real replay-server initialization
 /// which involves loading traces and running the DAP handshake.
 async fn open_trace(
     client: &mut UnixStream,
@@ -707,7 +719,7 @@ fn create_rr_recording(
 /// Like [`create_rr_recording`] but builds and records an arbitrary Rust
 /// source file instead of the default `rust_flow_test.rs`.
 ///
-/// * `source_rel_path` — path relative to the `db-backend/test-programs/`
+/// * `source_rel_path` — path relative to the `replay-server/test-programs/`
 ///   directory (e.g. `"rust/rust_float_test.rs"`).
 /// * `binary_name` — the name for the compiled binary (no directory prefix).
 fn create_rr_recording_from_source(
@@ -840,7 +852,7 @@ fn check_rr_prerequisites() -> Result<(PathBuf, PathBuf), String> {
     }
 
     let db_backend = find_db_backend()
-        .ok_or_else(|| "db-backend not found (skipping real recording tests)".to_string())?;
+        .ok_or_else(|| "replay-server not found (skipping real recording tests)".to_string())?;
 
     Ok((ct_rr_support, db_backend))
 }
@@ -906,7 +918,7 @@ fn find_ruby_recorder() -> Option<PathBuf> {
         }
     }
 
-    // Check relative to CARGO_MANIFEST_DIR (backend-manager crate).
+    // Check relative to CARGO_MANIFEST_DIR (session-manager crate).
     // Use the pure Ruby recorder since the native Rust extension .so is
     // not compiled during cargo test.
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -1050,7 +1062,7 @@ fn create_noir_recording(test_dir: &Path, log_path: &Path) -> Result<PathBuf, St
 
 /// Checks whether Noir-based test prerequisites are met.
 ///
-/// Returns `(nargo_path, db_backend_path)` on success, or a skip reason
+/// Returns `(nargo_path, replay_server_path)` on success, or a skip reason
 /// string on failure.  When `REQUIRE_REAL_RECORDINGS=1` is set, missing
 /// prerequisites cause a panic (via the underlying `find_nargo()` /
 /// `find_db_backend()` functions) rather than a silent skip.
@@ -14429,7 +14441,7 @@ async fn test_cli_trace_info_rr() {
             &["trace", "info", &trace_path_str],
             &[
                 (
-                    "CODETRACER_DB_BACKEND_CMD",
+                    "CODETRACER_REPLAY_SERVER_CMD",
                     db_backend.to_str().unwrap_or(""),
                 ),
                 ("CODETRACER_CT_RR_SUPPORT_CMD", &ct_rr_support_str),
@@ -14542,7 +14554,7 @@ async fn test_cli_trace_query_rr_inline() {
             ],
             &[
                 (
-                    "CODETRACER_DB_BACKEND_CMD",
+                    "CODETRACER_REPLAY_SERVER_CMD",
                     db_backend.to_str().unwrap_or(""),
                 ),
                 ("CODETRACER_CT_RR_SUPPORT_CMD", &ct_rr_support_str),
@@ -14652,7 +14664,7 @@ print(f'DONE: {len(results)} steps completed')";
             &["trace", "query", &trace_path_str, "-c", script],
             &[
                 (
-                    "CODETRACER_DB_BACKEND_CMD",
+                    "CODETRACER_REPLAY_SERVER_CMD",
                     db_backend.to_str().unwrap_or(""),
                 ),
                 ("CODETRACER_CT_RR_SUPPORT_CMD", &ct_rr_support_str),
@@ -14783,7 +14795,7 @@ print('DONE')"
             &["trace", "query", &trace_path_str, "-c", &script],
             &[
                 (
-                    "CODETRACER_DB_BACKEND_CMD",
+                    "CODETRACER_REPLAY_SERVER_CMD",
                     db_backend.to_str().unwrap_or(""),
                 ),
                 ("CODETRACER_CT_RR_SUPPORT_CMD", &ct_rr_support_str),
@@ -14927,7 +14939,7 @@ except Exception as e:
             &test_dir,
             &["trace", "query", &trace_path_str, "--timeout", "60", "-c", &script],
             &[
-                ("CODETRACER_DB_BACKEND_CMD", db_backend.to_str().unwrap_or("")),
+                ("CODETRACER_REPLAY_SERVER_CMD", db_backend.to_str().unwrap_or("")),
                 ("CODETRACER_CT_RR_SUPPORT_CMD", &ct_rr_support_str),
                 ("CODETRACER_PYTHON_API_PATH", &api_dir_str),
             ],
@@ -15087,7 +15099,7 @@ print('GOTO_TICKS_OK')";
             &["trace", "query", &trace_path_str, "-c", script],
             &[
                 (
-                    "CODETRACER_DB_BACKEND_CMD",
+                    "CODETRACER_REPLAY_SERVER_CMD",
                     db_backend.to_str().unwrap_or(""),
                 ),
                 ("CODETRACER_CT_RR_SUPPORT_CMD", &ct_rr_support_str),
@@ -15241,7 +15253,7 @@ except Exception as e:
             ],
             &[
                 (
-                    "CODETRACER_DB_BACKEND_CMD",
+                    "CODETRACER_REPLAY_SERVER_CMD",
                     db_backend.to_str().unwrap_or(""),
                 ),
                 ("CODETRACER_CT_RR_SUPPORT_CMD", &ct_rr_support_str),

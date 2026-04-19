@@ -164,8 +164,8 @@ let
   evmRecorderExe* = env.get("CODETRACER_EVM_RECORDER_PATH",
     when not defined(js): findTool("codetracer-evm-recorder") else: codetracerPrefix / "bin" / "codetracer-evm-recorder")
 
-  dbBackendExe* = codetracerPrefix / "bin" / "db-backend"
-  backendManagerExe* = codetracerPrefix / "bin" / "backend-manager"
+  dbBackendExe* = codetracerPrefix / "bin" / "replay-server"
+  backendManagerExe* = codetracerPrefix / "bin" / "session-manager"
   virtualizationLayersExe* = codetracerPrefix / "bin" / "virtualization-layers"
 
   cargoExe* = when not defined(js): findTool("cargo") else: codetracerPrefix / "bin" / "cargo"

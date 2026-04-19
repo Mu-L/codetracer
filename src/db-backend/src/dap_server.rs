@@ -17,10 +17,10 @@ use crate::dap::{self, Capabilities, DapMessage, Event, ProtocolMessage, Respons
 use crate::dap_types;
 
 use crate::db::Db;
-use crate::handler::Handler;
+use crate::dap_handler::Handler;
 #[cfg(not(windows))]
 use crate::paths::CODETRACER_PATHS;
-use crate::rr_dispatcher::RecreatorArgs;
+use crate::recreator_session::RecreatorArgs;
 use crate::task::{
     Action, CallSearchArg, CalltraceLoadArgs, CollapseCallsArgs, CtLoadFlowArguments, CtLoadLocalsArguments,
     FunctionLocation, GoToTicksArguments, LoadHistoryArg, LocalStepJump, Location, ProgramEvent, RunTracepointsArg,

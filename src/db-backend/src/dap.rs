@@ -450,7 +450,7 @@ pub fn setup_onmessage_callback() -> Result<(), DapError> {
 
     use crate::{
         dap_server::{make_transport, Ctx},
-        handler::Handler,
+        dap_handler::Handler,
         transport::{DapTransport, WorkerTransport},
     };
 

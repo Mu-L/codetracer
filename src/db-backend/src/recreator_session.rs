@@ -368,9 +368,9 @@ impl ReplayWorker {
     }
 
     // for now: don't return a typed value here, only Ok(raw value) or an error
-    #[allow(clippy::expect_used)] // stream must be initialized before run_query is called
+    #[allow(clippy::expect_used)] // stream must be initialized before dispatch_replay_query is called
     #[cfg(any(unix, windows))]
-    pub fn run_query(&mut self, query: ReplayQuery) -> Result<String, Box<dyn Error>> {
+    pub fn dispatch_replay_query(&mut self, query: ReplayQuery) -> Result<String, Box<dyn Error>> {
         let raw_json = serde_json::to_string(&query)?;
 
         debug!("send to worker {raw_json}\n");
@@ -386,9 +386,9 @@ impl ReplayWorker {
         let mut reader = BufReader::new(self.stream.as_mut().expect("valid receiving stream"));
         reader.read_line(&mut res).map_err(|e| {
             if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut {
-                format!("run_query timed out (10s) waiting for worker response to: {raw_json}")
+                format!("dispatch_replay_query timed out (10s) waiting for worker response to: {raw_json}")
             } else {
-                format!("run_query IO error: {e}")
+                format!("dispatch_replay_query IO error: {e}")
             }
         })?;
 
@@ -406,7 +406,7 @@ impl ReplayWorker {
         }
 
         if res.starts_with("error:") {
-            return Err(format!("run_query ct rr worker error: {}", res).into());
+            return Err(format!("dispatch_replay_query ct rr worker error: {}", res).into());
         }
 
         // TTD replay workers return JSON error envelopes like:
@@ -421,7 +421,7 @@ impl ReplayWorker {
                         .get("message")
                         .and_then(|v| v.as_str())
                         .unwrap_or("(no message)");
-                    return Err(format!("run_query ct rr worker error: [{code}] {message}").into());
+                    return Err(format!("dispatch_replay_query ct rr worker error: [{code}] {message}").into());
                 }
             }
         }
@@ -430,7 +430,7 @@ impl ReplayWorker {
     }
 
     #[cfg(not(any(unix, windows)))]
-    pub fn run_query(&mut self, _query: ReplayQuery) -> Result<String, Box<dyn Error>> {
+    pub fn dispatch_replay_query(&mut self, _query: ReplayQuery) -> Result<String, Box<dyn Error>> {
         Err("ct-rr worker transport is only supported on Unix and Windows platforms".into())
     }
 }
@@ -502,7 +502,7 @@ impl RecreatorReplaySession {
 
     fn load_location_directly(&mut self) -> Result<Location, Box<dyn Error>> {
         Ok(serde_json::from_str::<Location>(
-            &self.stable.run_query(ReplayQuery::LoadLocation)?,
+            &self.stable.dispatch_replay_query(ReplayQuery::LoadLocation)?,
         )?)
     }
 }
@@ -515,13 +515,13 @@ impl ReplaySession for RecreatorReplaySession {
 
     fn run_to_entry(&mut self) -> Result<(), Box<dyn Error>> {
         self.ensure_active_stable()?;
-        let _ok = self.stable.run_query(ReplayQuery::RunToEntry)?;
+        let _ok = self.stable.dispatch_replay_query(ReplayQuery::RunToEntry)?;
         Ok(())
     }
 
     fn load_events(&mut self) -> Result<Events, Box<dyn Error>> {
         self.ensure_active_stable()?;
-        let events = serde_json::from_str::<Events>(&self.stable.run_query(ReplayQuery::LoadAllEvents)?)?;
+        let events = serde_json::from_str::<Events>(&self.stable.dispatch_replay_query(ReplayQuery::LoadAllEvents)?)?;
         Ok(events)
         // Ok(Events {
         //     events: vec![],
@@ -532,14 +532,14 @@ impl ReplaySession for RecreatorReplaySession {
 
     fn step(&mut self, action: Action, forward: bool) -> Result<bool, Box<dyn Error>> {
         self.ensure_active_stable()?;
-        let res = serde_json::from_str::<bool>(&self.stable.run_query(ReplayQuery::Step { action, forward })?)?;
+        let res = serde_json::from_str::<bool>(&self.stable.dispatch_replay_query(ReplayQuery::Step { action, forward })?)?;
         Ok(res)
     }
 
     fn load_locals(&mut self, arg: CtLoadLocalsArguments) -> Result<Vec<VariableWithRecord>, Box<dyn Error>> {
         self.ensure_active_stable()?;
         let res =
-            serde_json::from_str::<Vec<VariableWithRecord>>(&self.stable.run_query(ReplayQuery::LoadLocals { arg })?)?;
+            serde_json::from_str::<Vec<VariableWithRecord>>(&self.stable.dispatch_replay_query(ReplayQuery::LoadLocals { arg })?)?;
         Ok(res)
     }
 
@@ -550,7 +550,7 @@ impl ReplaySession for RecreatorReplaySession {
         lang: Lang,
     ) -> Result<ValueRecordWithType, Box<dyn Error>> {
         self.ensure_active_stable()?;
-        let res = serde_json::from_str::<ValueRecordWithType>(&self.stable.run_query(ReplayQuery::LoadValue {
+        let res = serde_json::from_str::<ValueRecordWithType>(&self.stable.dispatch_replay_query(ReplayQuery::LoadValue {
             expression: expression.to_string(),
             depth_limit,
             lang,
@@ -567,7 +567,7 @@ impl ReplaySession for RecreatorReplaySession {
         let res = serde_json::from_str::<ValueRecordWithType>(
             &self
                 .stable
-                .run_query(ReplayQuery::LoadReturnValue { depth_limit, lang })?,
+                .dispatch_replay_query(ReplayQuery::LoadReturnValue { depth_limit, lang })?,
         )?;
         Ok(res)
     }
@@ -581,14 +581,14 @@ impl ReplaySession for RecreatorReplaySession {
 
     fn load_callstack(&mut self) -> Result<Vec<CallLine>, Box<dyn Error>> {
         self.ensure_active_stable()?;
-        let res = serde_json::from_str::<Vec<CallLine>>(&self.stable.run_query(ReplayQuery::LoadCallstack)?)?;
+        let res = serde_json::from_str::<Vec<CallLine>>(&self.stable.dispatch_replay_query(ReplayQuery::LoadCallstack)?)?;
         Ok(res)
     }
 
     fn load_history(&mut self, arg: &LoadHistoryArg) -> Result<(Vec<HistoryResultWithRecord>, i64), Box<dyn Error>> {
         self.ensure_active_stable()?;
         let res = serde_json::from_str::<(Vec<HistoryResultWithRecord>, i64)>(
-            &self.stable.run_query(ReplayQuery::LoadHistory { arg: arg.clone() })?,
+            &self.stable.dispatch_replay_query(ReplayQuery::LoadHistory { arg: arg.clone() })?,
         )?;
         Ok(res)
     }
@@ -603,7 +603,7 @@ impl ReplaySession for RecreatorReplaySession {
 
     fn location_jump(&mut self, location: &Location) -> Result<(), Box<dyn Error>> {
         self.ensure_active_stable()?;
-        let _ = self.stable.run_query(ReplayQuery::LocationJump {
+        let _ = self.stable.dispatch_replay_query(ReplayQuery::LocationJump {
             location: location.clone(),
         })?;
         Ok(())
@@ -611,7 +611,7 @@ impl ReplaySession for RecreatorReplaySession {
 
     fn add_breakpoint(&mut self, path: &str, line: i64) -> Result<Breakpoint, Box<dyn Error>> {
         self.ensure_active_stable()?;
-        let breakpoint = serde_json::from_str::<Breakpoint>(&self.stable.run_query(ReplayQuery::AddBreakpoint {
+        let breakpoint = serde_json::from_str::<Breakpoint>(&self.stable.dispatch_replay_query(ReplayQuery::AddBreakpoint {
             path: path.to_string(),
             line,
         })?)?;
@@ -620,7 +620,7 @@ impl ReplaySession for RecreatorReplaySession {
 
     fn delete_breakpoint(&mut self, breakpoint: &Breakpoint) -> Result<bool, Box<dyn Error>> {
         self.ensure_active_stable()?;
-        Ok(serde_json::from_str::<bool>(&self.stable.run_query(
+        Ok(serde_json::from_str::<bool>(&self.stable.dispatch_replay_query(
             ReplayQuery::DeleteBreakpoint {
                 breakpoint: breakpoint.clone(),
             },
@@ -630,13 +630,13 @@ impl ReplaySession for RecreatorReplaySession {
     fn delete_breakpoints(&mut self) -> Result<bool, Box<dyn Error>> {
         self.ensure_active_stable()?;
         Ok(serde_json::from_str::<bool>(
-            &self.stable.run_query(ReplayQuery::DeleteBreakpoints)?,
+            &self.stable.dispatch_replay_query(ReplayQuery::DeleteBreakpoints)?,
         )?)
     }
 
     fn toggle_breakpoint(&mut self, breakpoint: &Breakpoint) -> Result<Breakpoint, Box<dyn Error>> {
         self.ensure_active_stable()?;
-        Ok(serde_json::from_str::<Breakpoint>(&self.stable.run_query(
+        Ok(serde_json::from_str::<Breakpoint>(&self.stable.dispatch_replay_query(
             ReplayQuery::ToggleBreakpoint {
                 breakpoint: breakpoint.clone(),
             },
@@ -645,19 +645,19 @@ impl ReplaySession for RecreatorReplaySession {
 
     fn enable_breakpoints(&mut self) -> Result<(), Box<dyn Error>> {
         self.ensure_active_stable()?;
-        let _ = self.stable.run_query(ReplayQuery::EnableBreakpoints)?;
+        let _ = self.stable.dispatch_replay_query(ReplayQuery::EnableBreakpoints)?;
         Ok(())
     }
 
     fn disable_breakpoints(&mut self) -> Result<(), Box<dyn Error>> {
         self.ensure_active_stable()?;
-        let _ = self.stable.run_query(ReplayQuery::DisableBreakpoints)?;
+        let _ = self.stable.dispatch_replay_query(ReplayQuery::DisableBreakpoints)?;
         Ok(())
     }
 
     fn jump_to_call(&mut self, location: &Location) -> Result<Location, Box<dyn Error>> {
         self.ensure_active_stable()?;
-        Ok(serde_json::from_str::<Location>(&self.stable.run_query(
+        Ok(serde_json::from_str::<Location>(&self.stable.dispatch_replay_query(
             ReplayQuery::JumpToCall {
                 location: location.clone(),
             },
@@ -666,7 +666,7 @@ impl ReplaySession for RecreatorReplaySession {
 
     fn event_jump(&mut self, event: &ProgramEvent) -> Result<bool, Box<dyn Error>> {
         self.ensure_active_stable()?;
-        Ok(serde_json::from_str::<bool>(&self.stable.run_query(
+        Ok(serde_json::from_str::<bool>(&self.stable.dispatch_replay_query(
             ReplayQuery::EventJump {
                 program_event: event.clone(),
             },
@@ -675,7 +675,7 @@ impl ReplaySession for RecreatorReplaySession {
 
     fn callstack_jump(&mut self, depth: usize) -> Result<(), Box<dyn Error>> {
         self.ensure_active_stable()?;
-        self.stable.run_query(ReplayQuery::CallstackJump { depth })?;
+        self.stable.dispatch_replay_query(ReplayQuery::CallstackJump { depth })?;
         Ok(())
     }
 
@@ -703,7 +703,7 @@ impl ReplaySession for RecreatorReplaySession {
     fn tracepoint_jump(&mut self, event: &ProgramEvent) -> Result<(), Box<dyn Error>> {
         self.ensure_active_stable()?;
         self.stable
-            .run_query(ReplayQuery::TracepointJump { event: event.clone() })?;
+            .dispatch_replay_query(ReplayQuery::TracepointJump { event: event.clone() })?;
         Ok(())
     }
 
@@ -725,7 +725,7 @@ impl ReplaySession for RecreatorReplaySession {
             }),
         };
 
-        let response_json = self.stable.run_query(ReplayQuery::TtdTracepointEvaluate { request })?;
+        let response_json = self.stable.dispatch_replay_query(ReplayQuery::TtdTracepointEvaluate { request })?;
         let response: TtdTracepointEvalResponseEnvelope = serde_json::from_str(&response_json)?;
 
         if let Some(diag) = response.diagnostic {

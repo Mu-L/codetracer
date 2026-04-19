@@ -2145,7 +2145,7 @@ async fn handle_read_source_file(
     }
 
     // Send ct/py-read-source to the daemon.  If the backend does not
-    // support the ct/read-source command (e.g. the db-backend for RR
+    // support the ct/read-source command (e.g. the replay-server for RR
     // traces), fall back to reading the file directly from the trace
     // directory's `files/` subdirectory, where CodeTracer stores copies
     // of all source files at recording time.
@@ -2219,7 +2219,7 @@ async fn handle_read_source_file(
 /// Reads a source file from a trace, trying multiple resolution strategies.
 ///
 /// This function serves as a fallback when the daemon's `ct/read-source`
-/// command is not supported by the backend (e.g. db-backend for Python traces).
+/// command is not supported by the backend (e.g. replay-server for Python traces).
 ///
 /// Resolution strategies (tried in order):
 ///

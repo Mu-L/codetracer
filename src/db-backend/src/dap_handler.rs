@@ -23,7 +23,7 @@ use crate::in_memory_trace_reader::InMemoryTraceReader;
 use crate::lang::{lang_from_context, Lang};
 use crate::program_search_tool::ProgramSearchTool;
 use crate::replay::ReplaySession;
-use crate::rr_dispatcher::{RecreatorArgs, RecreatorReplaySession};
+use crate::recreator_session::{RecreatorArgs, RecreatorReplaySession};
 use crate::trace_reader::TraceReader;
 // use crate::response::{};
 use crate::dap_types;

@@ -67,7 +67,7 @@ struct RawTraceMetadata {
 }
 
 /// Schema for `trace_db_metadata.json` (the extended format written by
-/// `ct-rr-support record`).  Only the fields needed by backend-manager are
+/// `ct-rr-support record`).  Only the fields needed by session-manager are
 /// deserialized; the rest are ignored via `deny_unknown_fields = false`
 /// (the serde default).
 ///
@@ -736,12 +736,13 @@ mod tests {
 
     #[test]
     fn test_read_real_trace() {
-        // Test against the actual db-backend test trace if available.
+        // Test against the actual replay-server (formerly db-backend) test trace if available.
         let trace_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .expect("parent")
             .join("db-backend")
             .join("trace");
+        // The directory is still named db-backend on disk; only the crate name changed.
 
         if !trace_dir.exists() {
             // Skip if the test trace is not available.

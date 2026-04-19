@@ -36,8 +36,8 @@ proc stopJump*(self: DebugComponent) =
   self.data.redraw()
 
 proc resetOperation*(self: DebugComponent) =
-  clog "reset-operation: for now restarting db-backend"
-  self.data.restartSubsystem(name="db-backend")
+  clog "reset-operation: for now restarting replay-server"
+  self.data.restartSubsystem(name="replay-server")
   if self.jumpHistory.len != 0:
     self.jumpHistory[^1].lastOperation = cstring"reset-operation"
 
@@ -71,11 +71,11 @@ proc action(self: DebugComponent, id: string) =
   of "reset-operation": self.resetOperation()
 
   # TODO: a special case: or remove, as currently we
-  #   directly restart db-backend anyway?
+  #   directly restart replay-server anyway?
   #   or make several options for
-  #     * ) again, restoring a more gradual/internal for db-backend restart
-  #     * ) db-backend restart
-  #     * ) backend-manager (+ db-backend) restart
+  #     * ) again, restoring a more gradual/internal for replay-server restart
+  #     * ) replay-server restart
+  #     * ) session-manager (+ replay-server) restart
   # ?
   of "full-reset-operation": self.resetOperation()
 

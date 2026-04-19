@@ -134,7 +134,7 @@ impl BackendManager {
         let socket_dir: std::path::PathBuf;
         {
             let path = &CODETRACER_PATHS.lock()?;
-            socket_dir = path.tmp_path.join("backend-manager");
+            socket_dir = path.tmp_path.join("session-manager");
         }
 
         create_dir_all(&socket_dir).await?;
@@ -268,7 +268,7 @@ impl BackendManager {
         let socket_dir: std::path::PathBuf;
         {
             let path = &CODETRACER_PATHS.lock()?;
-            socket_dir = path.tmp_path.join("backend-manager");
+            socket_dir = path.tmp_path.join("session-manager");
         }
 
         create_dir_all(&socket_dir).await?;
@@ -997,7 +997,7 @@ impl BackendManager {
             //   - `errorMessage`: string
             //   - `finished`: bool
             //
-            // See: db-backend/src/task.rs — `FlowUpdate`, `FlowViewUpdate`
+            // See: replay-server/src/task.rs — `FlowUpdate`, `FlowViewUpdate`
             if event_name == "ct/updated-flow" {
                 // Find the pending Flow request for this backend.
                 if let Some(idx) = ds
@@ -1080,8 +1080,8 @@ impl BackendManager {
             //   - `scrollPosition`: usize
             //   - `startCallLineIndex`: usize
             //
-            // See: db-backend/src/task.rs — `CallArgsUpdateResults`
-            // See: db-backend/src/dap.rs — `updated_calltrace_event`
+            // See: replay-server/src/task.rs — `CallArgsUpdateResults`
+            // See: replay-server/src/dap.rs — `updated_calltrace_event`
             if event_name == "ct/updated-calltrace"
                 && let Some(idx) = ds
                     .py_bridge
@@ -1150,7 +1150,7 @@ impl BackendManager {
             // `ct/calltrace-search-res` event (not a DAP response) containing
             // an array of `Call` objects matching the search query.
             //
-            // See: db-backend/src/dap.rs — `calltrace_search_event`
+            // See: replay-server/src/dap.rs — `calltrace_search_event`
             if event_name == "ct/calltrace-search-res"
                 && let Some(idx) = ds
                     .py_bridge
@@ -1188,7 +1188,7 @@ impl BackendManager {
             // by a `ct/updated-events-content` event with the raw content.
             // We intercept the first event here to build the response.
             //
-            // See: db-backend/src/dap.rs — `updated_events`
+            // See: replay-server/src/dap.rs — `updated_events`
             if event_name == "ct/updated-events"
                 && let Some(idx) = ds
                     .py_bridge
@@ -1233,7 +1233,7 @@ impl BackendManager {
             // event containing an array of `ProgramEvent` objects representing
             // terminal output (Write events).
             //
-            // See: db-backend/src/dap.rs — `loaded_terminal_event`
+            // See: replay-server/src/dap.rs — `loaded_terminal_event`
             if event_name == "ct/loaded-terminal"
                 && let Some(idx) = ds
                     .py_bridge
@@ -1278,8 +1278,8 @@ impl BackendManager {
             // build the `ct/py-run-tracepoints` response for the Python
             // client.
             //
-            // See: db-backend/src/handler.rs — `run_tracepoints()`
-            // See: db-backend/src/dap.rs — `tracepoint_results_event()`
+            // See: replay-server/src/handler.rs — `run_tracepoints()`
+            // See: replay-server/src/dap.rs — `tracepoint_results_event()`
             if event_name == "ct/tracepoint-results"
                 && let Some(idx) = ds
                     .py_bridge
@@ -1795,7 +1795,7 @@ impl BackendManager {
         {
             let path = &CODETRACER_PATHS.lock()?.tmp_path;
             socket_dir = path
-                .join("backend-manager")
+                .join("session-manager")
                 .join(std::process::id().to_string());
         }
 
@@ -2798,7 +2798,7 @@ impl BackendManager {
         //
         // The arguments must match the backend's `CtLoadLocalsArguments`
         // schema (camelCase):
-        //   https://github.com/nicholasgasior/codetracer/blob/main/codetracer/src/db-backend/src/task.rs
+        //   https://github.com/nicholasgasior/codetracer/blob/main/codetracer/src/replay-server/src/task.rs
         let dap_request = serde_json::json!({
             "type": "request",
             "command": "ct/load-locals",
@@ -3209,7 +3209,7 @@ impl BackendManager {
         // Map the string mode to the integer FlowMode expected by the
         // backend's CtLoadFlowArguments.  FlowMode is serialized as a
         // repr(u8) integer: 0 = Call, 1 = Diff.
-        // See: db-backend/src/task.rs — `enum FlowMode`
+        // See: replay-server/src/task.rs — `enum FlowMode`
         let flow_mode: u8 = match mode {
             "diff" => 1,
             _ => 0, // "call" or any unrecognized mode defaults to Call
@@ -3230,7 +3230,7 @@ impl BackendManager {
         // The backend deserializes these via `req.load_args::<CtLoadFlowArguments>()`
         // with `#[serde(rename_all = "camelCase")]`.
         //
-        // See: db-backend/src/task.rs — `CtLoadFlowArguments`, `Location`
+        // See: replay-server/src/task.rs — `CtLoadFlowArguments`, `Location`
         let dap_request = serde_json::json!({
             "type": "request",
             "command": "ct/load-flow",
@@ -4377,7 +4377,7 @@ impl BackendManager {
         //   - `count` -> `height` (number of visible call-lines to load)
         //   - `depth` -> `depth` (maximum call nesting depth)
         //
-        // See: db-backend/src/task.rs — `CalltraceLoadArgs`
+        // See: replay-server/src/task.rs — `CalltraceLoadArgs`
         let dap_request = serde_json::json!({
             "type": "request",
             "command": "ct/load-calltrace-section",
@@ -4536,7 +4536,7 @@ impl BackendManager {
         // names against).  The `limit` parameter is not part of the backend
         // struct — the backend returns all matching calls.
         //
-        // See: db-backend/src/task.rs — `CallSearchArg`
+        // See: replay-server/src/task.rs — `CallSearchArg`
         let dap_request = serde_json::json!({
             "type": "request",
             "command": "ct/search-calltrace",
@@ -5350,13 +5350,17 @@ impl BackendManager {
             }
         };
 
-        // Determine which backend command to spawn.
-        // Tests can override via CODETRACER_DB_BACKEND_CMD env var.
-        let backend_cmd =
-            std::env::var("CODETRACER_DB_BACKEND_CMD").unwrap_or_else(|_| "db-backend".to_string());
+        // Determine which replay-server command to spawn.
+        // Tests can override via CODETRACER_REPLAY_SERVER_CMD (preferred) or
+        // the legacy CODETRACER_DB_BACKEND_CMD env var.
+        let backend_cmd = std::env::var("CODETRACER_REPLAY_SERVER_CMD")
+            .or_else(|_| std::env::var("CODETRACER_DB_BACKEND_CMD"))
+            .unwrap_or_else(|_| "replay-server".to_string());
 
         // Build the arguments: the backend command + "dap-server" subcommand.
-        let backend_args_owned: Vec<String> = if backend_cmd.contains("backend-manager") {
+        let backend_args_owned: Vec<String> = if backend_cmd.contains("backend-manager")
+            || backend_cmd.contains("session-manager")
+        {
             // For mock-dap-backend, the subcommand is `mock-dap-backend`.
             vec!["mock-dap-backend".to_string()]
         } else {
@@ -5383,7 +5387,7 @@ impl BackendManager {
 
         // Build DAP launch options.  If the trace directory contains an `rr/`
         // subdirectory (Linux RR traces) or `.run` files (Windows TTD traces),
-        // we need to tell db-backend where ct-native-replay is so it can spawn
+        // we need to tell replay-server where ct-native-replay is so it can spawn
         // the replay worker.
         //
         // The ct-native-replay path is resolved from (in priority order):
@@ -5391,7 +5395,7 @@ impl BackendManager {
         //      (falls back to legacy `CODETRACER_CT_RR_SUPPORT_CMD`)
         //   2. `ct-native-replay` on PATH (falls back to legacy `ct-rr-support`)
         //
-        // Reference: db-backend/src/dap.rs — `LaunchRequestArguments.ctRRWorkerExe`
+        // Reference: replay-server/src/dap.rs — `LaunchRequestArguments.ctRRWorkerExe`
         let dap_launch_opts = {
             let mut opts = dap_init::DapLaunchOptions::default();
             let needs_rr_support = trace_path.join("rr").is_dir()
@@ -5467,7 +5471,7 @@ impl BackendManager {
         // Run DAP init sequence.
         // Large DB traces (e.g. 96 MB Python traces) can take significant
         // time to parse and post-process.  Use a generous per-step timeout
-        // so that `setup()` in db-backend has time to complete.
+        // so that `setup()` in replay-server has time to complete.
         let dap_timeout = Duration::from_secs(120);
         match dap_init::run_dap_init(
             &sender,
@@ -5740,11 +5744,11 @@ impl BackendManager {
         //
         // The `CODETRACER_PYTHON_API_PATH` environment variable points to the
         // directory containing the `codetracer` Python package.  If not set we
-        // try a relative path from the backend-manager binary that works in
+        // try a relative path from the session-manager binary that works in
         // the standard repository layout.
         let python_api_path = std::env::var("CODETRACER_PYTHON_API_PATH").unwrap_or_else(|_| {
             // Attempt to resolve from the binary location:
-            // <repo>/src/backend-manager/target/<profile>/backend-manager
+            // <repo>/src/backend-manager/target/<profile>/session-manager
             //  -> <repo>/python-api/
             if let Ok(exe) = std::env::current_exe()
                 && let Some(repo) = exe

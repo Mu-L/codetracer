@@ -384,7 +384,7 @@ pub struct PendingPyRequest {
 /// Formats a backend `ct/load-locals` response into the simplified
 /// `ct/py-locals` response body.
 ///
-/// The real backend (db-backend) returns locals as `body.locals`, an
+/// The real backend (replay-server) returns locals as `body.locals`, an
 /// array of `{expression, value, address}` objects where `expression`
 /// is the variable name and `value` is a CodeTracer `Value` object
 /// containing `i` (the string representation) and `typ` (with
@@ -435,7 +435,7 @@ pub fn format_locals_response(backend_response: &Value) -> (bool, Value) {
 
 /// Extracts the string representation from a CodeTracer Value JSON object.
 ///
-/// The Value struct (defined in `db-backend/src/value.rs`) stores typed data
+/// The Value struct (defined in `replay-server/src/value.rs`) stores typed data
 /// in different fields depending on `kind` (a `TypeKind` enum serialized as u8):
 ///   - Int (7):     `i` field (string)
 ///   - Float (8):   `f` field (string)

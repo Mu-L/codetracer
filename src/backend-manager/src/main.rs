@@ -46,8 +46,8 @@ use crate::paths::CODETRACER_PATHS;
 #[derive(Parser, Debug)]
 #[command(
     version,
-    about = "CodeTracer backend manager -- daemon, trace CLI, and MCP server.",
-    long_about = "CodeTracer backend manager.\n\n\
+    about = "CodeTracer session manager -- daemon, trace CLI, and MCP server.",
+    long_about = "CodeTracer session manager.\n\n\
         Provides:\n  \
         - A daemon that manages replay backend processes (ct daemon start)\n  \
         - A CLI for inspecting recorded traces (ct trace query / ct trace info)\n  \
@@ -447,7 +447,7 @@ async fn daemon_connect(socket_path: &PathBuf, pid_path: &PathBuf) -> Result<(),
         create_dir_all(parent).await?;
     }
 
-    // Spawn `backend-manager daemon start` as a detached process.
+    // Spawn `session-manager daemon start` as a detached process.
     let exe = std::env::current_exe()?;
     info!("Auto-starting daemon: {} daemon start", exe.display());
 
@@ -522,7 +522,7 @@ async fn daemon_connect(socket_path: &PathBuf, pid_path: &PathBuf) -> Result<(),
         create_dir_all(parent).await?;
     }
 
-    // Spawn `backend-manager daemon start` as a detached process.
+    // Spawn `session-manager daemon start` as a detached process.
     let exe = std::env::current_exe()?;
     info!("Auto-starting daemon: {} daemon start", exe.display());
 
@@ -593,7 +593,7 @@ async fn run_mock_backend(socket_path: &str) -> Result<(), Box<dyn Error>> {
 #[cfg(unix)]
 ///
 /// This enables end-to-end testing of the `ct/open-trace` and
-/// `ct/py-navigate` flows without needing a real db-backend binary.
+/// `ct/py-navigate` flows without needing a real replay-server binary.
 async fn run_mock_dap_backend(socket_path: &str) -> Result<(), Box<dyn Error>> {
     use tokio::io::AsyncReadExt as _;
 
@@ -1156,7 +1156,7 @@ async fn run_mock_dap_backend(socket_path: &str) -> Result<(), Box<dyn Error>> {
                 // When the daemon sends ct/run-tracepoints, the mock backend
                 // emits per-tracepoint ct/updated-trace events followed by a
                 // single ct/tracepoint-results event containing simulated
-                // Stop results.  This mirrors the real db-backend's behavior
+                // Stop results.  This mirrors the real replay-server's behavior
                 // in handler.rs::run_tracepoints().
                 "ct/run-tracepoints" => {
                     let args = msg.get("arguments");
@@ -2046,7 +2046,7 @@ async fn cli_dap_read(stream: &mut UnixStream) -> Result<serde_json::Value, Box<
 /// Ensures the daemon is running and returns a connected socket.
 ///
 /// If the daemon socket does not exist or a connection attempt fails, this
-/// function auto-starts the daemon by spawning `backend-manager daemon start`
+/// function auto-starts the daemon by spawning `session-manager daemon start`
 /// as a background process and polling for the socket.
 #[cfg(unix)]
 async fn ensure_daemon_connected(

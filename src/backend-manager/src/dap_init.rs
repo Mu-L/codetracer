@@ -47,7 +47,7 @@ pub struct DapInitResult {
 
 /// Optional parameters for the DAP `launch` request.
 ///
-/// When a trace directory contains an `rr/` subdirectory, the `db-backend`
+/// When a trace directory contains an `rr/` subdirectory, the `replay-server`
 /// needs the path to `ct-rr-support` (passed as `ctRRWorkerExe` in the
 /// launch arguments) so it can spawn the RR replay worker.
 ///
@@ -236,7 +236,7 @@ async fn wait_for_stopped_event(
 /// so the backend knows which trace to load.  When the trace is an RR
 /// recording, the caller should populate `opts.ct_rr_worker_exe` with
 /// the path to `ct-rr-support` so that the backend can start the RR
-/// replay worker (the db-backend expects `ctRRWorkerExe` in the launch
+/// replay worker (the replay-server expects `ctRRWorkerExe` in the launch
 /// arguments).
 ///
 /// The `timeout` duration is applied to each individual wait step (not
@@ -277,16 +277,16 @@ pub async fn run_dap_init(
 
     // Step 2: launch
     //
-    // Build launch arguments.  The db-backend's `LaunchRequestArguments`
+    // Build launch arguments.  The replay-server's `LaunchRequestArguments`
     // struct expects `traceFolder`, `program`, `pid`, and optionally
     // `ctRRWorkerExe` for RR-based traces.
     //
-    // The `trace_file` field tells db-backend which events file to load.
+    // The `trace_file` field tells replay-server which events file to load.
     // Python/Ruby/WASM recorders produce `trace.bin` (binary CBOR+zstd),
     // while some older or test fixtures use `trace.json`.  We probe the
     // trace directory and prefer `.bin` when present.
     //
-    // Reference: codetracer/src/db-backend/src/dap.rs — `LaunchRequestArguments`
+    // Reference: codetracer/src/replay-server/src/dap.rs — `LaunchRequestArguments`
     let trace_folder_str = trace_folder.to_string_lossy().to_string();
 
     // Detect the trace events file: prefer trace.bin over trace.json.

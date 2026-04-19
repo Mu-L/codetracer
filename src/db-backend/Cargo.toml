@@ -1,5 +1,5 @@
 [package]
-name = "db-backend"
+name = "replay-server"
 version = "0.1.0"
 edition = "2021"
 
@@ -99,7 +99,7 @@ path = "src/lib.rs"
 crate-type = ["rlib", "cdylib"]
 
 [[bin]]
-name = "db-backend"
+name = "replay-server"
 path = "src/main.rs"
 required-features = ["io-transport"]
 

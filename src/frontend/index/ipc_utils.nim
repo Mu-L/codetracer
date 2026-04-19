@@ -106,15 +106,15 @@ proc ready*(): Future[void] {.async.} =
   let backendManager = await startProcess(backendManagerExe.cstring, @[], spawnOptions)
   if backendManager.isOk:
     backendManagerProcess = backendManager.value
-    infoPrint "index: backend-manager started, pid = ", $backendManagerProcess.pid
+    infoPrint "index: session-manager started, pid = ", $backendManagerProcess.pid
   else:
-    errorPrint "index: backend-manager FAILED to start: ", backendManager.error
+    errorPrint "index: session-manager FAILED to start: ", backendManager.error
     errorPrint "index: backendManagerExe was: ", backendManagerExe
 
   if runtimePlatform == cstring"win32":
-    # On Windows, the backend-manager uses TCP on localhost.
+    # On Windows, the session-manager uses TCP on localhost.
     # It writes the port number to a .port file.
-    let portFilePath = codetracerTmpPath / "backend-manager" / $backendManagerProcess.pid & ".port"
+    let portFilePath = codetracerTmpPath / "session-manager" / $backendManagerProcess.pid & ".port"
     infoPrint "index: waiting for TCP port file at ", portFilePath
 
     await asyncSleep(100)
@@ -130,11 +130,11 @@ proc ready*(): Future[void] {.async.} =
             break
       socketAttempt += 1
       if socketAttempt mod 5 == 0:
-        infoPrint "index: still waiting for backend-manager TCP port (attempt ", $socketAttempt, ")"
+        infoPrint "index: still waiting for session-manager TCP port (attempt ", $socketAttempt, ")"
       await asyncSleep(1000)
   else:
     let backendManagerSocketPath =
-      codetracerTmpPath / "backend-manager" / $backendManagerProcess.pid & ".sock"
+      codetracerTmpPath / "session-manager" / $backendManagerProcess.pid & ".sock"
     infoPrint "index: waiting for socket at ", backendManagerSocketPath
 
     await asyncSleep(100)
@@ -146,11 +146,11 @@ proc ready*(): Future[void] {.async.} =
         break
       socketAttempt += 1
       if socketAttempt mod 5 == 0:
-        infoPrint "index: still waiting for backend-manager socket (attempt ", $socketAttempt, ")"
+        infoPrint "index: still waiting for session-manager socket (attempt ", $socketAttempt, ")"
       await asyncSleep(1000)
 
   setupProxyForDap(backendManagerSocket)
-  infoPrint "index: backend manager socket configured"
+  infoPrint "index: session manager socket configured"
 
   configureIpcMain()
 

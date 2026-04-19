@@ -53,7 +53,7 @@ const DEFAULT_MAX_SESSIONS: usize = 10;
 // DaemonConfig
 // ---------------------------------------------------------------------------
 
-/// Runtime configuration for the backend-manager daemon.
+/// Runtime configuration for the session-manager daemon.
 ///
 /// Constructed once at daemon startup via [`DaemonConfig::load`] and then
 /// threaded through the daemon's subsystems (session manager, logging, etc.).

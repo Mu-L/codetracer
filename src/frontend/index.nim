@@ -14,7 +14,7 @@ when not defined(server):
   electron_vars.app.on("before-quit") do ():
     stopBackendManager()
 
-  # Ensure signal-driven exits also terminate the backend-manager.
+  # Ensure signal-driven exits also terminate the session-manager.
   nodeProcess.on(cstring"SIGINT") do ():
     stopBackendManager()
     electron_vars.app.quit(0)

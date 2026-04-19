@@ -380,8 +380,8 @@ proc webTechMenu(data: Data, program: cstring): MenuNode =
 
         # TODO:
         folder "Reset":
-          element "Restart db-backend", aRestartDbBackend, true
-          element "Restart backend-manager", aRestartBackendManager, true
+          element "Restart replay-server", aRestartDbBackend, true
+          element "Restart session-manager", aRestartBackendManager, true
 
         folder "Debug":
           # element "Trace Existing Program...", aTrace, false
@@ -2260,8 +2260,8 @@ var actions*: array[ClientAction, ClientActionHandler] = [
   proc(actionData: JsObject) = data.findSymbol(),
   proc(actionData: JsObject) = data.reRecordCurrent(projectOnly=false),
   proc(actionData: JsObject) = data.reRecordCurrent(projectOnly=true),
-  proc(actionData: JsObject) = data.restartSubsystem(name="db-backend"),
-  proc(actionData: JsObject) = data.restartSubsystem(name="backend-manager"),
+  proc(actionData: JsObject) = data.restartSubsystem(name="replay-server"),
+  proc(actionData: JsObject) = data.restartSubsystem(name="session-manager"),
   proc(actionData: JsObject) = data.openTraceDialog(),
   proc(actionData: JsObject) = data.showRecordNewTraceDialog(),
   proc(actionData: JsObject) = data.recordFromLaunchConfig(actionData),
