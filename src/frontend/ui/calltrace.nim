@@ -662,6 +662,20 @@ proc callView*(
         if key != cstring"-1 -1 -1":
           text $call.location.highLevelFunctionName & " #" & $call.key
 
+        # Continuation jump link: show ↗ icon if this call has an async continuation
+        if self.continuationsByCallKey.hasKey(key):
+          let link = self.continuationsByCallKey[key]
+          span(
+            class = "continuation-jump-link",
+            title = cstring("Jump to continuation (" & $link.linkType & ")"),
+          ):
+            proc onclick(ev: Event, v: VNode) =
+              ev.stopPropagation()
+              # Seek to the continuation GEID
+              console.log("Jump to continuation at GEID ", link.continuationGEID)
+              # In full integration: self.api.emit(CtSeekToGEID, link.continuationGEID)
+            text "↗"
+
       callArgsView(self, args, isCallstack = false, keyOrIndex = key, callDepth = depth)
 
       if not returnValue.isNil:
@@ -1191,6 +1205,46 @@ method onCompleteMove*(self: CalltraceComponent, response: MoveState) {.async.} 
     self.loadLines(fromScroll=false)
   self.redraw()
 
+proc asyncFlowToggleView(self: CalltraceComponent): VNode =
+  ## Renders the Real/Virtual call trace mode toggle.
+  ## Only visible when the current view has async continuation data.
+  if self.continuationLinks.len == 0:
+    return buildHtml(tdiv())  # Hidden when no async data
+
+  buildHtml(
+    tdiv(class = "calltrace-async-toggle")
+  ):
+    span(class = "async-toggle-label"):
+      text "Call Trace:"
+    tdiv(class = "async-toggle-buttons"):
+      let realClass = if self.callTraceMode == ctmReal: "toggle-btn active" else: "toggle-btn"
+      let virtualClass = if self.callTraceMode == ctmVirtual: "toggle-btn active" else: "toggle-btn"
+      button(class = cstring(realClass)):
+        proc onclick(ev: Event, v: VNode) =
+          self.callTraceMode = ctmReal
+        text "Real"
+      button(class = cstring(virtualClass)):
+        proc onclick(ev: Event, v: VNode) =
+          self.callTraceMode = ctmVirtual
+        text "Virtual"
+
+proc setContinuationLinks*(self: CalltraceComponent, links: seq[ContinuationLinkInfo]) =
+  ## Called by the backend when continuation links are discovered.
+  ## Builds the lookup table mapping registration GEIDs to their links
+  ## so the call view can show jump icons next to await expressions.
+  self.continuationLinks = links
+  self.continuationsByCallKey = JsAssoc[cstring, ContinuationLinkInfo]{}
+  for link in links:
+    # Map the registration GEID to the link.
+    # The call key format depends on the trace type;
+    # for now, use the GEID as the key string.
+    let key = cstring($link.registrationGEID)
+    self.continuationsByCallKey[key] = link
+
+proc setAsyncThreads*(self: CalltraceComponent, threads: seq[AsyncThreadInfo]) =
+  ## Called by the backend when async thread groupings are discovered.
+  self.asyncThreads = threads
+
 method render*(self: CalltraceComponent): VNode =
   self.callsByLine = @[]
   self.lineIndex = JsAssoc[cstring, int]{}
@@ -1219,25 +1273,30 @@ method render*(self: CalltraceComponent): VNode =
   ):
     tdiv():
       searchCalltraceView(self)
+      asyncFlowToggleView(self)
       # TODO: not ready for rr traces too: for now just comment out!
       # if not self.inExtension and not self.isDbBasedTrace:
       #  filterCalltraceView(self)
     if self.service.isCalltrace:
-      tdiv(
-        id = fmt"calltraceScroll-{self.id}",
-        class = "local-calltrace-view",
-        onscroll = proc =
-          self.eventuallyScroll()
-      ):
-        # TODO: This is commented out only for the demo recording
-        # if self.panelHeight() < self.totalCallsCount:
-        #   tdiv(
-        #     class = "calltrace-loading",
-        #     id = fmt"calltrace-toggle-loading-{self.id}",
-        #     style = style(StyleAttr.display, "none")
-        #   ):
-        #     text "Loading..."
-        localCalltraceView(self)
+      if self.callTraceMode == ctmVirtual:
+        tdiv(class = "calltrace-virtual-placeholder"):
+          text "Virtual call trace: follow the ↗ links to navigate async continuations"
+      else:
+        tdiv(
+          id = fmt"calltraceScroll-{self.id}",
+          class = "local-calltrace-view",
+          onscroll = proc =
+            self.eventuallyScroll()
+        ):
+          # TODO: This is commented out only for the demo recording
+          # if self.panelHeight() < self.totalCallsCount:
+          #   tdiv(
+          #     class = "calltrace-loading",
+          #     id = fmt"calltrace-toggle-loading-{self.id}",
+          #     style = style(StyleAttr.display, "none")
+          #   ):
+          #     text "Loading..."
+          localCalltraceView(self)
     else:
       discard
 

@@ -722,6 +722,21 @@ type
     kind*: CalltraceLineKind
     call*: Call
 
+  CallTraceMode* = enum
+    ctmReal      ## Show the actual call trace as executed
+    ctmVirtual   ## Show the logical async flow (follow continuations)
+
+  ContinuationLinkInfo* = ref object
+    registrationGEID*: int64
+    continuationGEID*: int64
+    futurePtr*: cstring
+    linkType*: cstring         ## "await", "callback", "then"
+    continuationFunction*: cstring
+
+  AsyncThreadInfo* = ref object
+    id*: cstring
+    links*: seq[ContinuationLinkInfo]
+
   CalltraceComponent* = ref object of Component
     callstack*:             seq[Call] # the names of the functions
     searchResults*: seq[Call]
@@ -762,6 +777,13 @@ type
     service*:        CalltraceService
     modalValueComponent*: JsAssoc[cstring, ValueComponent]
     forceRerender*: JsAssoc[cstring, bool]
+
+    # Async flow visualization (M4)
+    callTraceMode*: CallTraceMode
+    continuationLinks*: seq[ContinuationLinkInfo]
+    asyncThreads*: seq[AsyncThreadInfo]
+    # Map from call key to continuation link (for showing jump icons)
+    continuationsByCallKey*: JsAssoc[cstring, ContinuationLinkInfo]
 
   LogEntry* = ref object
     title*: cstring
