@@ -1,5 +1,6 @@
 certs/
 traces/
 app/pkg/
+dist/
 nginx.conf
 *.pid
