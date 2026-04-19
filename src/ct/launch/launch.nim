@@ -274,7 +274,8 @@ proc runInitial*(conf: CodetracerConf) =
         conf.hostPort,
         conf.hostBackendSocketPort, conf.hostFrontendSocketPort,
         conf.hostFrontendSocketParameters, conf.hostTraceArg,
-        conf.hostIdleTimeout)
+        conf.hostIdleTimeout,
+        conf.hostTracePath)
     of StartupCommand.`import`:
       importCommand(
         conf.importTraceZipPath,

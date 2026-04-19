@@ -362,8 +362,18 @@ type
           "Use 0/never to disable."
       .} : string
 
+      hostTracePath* {.
+        name: "trace-path"
+        defaultValue: ""
+        desc: "Path to a .ct file or " &
+          "trace folder to auto-import " &
+          "and host. Skips the need " &
+          "for a separate ct import."
+      .} : string
+
       hostTraceArg* {.
         argument
+        defaultValue: ""
         desc: "Trace id to run. If not a " &
           "valid trace id, treats it " &
           "as a trace folder"

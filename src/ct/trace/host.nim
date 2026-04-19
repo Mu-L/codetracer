@@ -1,6 +1,7 @@
 import
-  std / [ options, strformat, strutils, osproc, os ],
-  ../../common/[ types, trace_index, paths ]
+  std / [ options, strformat, strutils, osproc, os, json ],
+  ../../common/[ types, trace_index, paths, lang ],
+  storage_and_import
 
 
 # hosts a codetracer server that can be accessed in the browser
@@ -8,6 +9,7 @@ import
 #        [--backend-socket-port <port>]
 #        [--frontend-socket <port>]
 #        [--frontend-socket-parameters <parameters>]
+#        [--trace-path <path-to-.ct-file-or-trace-folder>]
 #        <trace-id>/<trace-folder>
 
 const
@@ -66,13 +68,89 @@ proc parseIdleTimeoutMs*(raw: string): IdleTimeoutResult =
 
   return okResult(base * multiplier)
 
+proc importCtFile(ctFilePath: string): int =
+  ## Import a standalone .ct file by creating a minimal trace folder
+  ## around it and importing into the database.
+  ## Returns the assigned trace ID.
+  let tempDir = getTempDir() / "ct-host-" & $getCurrentProcessId()
+  createDir(tempDir)
+  copyFile(ctFilePath, tempDir / "trace.ct")
+
+  # Create minimal trace_db_metadata.json so importTrace can read it.
+  let metaJson = %*{
+    "program": "imported",
+    "args": newJArray(),
+    "workdir": tempDir,
+    "lang": "c"
+  }
+  writeFile(tempDir / "trace_db_metadata.json", $metaJson)
+  writeFile(tempDir / "trace_paths.json", "[]")
+
+  # Copy source files if present alongside the .ct file.
+  let sourceDir = ctFilePath.parentDir
+  for entry in walkDir(sourceDir):
+    if entry.kind == pcFile and entry.path != ctFilePath:
+      let ext = entry.path.splitFile.ext.toLowerAscii
+      if ext in [".c", ".cpp", ".h", ".hpp", ".rs", ".py", ".rb", ".nim", ".js", ".ts"]:
+        let filesDir = tempDir / "files" / sourceDir.strip(chars = {'/'})
+        createDir(filesDir)
+        copyFile(entry.path, filesDir / entry.path.extractFilename)
+
+  let trace = importTrace(
+    tempDir,
+    NO_TRACE_ID,
+    NO_PID,
+    LangUnknown,
+    traceKind = "rr")
+  if trace.isNil:
+    echo "ct host: error: failed to import trace from ", ctFilePath
+    quit(1)
+
+  result = trace.id
+
+
+proc importTraceFolder(traceFolderPath: string): int =
+  ## Import a trace folder into the database.
+  ## The folder should contain trace_metadata.json or trace_db_metadata.json.
+  ## Returns the assigned trace ID.
+  let fullPath = expandFilename(expandTilde(traceFolderPath))
+
+  let traceKind =
+    if fileExists(fullPath / "trace_metadata.json"):
+      "db"
+    else:
+      # Replay trace imports (RR/TTD) carry trace_db_metadata.json.
+      "rr"
+
+  let metaFile = if traceKind == "db":
+      fullPath / "trace_metadata.json"
+    else:
+      fullPath / "trace_db_metadata.json"
+  if not fileExists(metaFile):
+    echo "ct host: error: trace folder missing metadata file: ", metaFile
+    quit(1)
+
+  let trace = importTrace(
+    fullPath,
+    NO_TRACE_ID,
+    NO_PID,
+    LangUnknown,
+    traceKind = traceKind)
+  if trace.isNil:
+    echo "ct host: error: failed to import trace from folder ", traceFolderPath
+    quit(1)
+
+  result = trace.id
+
+
 proc hostCommand*(
     port: int,
     backendSocketPort: Option[int],
     frontendSocketPort: Option[int],
     frontendSocketParameters: string,
     traceArg: string,
-    idleTimeoutRaw: string) =
+    idleTimeoutRaw: string,
+    tracePath: string = "") =
 
   putEnv("NODE_PATH", nodeModulesPath)
   putEnv("CODETRACER_PREFIX", codetracerPrefix)
@@ -105,25 +183,44 @@ proc hostCommand*(
     echo "ct host: error: pass either both backend and frontend port or neither"
     quit(1)
 
-  try:
-    traceId = traceArg.parseInt
-  except CatchableError:
-    # probably traceId is a folder
-    # TODO don't depend on db?
-    let traceFolder = traceArg
-    var traceFolderFullPath = ""
-    try:
-      traceFolderFullPath = expandFilename(expandTilde(traceFolder))
-    except OsError as e:
-      echo "ct host error: folder os error: ", e.msg
+  if tracePath.len > 0:
+    # --trace-path provided: auto-import the trace before hosting.
+    if fileExists(tracePath) and tracePath.endsWith(".ct"):
+      echo "ct host: importing .ct file: ", tracePath
+      traceId = importCtFile(tracePath)
+      echo "ct host: imported as trace id ", traceId
+    elif dirExists(tracePath):
+      echo "ct host: importing trace folder: ", tracePath
+      traceId = importTraceFolder(tracePath)
+      echo "ct host: imported as trace id ", traceId
+    else:
+      echo "ct host: error: --trace-path not found: ", tracePath
       quit(1)
-    var trace = trace_index.findByPath(traceFolderFullPath, test=false)
-    if trace.isNil:
-      trace = trace_index.findByPath(traceFolderFullPath & "/", test=false)
-      if trace.isNil:
-        echo "ct host error: trace not found: maybe you should import it first"
+  elif traceArg.len > 0:
+    try:
+      traceId = traceArg.parseInt
+    except CatchableError:
+      # probably traceId is a folder
+      # TODO don't depend on db?
+      let traceFolder = traceArg
+      var traceFolderFullPath = ""
+      try:
+        traceFolderFullPath = expandFilename(expandTilde(traceFolder))
+      except OsError as e:
+        echo "ct host error: folder os error: ", e.msg
         quit(1)
-    traceId = trace.id
+      var trace = trace_index.findByPath(traceFolderFullPath, test=false)
+      if trace.isNil:
+        trace = trace_index.findByPath(traceFolderFullPath & "/", test=false)
+        if trace.isNil:
+          echo "ct host error: trace not found: maybe you should import it first"
+          quit(1)
+      traceId = trace.id
+  else:
+    echo "ct host: error: no trace specified. " &
+      "Provide a trace ID or folder as a positional argument, " &
+      "or use --trace-path to auto-import a .ct file or trace folder."
+    quit(1)
 
   let callerPid = getCurrentProcessId()
   echo "server index ", codetracerExeDir
