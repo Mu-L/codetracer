@@ -10,7 +10,7 @@ use crate::{
     expr_loader::ExprLoader,
     lang::{lang_from_context, Lang},
     nim_mangling,
-    replay::Replay,
+    replay::ReplaySession,
     task::{
         Action, BranchesTaken, CoreTrace, CtLoadLocalsArguments, FlowEvent, FlowMode, FlowStep, FlowUpdate,
         FlowUpdateState, FlowUpdateStateKind, FlowViewUpdate, Iteration, Location, Loop, LoopId, LoopIterationSteps,
@@ -36,7 +36,7 @@ impl FlowPreloader {
         }
     }
 
-    pub fn load(&mut self, location: Location, mode: FlowMode, kind: TraceKind, replay: &mut dyn Replay) -> FlowUpdate {
+    pub fn load(&mut self, location: Location, mode: FlowMode, kind: TraceKind, replay: &mut dyn ReplaySession) -> FlowUpdate {
         info!("flow: load: {:?}", location);
         let path_buf = PathBuf::from(&location.path);
 
@@ -76,7 +76,7 @@ impl FlowPreloader {
         diff_lines: HashSet<(PathBuf, i64)>,
         db: &Db,
         trace_kind: TraceKind,
-        replay: &mut dyn Replay,
+        replay: &mut dyn ReplaySession,
     ) -> Result<FlowUpdate, Box<dyn Error>> {
         info!("load_diff_flow");
         for diff_line in &diff_lines {
@@ -197,7 +197,7 @@ impl<'a> CallFlowPreloader<'a> {
     //   last
     //
     #[allow(clippy::unwrap_used)]
-    pub fn load_flow(&mut self, location: Location, replay: &mut dyn Replay) -> FlowUpdate {
+    pub fn load_flow(&mut self, location: Location, replay: &mut dyn ReplaySession) -> FlowUpdate {
         // Update location on flow load
         if self.mode == FlowMode::Call {
             // let step_id = StepId(location.rr_ticks.0);
@@ -241,7 +241,7 @@ impl<'a> CallFlowPreloader<'a> {
             // For DB traces, the flow should cover the entire function call,
             // not just from the breakpoint forward. Use jump_to_call to find
             // the call's first step, then step with StepIn to enter the body.
-            if self.trace_kind == TraceKind::DB && self.location.rr_ticks.0 > 0 {
+            if self.trace_kind == TraceKind::Materialized && self.location.rr_ticks.0 > 0 {
                 if let Ok(call_loc) = replay.jump_to_call(&self.location) {
                     // jump_to_call lands on the call entry step (the Call
                     // event itself). StepIn from there enters the call body.
@@ -277,7 +277,7 @@ impl<'a> CallFlowPreloader<'a> {
         }
     }
 
-    fn add_return_value(&mut self, mut flow_view_update: FlowViewUpdate, replay: &mut dyn Replay) -> FlowViewUpdate {
+    fn add_return_value(&mut self, mut flow_view_update: FlowViewUpdate, replay: &mut dyn ReplaySession) -> FlowViewUpdate {
         // assumes that replay is stopped on the place where return value is available
 
         let return_string = "return".to_string();
@@ -338,7 +338,7 @@ impl<'a> CallFlowPreloader<'a> {
         &self,
         _from_step_id: StepId,
         _including_from: bool,
-        _replay: &mut dyn Replay,
+        _replay: &mut dyn ReplaySession,
     ) -> (StepId, bool, bool) {
         // TODO: maybe combination of replay.next, diff_call_keys check, different for cases?s
         //
@@ -368,13 +368,13 @@ impl<'a> CallFlowPreloader<'a> {
     fn move_to_first_step(
         &self,
         from_step_id: StepId,
-        replay: &mut dyn Replay,
+        replay: &mut dyn ReplaySession,
     ) -> Result<(StepId, bool, bool), Box<dyn Error>> {
         let (mut step_id, mut progressing, mut move_error) = match self.mode {
             FlowMode::Call => (from_step_id, true, false),
             FlowMode::Diff => self.next_diff_flow_step(StepId(0), true, replay),
         };
-        if self.trace_kind == TraceKind::DB {
+        if self.trace_kind == TraceKind::Materialized {
             // For DB traces the Python API typically sends rrTicks=0 because
             // it does not know the step_id — only the source path and line.
             // When step_id is 0 and a specific line was requested, we need to
@@ -463,7 +463,7 @@ impl<'a> CallFlowPreloader<'a> {
     // returns new step_id/rr ticks(?) and `progressing`(if false, the flow loop should stop)
     //   for RR: rr ticks might stay the same, but we still return progressing `true` unless we have an error for
     //      stepping/location
-    fn move_to_next_step(&mut self, from_step_id: StepId, replay: &mut dyn Replay) -> (StepId, bool, bool) {
+    fn move_to_next_step(&mut self, from_step_id: StepId, replay: &mut dyn ReplaySession) -> (StepId, bool, bool) {
         info!("  move_to_next_step:");
         match self.mode {
             FlowMode::Call => {
@@ -475,13 +475,13 @@ impl<'a> CallFlowPreloader<'a> {
                 }
 
                 let mut expr_loader = ExprLoader::new(CoreTrace::default());
-                // for DbReplay actually those replay methods shouldn't fail;
+                // for MaterializedReplaySession actually those replay methods shouldn't fail;
                 //   but this might be unreliable/change in the future
                 //   and for RR they can also surely fail
                 match replay.load_location(&mut expr_loader) {
                     Ok(location) => {
                         let new_step_id = StepId(location.rr_ticks.0);
-                        let progressing = if self.trace_kind == TraceKind::DB {
+                        let progressing = if self.trace_kind == TraceKind::Materialized {
                             new_step_id != from_step_id
                         } else {
                             // for now hard to detect; assume true
@@ -507,7 +507,7 @@ impl<'a> CallFlowPreloader<'a> {
         Ok(CallKey(location.key.parse::<i64>()?)) // for now still assume it's an integer
     }
 
-    fn load_view_update(&mut self, replay: &mut dyn Replay) -> Result<FlowViewUpdate, Box<dyn Error>> {
+    fn load_view_update(&mut self, replay: &mut dyn ReplaySession) -> Result<FlowViewUpdate, Box<dyn Error>> {
         // let start_step_id = StepId(self.location.rr_ticks.0);
         // db.calls[call_key].step_id;
         // let mut path_buf = &PathBuf::from(&self.location.path);
@@ -577,7 +577,7 @@ impl<'a> CallFlowPreloader<'a> {
 
                 // for now return value loading not working well for RR!
                 //   should be fixed/improved in ct-rr-support
-                if self.trace_kind == TraceKind::DB {
+                if self.trace_kind == TraceKind::Materialized {
                     replay.step(Action::StepIn, false)?; // hopefully go back to the end of our original function
                     let return_location = replay.load_location(&mut expr_loader)?;
                     // maybe this can be improved with a limited loop/jump to return/exit of call in the future
@@ -754,7 +754,7 @@ impl<'a> CallFlowPreloader<'a> {
         }
     }
 
-    fn load_step_flow_events(&self, replay: &mut dyn Replay, step_id: StepId) -> Vec<FlowEvent> {
+    fn load_step_flow_events(&self, replay: &mut dyn ReplaySession, step_id: StepId) -> Vec<FlowEvent> {
         // load not only exactly this step, but for the whole step line "visit":
         // include events for next steps for this visit, because we don't process those steps in flow
         // otherwise, but we do something like a `next`
@@ -771,7 +771,7 @@ impl<'a> CallFlowPreloader<'a> {
         &mut self,
         mut flow_view_update: FlowViewUpdate,
         line: Position,
-        replay: &mut dyn Replay,
+        replay: &mut dyn ReplaySession,
         step_id: StepId,
         location: &Location,
     ) -> FlowViewUpdate {

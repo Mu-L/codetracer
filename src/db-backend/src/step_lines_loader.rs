@@ -6,7 +6,7 @@ use std::sync::Arc;
 use codetracer_trace_types::{CallKey, StepId};
 use log::info;
 
-use crate::db::{Db, DbReplay, DbStep};
+use crate::db::{Db, MaterializedReplaySession, DbStep};
 use crate::distinct_vec::DistinctVec;
 use crate::expr_loader::ExprLoader;
 use crate::flow_preloader::FlowPreloader;
@@ -102,8 +102,8 @@ impl StepLinesLoader {
                 // let function_id = db.calls[call_key].function_id;
                 // let function_first = db.functions[function_id].line;
                 let reader: Arc<dyn TraceReader> = Arc::new(InMemoryTraceReader::new(db.clone()));
-                let mut replay = DbReplay::new(reader);
-                let flow_update = flow_preloader.load(location, FlowMode::Call, TraceKind::DB, &mut replay);
+                let mut replay = MaterializedReplaySession::new(reader);
+                let flow_update = flow_preloader.load(location, FlowMode::Call, TraceKind::Materialized, &mut replay);
                 if !flow_update.error && !flow_update.view_updates.is_empty() {
                     let flow_view_update = &flow_update.view_updates[0];
                     for flow_step in flow_view_update.steps.iter() {

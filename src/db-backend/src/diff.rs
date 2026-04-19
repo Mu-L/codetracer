@@ -9,7 +9,7 @@ use num_derive::FromPrimitive;
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
-use crate::db::{Db, DbReplay};
+use crate::db::{Db, MaterializedReplaySession};
 use crate::flow_preloader::FlowPreloader;
 use crate::in_memory_trace_reader::InMemoryTraceReader;
 use crate::task::{FlowUpdate, TraceKind};
@@ -148,8 +148,8 @@ pub fn index_diff(diff: Diff, trace_folder: &Path) -> Result<(), Box<dyn Error>>
     info!("diff_lines {diff_lines:?}");
     let mut flow_preloader = FlowPreloader::new();
     let reader: Arc<dyn crate::trace_reader::TraceReader> = Arc::new(InMemoryTraceReader::new(db.clone()));
-    let mut replay = DbReplay::new(reader);
-    let flow_update = match flow_preloader.load_diff_flow(diff_lines, &db, TraceKind::DB, &mut replay) {
+    let mut replay = MaterializedReplaySession::new(reader);
+    let flow_update = match flow_preloader.load_diff_flow(diff_lines, &db, TraceKind::Materialized, &mut replay) {
         Ok(flow_update_direct) => flow_update_direct,
         Err(_e) => FlowUpdate::error("load diff flow error: {e:?}"),
     };

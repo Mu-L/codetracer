@@ -113,7 +113,7 @@ fn _test_backend_dap_server_socket() {
         request: None,
         typ: None,
         session_id: None,
-        ct_rr_worker_exe: None,
+        recreator_exe: None,
         restore_location: None,
     };
 

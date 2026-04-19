@@ -1784,8 +1784,8 @@ pub struct Breakpoint {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TraceKind {
-    DB,
-    RR,
+    Materialized,
+    Recreator,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema)]

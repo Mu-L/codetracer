@@ -52,7 +52,7 @@
 //         typ: None,
 //         session_id: None,
 //         // TODO: env var, or taking from $PATH, or from local or test config?
-//         ct_rr_worker_exe: Some(PathBuf::from(
+//         recreator_exe: Some(PathBuf::from(
 //             "/home/nedy/codetracer-rr-backend/src/build-debug/bin/ct-rr-worker",
 //         )),
 //     };

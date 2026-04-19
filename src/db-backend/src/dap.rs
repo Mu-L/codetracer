@@ -38,7 +38,7 @@ pub struct LaunchRequestArguments {
     #[serde(rename = "rawDiffIndex", skip_serializing_if = "Option::is_none")]
     pub raw_diff_index: Option<String>,
     #[serde(rename = "ctRRWorkerExe", skip_serializing_if = "Option::is_none")]
-    pub ct_rr_worker_exe: Option<PathBuf>,
+    pub recreator_exe: Option<PathBuf>,
     #[serde(rename = "restoreLocation", skip_serializing_if = "Option::is_none")]
     pub restore_location: Option<Location>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -3,7 +3,7 @@ use log::info;
 
 use crate::{
     lang::Lang,
-    replay::Replay,
+    replay::ReplaySession,
     task::StringAndValueTuple,
     tracepoint_interpreter::Instruction,
     value::{to_ct_value, Type, Value, ValueRecordWithType},
@@ -22,7 +22,7 @@ fn simple_type_record(kind: TypeKind, lang_type: &str) -> TypeRecord {
 pub fn execute_bytecode(
     bytecode: &Bytecode,
     source: &str,
-    replay: &mut dyn Replay,
+    replay: &mut dyn ReplaySession,
     unary_op_functions: &UnaryOperatorFunctions,
     binary_op_functions: &BinaryOperatorFunctions,
     lang: Lang,

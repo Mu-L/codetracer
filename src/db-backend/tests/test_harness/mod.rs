@@ -385,7 +385,7 @@ impl DapTestClient {
             request: None,
             typ: None,
             session_id: None,
-            ct_rr_worker_exe: Some(ct_rr_support.to_path_buf()),
+            recreator_exe: Some(ct_rr_support.to_path_buf()),
             restore_location: None,
         };
         let launch = self
@@ -588,7 +588,7 @@ impl DapStdioTestClient {
     /// Initialize the DAP session and launch with an RR/TTD recording.
     ///
     /// Unlike `initialize_and_launch()` (for DB traces), this passes the
-    /// `ct_rr_worker_exe` so the backend can spawn the replay worker.
+    /// `recreator_exe` so the backend can spawn the replay worker.
     pub fn initialize_and_launch_rr(&mut self, recording: &TestRecording, ct_rr_support: &Path) -> Result<(), String> {
         // Send initialize
         let init = self.client.request("initialize", json!({}));
@@ -602,7 +602,7 @@ impl DapStdioTestClient {
         let conf_done = self.client.request("configurationDone", json!({}));
         self.send(&conf_done)?;
 
-        // Send launch with ct_rr_worker_exe
+        // Send launch with recreator_exe
         let launch_args = LaunchRequestArguments {
             program: None,
             trace_folder: Some(recording.trace_dir.clone()),
@@ -616,7 +616,7 @@ impl DapStdioTestClient {
             request: None,
             typ: None,
             session_id: None,
-            ct_rr_worker_exe: Some(ct_rr_support.to_path_buf()),
+            recreator_exe: Some(ct_rr_support.to_path_buf()),
             restore_location: None,
         };
         let launch = self
@@ -647,7 +647,7 @@ impl DapStdioTestClient {
         let conf_done = self.client.request("configurationDone", json!({}));
         self.send(&conf_done)?;
 
-        // Send launch — ct_rr_worker_exe is unused for DB traces, pass empty path.
+        // Send launch — recreator_exe is unused for DB traces, pass empty path.
         let launch_args = LaunchRequestArguments {
             program: None,
             trace_folder: Some(recording.trace_dir.clone()),
@@ -661,7 +661,7 @@ impl DapStdioTestClient {
             request: None,
             typ: None,
             session_id: None,
-            ct_rr_worker_exe: Some(PathBuf::from("")),
+            recreator_exe: Some(PathBuf::from("")),
             restore_location: None,
         };
         let launch = self
@@ -3501,7 +3501,7 @@ pub fn run_flow_test(config: &FlowTestConfig, version_label: &str) -> Result<(),
         println!("Starting DAP stdio client...");
         let mut client = DapStdioTestClient::start()?;
 
-        // Initialize and launch (using the rr-trace variant that passes ct_rr_worker_exe)
+        // Initialize and launch (using the rr-trace variant that passes recreator_exe)
         println!("Initializing DAP session...");
         client.initialize_and_launch_rr(&recording, &ct_rr_support)?;
 

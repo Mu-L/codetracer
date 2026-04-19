@@ -1,5 +1,5 @@
 // copied from Stan's paths.rs in src/db-backend in the public codetracer repo
-//   added run_dir/ct_rr_worker_socket_path (and copied to db-backend too)
+//   added run_dir/recreator_socket_path (and copied to db-backend too)
 
 use std::env;
 use std::error::Error;
@@ -35,7 +35,7 @@ pub fn run_dir_for(tmp_path: &Path, run_id: usize) -> Result<PathBuf, Box<dyn Er
     Ok(run_dir)
 }
 
-pub fn ct_rr_worker_socket_path(
+pub fn recreator_socket_path(
     from: &str,
     worker_name: &str,
     worker_index_for_kind: usize,

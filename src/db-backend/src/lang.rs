@@ -83,7 +83,7 @@ pub fn lang_from_context(path: &Path, trace_kind: TraceKind) -> Lang {
     // but still good to add all supported langs: TODO
     match extension {
         "rs" => {
-            if trace_kind == TraceKind::DB {
+            if trace_kind == TraceKind::Materialized {
                 Lang::RustWasm
             } else {
                 Lang::Rust

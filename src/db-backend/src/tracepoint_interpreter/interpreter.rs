@@ -19,7 +19,7 @@ use tree_sitter::{Node, Parser};
 use tree_sitter_traversal2::{traverse, Order};
 
 use crate::lang::Lang;
-use crate::replay::Replay;
+use crate::replay::ReplaySession;
 use crate::task::StringAndValueTuple;
 use crate::tracepoint_interpreter::executor::execute_bytecode;
 use crate::value::{Type, Value};
@@ -195,7 +195,7 @@ impl TracepointInterpreter {
         &self,
         tracepoint_index: usize,
         step_id: StepId,
-        replay: &mut dyn Replay,
+        replay: &mut dyn ReplaySession,
         lang: Lang,
     ) -> Vec<StringAndValueTuple> {
         if !self.compile_errors[tracepoint_index].is_empty() {

@@ -20,7 +20,7 @@ use crate::db::Db;
 use crate::handler::Handler;
 #[cfg(not(windows))]
 use crate::paths::CODETRACER_PATHS;
-use crate::rr_dispatcher::CtRRArgs;
+use crate::rr_dispatcher::RecreatorArgs;
 use crate::task::{
     Action, CallSearchArg, CalltraceLoadArgs, CollapseCallsArgs, CtLoadFlowArguments, CtLoadLocalsArguments,
     FunctionLocation, GoToTicksArguments, LoadHistoryArg, LocalStepJump, Location, ProgramEvent, RunTracepointsArg,
@@ -113,7 +113,7 @@ pub fn socket_path_for(pid: usize) -> PathBuf {
 /// `common/config.nim` only runs in the native CLI context), so the
 /// frontend typically sends an empty `ctRRWorkerExe` in the DAP launch
 /// request for RR-based traces.
-fn resolve_ct_rr_worker_exe(from_launch_args: Option<PathBuf>) -> PathBuf {
+fn resolve_recreator_exe(from_launch_args: Option<PathBuf>) -> PathBuf {
     // 1. Use the provided path if it's non-empty.
     if let Some(ref path) = from_launch_args {
         if !path.as_os_str().is_empty() {
@@ -323,7 +323,7 @@ fn setup(
     trace_folder: &Path,
     trace_file: &Path,
     raw_diff_index: Option<String>,
-    ct_rr_worker_exe: &Path,
+    recreator_exe: &Path,
     restore_location: Option<Location>,
     sender: Sender<DapMessage>,
     for_launch: bool,
@@ -358,10 +358,10 @@ fn setup(
             proc.postprocess(&trace)?;
 
             let mut handler = Handler::new(
-                TraceKind::DB,
-                CtRRArgs {
+                TraceKind::Materialized,
+                RecreatorArgs {
                     name: thread_name.to_string(),
-                    ..CtRRArgs::default()
+                    ..RecreatorArgs::default()
                 },
                 Box::new(db),
             );
@@ -383,13 +383,13 @@ fn setup(
     eprintln!("[db-backend setup] trying rr trace path");
     if let Some(path) = resolve_replay_trace_path(trace_folder, trace_file) {
         let db = Db::new(&PathBuf::from(""));
-        let ct_rr_args = CtRRArgs {
-            worker_exe: PathBuf::from(ct_rr_worker_exe),
+        let ct_rr_args = RecreatorArgs {
+            worker_exe: PathBuf::from(recreator_exe),
             rr_trace_folder: path,
             name: thread_name.to_string(),
         };
         info!("ct_rr_args {:?}", ct_rr_args);
-        let mut handler = Handler::new(TraceKind::RR, ct_rr_args, Box::new(db));
+        let mut handler = Handler::new(TraceKind::Recreator, ct_rr_args, Box::new(db));
         handler.raw_diff_index = raw_diff_index;
         if for_launch {
             eprintln!("[db-backend setup] calling run_to_entry");
@@ -633,7 +633,7 @@ pub struct Ctx {
     pub launch_trace_folder: PathBuf,
     pub launch_trace_file: PathBuf,
     pub launch_raw_diff_index: Option<String>,
-    pub ct_rr_worker_exe: PathBuf,
+    pub recreator_exe: PathBuf,
     pub restore_location: Option<Location>,
     pub received_configuration_done: bool,
 
@@ -654,7 +654,7 @@ impl Default for Ctx {
             launch_trace_folder: PathBuf::from(""),
             launch_trace_file: PathBuf::from(""),
             launch_raw_diff_index: None,
-            ct_rr_worker_exe: PathBuf::from(""),
+            recreator_exe: PathBuf::from(""),
             restore_location: None,
             received_configuration_done: false,
 
@@ -751,7 +751,7 @@ pub fn handle_message(msg: &DapMessage, sender: Sender<DapMessage>, ctx: &mut Ct
                 //info!("stored launch trace folder: {0:?}", ctx.launch_trace_folder)
 
                 ctx.launch_raw_diff_index = args.raw_diff_index.clone();
-                ctx.ct_rr_worker_exe = resolve_ct_rr_worker_exe(args.ct_rr_worker_exe);
+                ctx.recreator_exe = resolve_recreator_exe(args.recreator_exe);
                 ctx.restore_location = args.restore_location.clone();
 
                 if ctx.received_configuration_done {
@@ -864,7 +864,7 @@ fn task_thread(
             &ctx_with_cached_launch.launch_trace_folder,
             &ctx_with_cached_launch.launch_trace_file,
             ctx_with_cached_launch.launch_raw_diff_index.clone(),
-            &ctx_with_cached_launch.ct_rr_worker_exe,
+            &ctx_with_cached_launch.recreator_exe,
             ctx_with_cached_launch.restore_location.clone(),
             sender.clone(),
             for_launch,
@@ -877,10 +877,10 @@ fn task_thread(
     } else {
         // `.initialized` is false
         Handler::new(
-            TraceKind::DB,
-            CtRRArgs {
+            TraceKind::Materialized,
+            RecreatorArgs {
                 name: name.to_string(),
-                ..CtRRArgs::default()
+                ..RecreatorArgs::default()
             },
             Box::new(Db::new(&PathBuf::from(""))),
         )
@@ -913,7 +913,7 @@ fn task_thread(
                 info!("stored launch trace folder: {0:?}", launch_trace_folder);
 
                 let launch_raw_diff_index = args.raw_diff_index.clone();
-                let ct_rr_worker_exe = resolve_ct_rr_worker_exe(args.ct_rr_worker_exe);
+                let recreator_exe = resolve_recreator_exe(args.recreator_exe);
                 let restore_location = args.restore_location.clone();
 
                 let for_launch = run_to_entry;
@@ -921,7 +921,7 @@ fn task_thread(
                     &launch_trace_folder,
                     &launch_trace_file,
                     launch_raw_diff_index.clone(),
-                    &ct_rr_worker_exe,
+                    &recreator_exe,
                     restore_location,
                     sender.clone(),
                     for_launch,

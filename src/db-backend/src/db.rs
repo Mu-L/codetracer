@@ -16,7 +16,7 @@ use log::{error, info, warn};
 use crate::distinct_vec::DistinctVec;
 use crate::expr_loader::ExprLoader;
 use crate::lang::Lang;
-use crate::replay::Replay;
+use crate::replay::ReplaySession;
 use crate::task::{
     Action, Breakpoint, Call, CallArg, CallLine, CoreTrace, CtLoadLocalsArguments, Events, HistoryResultWithRecord,
     LoadHistoryArg, Location, ProgramEvent, RRTicks, VariableWithRecord, NO_ADDRESS, NO_INDEX, NO_PATH, NO_POSITION,
@@ -877,7 +877,7 @@ pub enum EndOfProgram {
 // type LineTraceMap = HashMap<usize, Vec<(usize, String)>>;
 
 #[derive(Debug)]
-pub struct DbReplay {
+pub struct MaterializedReplaySession {
     /// Shared, read-only access to trace data via the [`TraceReader`]
     /// abstraction.  All read accesses go through this.
     pub reader: Arc<dyn TraceReader>,
@@ -893,11 +893,11 @@ pub struct DbReplay {
     breakpoint_next_id: usize,
 }
 
-impl DbReplay {
-    pub fn new(reader: Arc<dyn TraceReader>) -> DbReplay {
+impl MaterializedReplaySession {
+    pub fn new(reader: Arc<dyn TraceReader>) -> MaterializedReplaySession {
         let mut breakpoint_list: Vec<HashMap<usize, Breakpoint>> = Default::default();
         breakpoint_list.resize_with(reader.path_count(), HashMap::new);
-        DbReplay {
+        MaterializedReplaySession {
             reader,
             local_types: Vec::new(),
             step_id: StepId(0),
@@ -1290,7 +1290,7 @@ impl DbReplay {
     }
 }
 
-impl Replay for DbReplay {
+impl ReplaySession for MaterializedReplaySession {
     fn load_location(&mut self, expr_loader: &mut ExprLoader) -> Result<Location, Box<dyn Error>> {
         info!("load_location: db replay");
         // Event-only traces (e.g. Stylus) have no steps — return a default location

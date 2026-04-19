@@ -10,7 +10,7 @@ use crate::task::{
 };
 use crate::value::ValueRecordWithType;
 
-pub trait Replay: std::fmt::Debug {
+pub trait ReplaySession: std::fmt::Debug {
     fn load_location(&mut self, expr_loader: &mut ExprLoader) -> Result<Location, Box<dyn Error>>;
     fn run_to_entry(&mut self) -> Result<(), Box<dyn Error>>;
     fn load_events(&mut self) -> Result<Events, Box<dyn Error>>;

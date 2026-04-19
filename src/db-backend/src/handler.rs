@@ -15,15 +15,15 @@ use codetracer_trace_types::{
 
 use crate::calltrace::Calltrace;
 use crate::dap::{self, DapClient, DapMessage};
-use crate::db::{Db, DbCall, DbRecordEvent, DbReplay};
+use crate::db::{Db, DbCall, DbRecordEvent, MaterializedReplaySession};
 use crate::event_db::{EventDb, SingleTableId};
 use crate::expr_loader::ExprLoader;
 use crate::flow_preloader::FlowPreloader;
 use crate::in_memory_trace_reader::InMemoryTraceReader;
 use crate::lang::{lang_from_context, Lang};
 use crate::program_search_tool::ProgramSearchTool;
-use crate::replay::Replay;
-use crate::rr_dispatcher::{CtRRArgs, RRDispatcher};
+use crate::replay::ReplaySession;
+use crate::rr_dispatcher::{RecreatorArgs, RecreatorReplaySession};
 use crate::trace_reader::TraceReader;
 // use crate::response::{};
 use crate::dap_types;
@@ -48,7 +48,7 @@ const TRACEPOINT_RESULTS_LIMIT_BEFORE_UPDATE: usize = 5;
 pub struct Handler {
     /// Abstracted read-only access to trace data.
     ///
-    /// Shared via `Arc` so that `DbReplay` (and other consumers) can hold
+    /// Shared via `Arc` so that `MaterializedReplaySession` (and other consumers) can hold
     /// a reference to the same reader without cloning the underlying data.
     pub reader: Arc<dyn TraceReader>,
     pub step_id: StepId,
@@ -69,8 +69,8 @@ pub struct Handler {
     pub breakpoints: HashMap<(String, i64), Vec<Breakpoint>>,
 
     pub trace_kind: TraceKind,
-    pub replay: Box<dyn Replay>,
-    pub ct_rr_args: CtRRArgs,
+    pub replay: Box<dyn ReplaySession>,
+    pub ct_rr_args: RecreatorArgs,
     pub load_flow_index: usize,
     pub tracepoint_rr_worker_index: usize,
 
@@ -115,11 +115,11 @@ pub struct Handler {
 
 #[allow(clippy::expect_used)]
 impl Handler {
-    pub fn new(trace_kind: TraceKind, ct_rr_args: CtRRArgs, db: Box<Db>) -> Handler {
+    pub fn new(trace_kind: TraceKind, ct_rr_args: RecreatorArgs, db: Box<Db>) -> Handler {
         Self::construct(trace_kind, ct_rr_args, db, false)
     }
 
-    pub fn construct(trace_kind: TraceKind, ct_rr_args: CtRRArgs, db: Box<Db>, indirect_send: bool) -> Handler {
+    pub fn construct(trace_kind: TraceKind, ct_rr_args: RecreatorArgs, db: Box<Db>, indirect_send: bool) -> Handler {
         // Wrap the Db in an InMemoryTraceReader so that all code goes through
         // the TraceReader abstraction. Direct Db access is available via
         // All trace data access goes through the TraceReader trait.
@@ -128,10 +128,10 @@ impl Handler {
         let trace = CoreTrace::default();
         let mut expr_loader = ExprLoader::new(trace.clone());
         let step_lines_loader = StepLinesLoader::new(&*reader, &mut expr_loader);
-        let replay: Box<dyn Replay> = if trace_kind == TraceKind::DB {
-            Box::new(DbReplay::new(Arc::clone(&reader)))
+        let replay: Box<dyn ReplaySession> = if trace_kind == TraceKind::Materialized {
+            Box::new(MaterializedReplaySession::new(Arc::clone(&reader)))
         } else {
-            Box::new(RRDispatcher::new(&ct_rr_args.name, 0, ct_rr_args.clone()))
+            Box::new(RecreatorReplaySession::new(&ct_rr_args.name, 0, ct_rr_args.clone()))
         };
         // let sender = sender::Sender::new();
         let mut handler = Handler {
@@ -282,7 +282,7 @@ impl Handler {
     }
 
     fn prepare_output_events(&mut self) -> Result<Vec<DapMessage>, Box<dyn Error>> {
-        if self.trace_kind == TraceKind::RR {
+        if self.trace_kind == TraceKind::Recreator {
             warn!("prepare_output_events not implemented for rr");
             return Ok(vec![]); // TODO
         }
@@ -319,7 +319,7 @@ impl Handler {
     }
 
     fn prepare_eventual_error_event_message(&mut self) -> Option<String> {
-        if self.trace_kind == TraceKind::RR {
+        if self.trace_kind == TraceKind::Recreator {
             warn!("prepare_eventual_error_event_message not implemented for rr");
             return None; // TODO
         }
@@ -337,7 +337,7 @@ impl Handler {
     }
 
     fn should_reset_flow(&mut self, is_main: bool, location: &Location) -> bool {
-        let result = if self.trace_kind == TraceKind::DB {
+        let result = if self.trace_kind == TraceKind::Materialized {
             is_main || location.key != self.last_location.key
         } else {
             is_main
@@ -434,7 +434,7 @@ impl Handler {
         args: task::CtLoadLocalsArguments,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
-        // if self.trace_kind == TraceKind::RR {
+        // if self.trace_kind == TraceKind::Recreator {
         // let locals: Vec<Variable> = vec![];
         // warn!("load_locals not implemented for rr yet");
         let locals_with_records = self.replay.load_locals(args)?;
@@ -545,7 +545,7 @@ impl Handler {
         args: CalltraceLoadArgs,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
-        let update = if self.trace_kind == TraceKind::RR {
+        let update = if self.trace_kind == TraceKind::Recreator {
             // TODO: calltrace? eventually in the future
             // for now callstack!
 
@@ -586,10 +586,10 @@ impl Handler {
         arg: CtLoadFlowArguments,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
-        let mut flow_replay: Box<dyn Replay> = if self.trace_kind == TraceKind::DB {
-            Box::new(DbReplay::new(Arc::clone(&self.reader)))
+        let mut flow_replay: Box<dyn ReplaySession> = if self.trace_kind == TraceKind::Materialized {
+            Box::new(MaterializedReplaySession::new(Arc::clone(&self.reader)))
         } else {
-            Box::new(RRDispatcher::new("flow", self.load_flow_index, self.ct_rr_args.clone()))
+            Box::new(RecreatorReplaySession::new("flow", self.load_flow_index, self.ct_rr_args.clone()))
         };
         self.load_flow_index += 1;
 
@@ -602,7 +602,7 @@ impl Handler {
             // a location with function_first == 0. The Db has authoritative
             // boundary data from the trace's Call/Function records.
             let mut location = arg.location;
-            if self.trace_kind == TraceKind::DB
+            if self.trace_kind == TraceKind::Materialized
                 && location.function_first == 0
                 && location.function_last == 0
                 && location.rr_ticks.0 >= 0
@@ -777,7 +777,7 @@ impl Handler {
             self.complete_move(false, sender.clone())?;
         }
 
-        if self.trace_kind == TraceKind::DB {
+        if self.trace_kind == TraceKind::Materialized {
             if original_step_id == self.step_id {
                 let location = if self.step_id == StepId(0) { "beginning" } else { "end" };
                 self.send_notification(
@@ -935,7 +935,7 @@ impl Handler {
         location: Location,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
-        if self.trace_kind == TraceKind::DB {
+        if self.trace_kind == TraceKind::Materialized {
             let step_id = StepId(location.rr_ticks.0); // using this field
                                                        // for compat with rr/gdb core support
             self.replay.jump_to(step_id)?;
@@ -992,8 +992,8 @@ impl Handler {
         load_history_arg: LoadHistoryArg,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
-        if self.trace_kind == TraceKind::RR {
-            self.replay = Box::new(RRDispatcher::new(
+        if self.trace_kind == TraceKind::Recreator {
+            self.replay = Box::new(RecreatorReplaySession::new(
                 "tracepoint",
                 self.tracepoint_rr_worker_index,
                 self.ct_rr_args.clone(),
@@ -1085,7 +1085,7 @@ impl Handler {
         source_location: SourceLocation,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
-        if self.trace_kind == TraceKind::DB {
+        if self.trace_kind == TraceKind::Materialized {
             if let Some(step_id) = self.get_closest_step_id(&source_location) {
                 self.replay.jump_to(step_id)?;
                 self.step_id = self.replay.current_step_id();
@@ -1631,8 +1631,8 @@ impl Handler {
         args: RunTracepointsArg,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
-        if self.trace_kind == TraceKind::RR {
-            self.replay = Box::new(RRDispatcher::new(
+        if self.trace_kind == TraceKind::Recreator {
+            self.replay = Box::new(RecreatorReplaySession::new(
                 "tracepoint",
                 self.tracepoint_rr_worker_index,
                 self.ct_rr_args.clone(),
@@ -1789,7 +1789,7 @@ impl Handler {
         arg: LocalStepJump,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
-        if self.trace_kind == TraceKind::DB {
+        if self.trace_kind == TraceKind::Materialized {
             self.replay.jump_to(StepId(arg.rr_ticks))?;
             self.step_id = self.replay.current_step_id();
 
@@ -2234,7 +2234,7 @@ impl Handler {
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
         let stack_frames: Vec<dap_types::StackFrame> = if args.thread_id == 1 {
-            if self.trace_kind == TraceKind::RR {
+            if self.trace_kind == TraceKind::Recreator {
                 // RR traces need a stack frame derived from the current location so VS Code can show the locator arrow.
                 let current_location = self.replay.load_location(&mut self.expr_loader)?;
                 let mut stack_frames: Vec<dap_types::StackFrame> = Vec::new();
@@ -2331,7 +2331,7 @@ impl Handler {
         arg: dap_types::ScopesArguments,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
-        if self.trace_kind == TraceKind::RR {
+        if self.trace_kind == TraceKind::Recreator {
             self.respond_dap(request, dap_types::ScopesResponseBody { scopes: vec![] }, sender)?;
             return Ok(());
         }
@@ -2372,7 +2372,7 @@ impl Handler {
         _arg: dap_types::VariablesArguments,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
-        if self.trace_kind == TraceKind::RR {
+        if self.trace_kind == TraceKind::Recreator {
             self.respond_dap(request, dap_types::VariablesResponseBody { variables: vec![] }, sender)?;
             return Ok(());
         }
@@ -2447,7 +2447,7 @@ mod tests {
     #[test]
     fn test_struct_handling() {
         let db = setup_db();
-        let handler: Handler = Handler::new(TraceKind::DB, CtRRArgs::default(), Box::new(db));
+        let handler: Handler = Handler::new(TraceKind::Materialized, RecreatorArgs::default(), Box::new(db));
         let value = handler.reader.to_ct_value(&ValueRecord::Struct {
             field_values: vec![],
             type_id: TypeId(1),
@@ -2460,7 +2460,7 @@ mod tests {
         let db = setup_db();
 
         // Act: Create a new Handler instance
-        let handler: Handler = Handler::new(TraceKind::DB, CtRRArgs::default(), Box::new(db));
+        let handler: Handler = Handler::new(TraceKind::Materialized, RecreatorArgs::default(), Box::new(db));
 
         // Assert: Check that the Handler instance is correctly initialized
         assert_eq!(handler.step_id, StepId(0));
@@ -2471,7 +2471,7 @@ mod tests {
     #[test]
     fn test_run_single_tracepoint() -> Result<(), Box<dyn Error>> {
         let db = setup_db();
-        let mut handler: Handler = Handler::new(TraceKind::DB, CtRRArgs::default(), Box::new(db));
+        let mut handler: Handler = Handler::new(TraceKind::Materialized, RecreatorArgs::default(), Box::new(db));
         let (sender, _r) = mpsc::channel(); // for now just artificial sender; not received
         handler.event_load(dap::Request::default(), sender.clone())?;
         handler.run_tracepoints(dap::Request::default(), make_tracepoints_args(1, 0), sender)?;
@@ -2484,7 +2484,7 @@ mod tests {
     fn test_multiple_tracepoints() -> Result<(), Box<dyn Error>> {
         let db = setup_db();
         let (sender, _r) = mpsc::channel(); // for now just artificial sender; not received
-        let mut handler: Handler = Handler::new(TraceKind::DB, CtRRArgs::default(), Box::new(db));
+        let mut handler: Handler = Handler::new(TraceKind::Materialized, RecreatorArgs::default(), Box::new(db));
         handler.event_load(dap::Request::default(), sender)?;
         // TODO
         // this way we are resetting them after reforms
@@ -2520,7 +2520,7 @@ mod tests {
         let size: usize = 10000;
         let db: Db = setup_db();
         let (sender, _r) = mpsc::channel(); // for now just artificial sender; not received
-        let mut handler: Handler = Handler::new(TraceKind::DB, CtRRArgs::default(), Box::new(db));
+        let mut handler: Handler = Handler::new(TraceKind::Materialized, RecreatorArgs::default(), Box::new(db));
         handler.event_load(dap::Request::default(), sender.clone())?;
         handler.run_tracepoints(
             dap::Request::default(),
@@ -2549,7 +2549,7 @@ mod tests {
         let size = 10000;
         let db: Db = setup_db_loop(size);
         let (sender, _r) = mpsc::channel(); // for now just artificial sender; not received
-        let mut handler: Handler = Handler::new(TraceKind::DB, CtRRArgs::default(), Box::new(db));
+        let mut handler: Handler = Handler::new(TraceKind::Materialized, RecreatorArgs::default(), Box::new(db));
         handler.event_load(dap::Request::default(), sender.clone())?;
         handler.run_tracepoints(dap::Request::default(), make_tracepoints_args(2, 0), sender)?;
         assert_eq!(handler.event_db.single_tables[1].events.len(), size);
@@ -2564,7 +2564,7 @@ mod tests {
         let count: usize = 10000;
         let db: Db = setup_db_with_step_count(count);
         let (sender, _r) = mpsc::channel(); // for now just artificial sender; not received
-        let mut handler: Handler = Handler::new(TraceKind::DB, CtRRArgs::default(), Box::new(db));
+        let mut handler: Handler = Handler::new(TraceKind::Materialized, RecreatorArgs::default(), Box::new(db));
         handler.event_load(dap::Request::default(), sender.clone())?;
         handler.run_tracepoints(dap::Request::default(), make_tracepoints_with_count(count), sender)?;
 
@@ -2577,7 +2577,7 @@ mod tests {
         let db = setup_db();
         let (sender, _r) = mpsc::channel(); // for now just artificial sender; not received
 
-        let mut handler: Handler = Handler::new(TraceKind::DB, CtRRArgs::default(), Box::new(db));
+        let mut handler: Handler = Handler::new(TraceKind::Materialized, RecreatorArgs::default(), Box::new(db));
         let request = dap::Request::default();
         handler.step(request, make_step_in(), sender)?;
         assert_eq!(handler.step_id, StepId(1_i64));
@@ -2588,7 +2588,7 @@ mod tests {
     fn test_source_jumps() -> Result<(), Box<dyn Error>> {
         let db = setup_db();
         let (sender, _r) = mpsc::channel(); // for now just artificial sender; not received
-        let mut handler: Handler = Handler::new(TraceKind::DB, CtRRArgs::default(), Box::new(db));
+        let mut handler: Handler = Handler::new(TraceKind::Materialized, RecreatorArgs::default(), Box::new(db));
         let path = "/test/workdir";
         let source_location: SourceLocation = SourceLocation {
             path: path.to_string(),
@@ -2622,7 +2622,7 @@ mod tests {
     fn test_local_calltrace() -> Result<(), Box<dyn Error>> {
         let db = setup_db_with_calls();
 
-        let mut handler: Handler = Handler::new(TraceKind::DB, CtRRArgs::default(), Box::new(db));
+        let mut handler: Handler = Handler::new(TraceKind::Materialized, RecreatorArgs::default(), Box::new(db));
 
         let calltrace_load_args = CalltraceLoadArgs {
             location: handler
@@ -2666,7 +2666,7 @@ mod tests {
         let db = load_db_for_trace(path);
         let (sender, _r) = mpsc::channel(); // for now just artificial sender; not received
 
-        let mut handler: Handler = Handler::new(TraceKind::DB, CtRRArgs::default(), Box::new(db));
+        let mut handler: Handler = Handler::new(TraceKind::Materialized, RecreatorArgs::default(), Box::new(db));
 
         // step-in from 1 to end(maybe also a parameter?)
         // on each step check validity, load locals, load callstack

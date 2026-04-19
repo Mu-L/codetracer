@@ -523,7 +523,7 @@ fn launch_ttd_session_with_fixture(session: &mut DapStdioSession, fixture: &TtdF
             request: None,
             typ: None,
             session_id: None,
-            ct_rr_worker_exe: Some(ct_rr_support),
+            recreator_exe: Some(ct_rr_support),
             restore_location: None,
         })
         .map_err(|e| format!("launch request failed: {e}"))?;

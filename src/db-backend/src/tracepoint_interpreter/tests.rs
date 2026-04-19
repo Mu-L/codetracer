@@ -15,10 +15,10 @@ use std::{
 use codetracer_trace_types::{StepId, TypeKind};
 
 use crate::{
-    db::{Db, DbReplay},
+    db::{Db, MaterializedReplaySession},
     in_memory_trace_reader::InMemoryTraceReader,
     lang::Lang,
-    replay::Replay,
+    replay::ReplaySession,
     task::StringAndValueTuple,
     trace_processor::{load_trace_data, load_trace_metadata, TraceProcessor},
     trace_reader::TraceReader,
@@ -122,7 +122,7 @@ fn check_tracepoint_evaluate(
     interpreter.register_tracepoint(0, src)?;
 
     let reader: Arc<dyn TraceReader> = Arc::new(InMemoryTraceReader::new(db.clone()));
-    let mut db_replay = DbReplay::new(reader);
+    let mut db_replay = MaterializedReplaySession::new(reader);
     for step in db.step_from(StepId(0), true) {
         let curr_line = step.line.0 as usize;
         db_replay.jump_to(step.step_id)?;

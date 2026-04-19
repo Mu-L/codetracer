@@ -6,7 +6,7 @@ use crate::value::ValueRecordWithType;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind")]
-pub enum CtRRQuery {
+pub enum ReplayQuery {
     RunToEntry,
     LoadLocation,
     Step {
