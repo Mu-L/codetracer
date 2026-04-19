@@ -24,6 +24,7 @@ run_test "Transport Infrastructure" "$SCRIPT_DIR/test_transport.sh"
 run_test "Emulator WASM API (native)" "$SCRIPT_DIR/test_emulator_api_native.sh"
 run_test "E2E WASM Module Serving" "$SCRIPT_DIR/test_wasm_e2e.sh"
 run_test "Distribution Contents" "$SCRIPT_DIR/test_dist.sh"
+run_test "Cross-Platform Trace Replay" "$SCRIPT_DIR/test_cross_platform_replay.sh"
 
 echo ""
 echo "=========================================="
