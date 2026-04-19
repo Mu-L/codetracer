@@ -26,7 +26,7 @@ mod test_harness;
 use test_harness::{find_cairo_flow_test, find_cairo_recorder, Language, TestRecording};
 
 fn find_db_backend() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_db-backend"))
+    PathBuf::from(env!("CARGO_BIN_EXE_replay-server"))
 }
 
 /// Returns the path to the Cairo flow test source file.

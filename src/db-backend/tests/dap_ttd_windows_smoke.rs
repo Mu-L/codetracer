@@ -25,7 +25,7 @@ struct DapStdioSession {
 
 impl DapStdioSession {
     fn spawn() -> Result<Self, String> {
-        let bin = env!("CARGO_BIN_EXE_db-backend");
+        let bin = env!("CARGO_BIN_EXE_replay-server");
         let mut child = Command::new(bin)
             .arg("dap-server")
             .arg("--stdio")

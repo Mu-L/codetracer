@@ -26,7 +26,7 @@ mod test_harness;
 use test_harness::{find_polkavm_flow_test, find_polkavm_recorder, Language, TestRecording};
 
 fn find_db_backend() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_db-backend"))
+    PathBuf::from(env!("CARGO_BIN_EXE_replay-server"))
 }
 
 /// Returns the path to the PolkaVM flow test source file.

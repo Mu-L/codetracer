@@ -57,7 +57,7 @@ fn accept_with_timeout(
 //   starting separating db-backend logic in threads as the first bad commit
 #[cfg(unix)]
 fn _test_backend_dap_server_socket() {
-    let bin = env!("CARGO_BIN_EXE_db-backend");
+    let bin = env!("CARGO_BIN_EXE_replay-server");
     let pid = std::process::id() as usize;
     let trace_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("trace");
 

@@ -26,7 +26,7 @@ mod test_harness;
 use test_harness::{find_circom_flow_test, find_circom_recorder, Language, TestRecording};
 
 fn find_db_backend() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_db-backend"))
+    PathBuf::from(env!("CARGO_BIN_EXE_replay-server"))
 }
 
 /// Returns the path to the Circom flow test source file.

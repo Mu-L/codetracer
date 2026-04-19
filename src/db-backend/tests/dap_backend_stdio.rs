@@ -35,7 +35,7 @@ fn wait_for_child_exit(child: &mut Child, timeout: Duration) -> Option<std::proc
 
 #[test]
 fn dap_server_stdio_initialize_handshake_works() {
-    let bin = env!("CARGO_BIN_EXE_db-backend");
+    let bin = env!("CARGO_BIN_EXE_replay-server");
     let mut child = Command::new(bin)
         .arg("dap-server")
         .arg("--stdio")
@@ -114,7 +114,7 @@ fn dap_server_stdio_initialize_handshake_works() {
 
 #[test]
 fn dap_server_stdio_disconnect_acknowledges_and_exits() {
-    let bin = env!("CARGO_BIN_EXE_db-backend");
+    let bin = env!("CARGO_BIN_EXE_replay-server");
     let mut child = Command::new(bin)
         .arg("dap-server")
         .arg("--stdio")

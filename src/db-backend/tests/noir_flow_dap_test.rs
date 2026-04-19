@@ -10,7 +10,7 @@ mod test_harness;
 use test_harness::{Language, TestRecording};
 
 fn find_db_backend() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_db-backend"))
+    PathBuf::from(env!("CARGO_BIN_EXE_replay-server"))
 }
 
 /// Noir project directory containing the test program (`src/main.nr`).

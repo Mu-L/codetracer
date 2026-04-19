@@ -17,7 +17,7 @@
 // #[timeout(5_000)] // try to detect hanging, e.g. waiting for response that doesn't come
 // #[ignore] // ignored by default, as they depend on closed source ct-rr-worker/also not finished setup
 // fn test_rr() {
-//     let bin = env!("CARGO_BIN_EXE_db-backend");
+//     let bin = env!("CARGO_BIN_EXE_replay-server");
 //     let pid = std::process::id() as usize;
 //     let trace_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("rr-trace");
 

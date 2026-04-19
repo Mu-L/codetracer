@@ -16,7 +16,7 @@ mod test_harness;
 use test_harness::{find_solana_flow_test, find_solana_recorder, Language, TestRecording};
 
 fn find_db_backend() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_db-backend"))
+    PathBuf::from(env!("CARGO_BIN_EXE_replay-server"))
 }
 
 /// Record a Solana trace using synthetic register data and verify

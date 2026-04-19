@@ -11,7 +11,7 @@ mod test_harness;
 use test_harness::{find_fuel_recorder, find_sway_flow_test, Language, TestRecording};
 
 fn find_db_backend() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_db-backend"))
+    PathBuf::from(env!("CARGO_BIN_EXE_replay-server"))
 }
 
 /// Verify the full Sway recording + DAP pipeline works.

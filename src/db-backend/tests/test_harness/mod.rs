@@ -316,7 +316,7 @@ pub struct DapTestClient {
 impl DapTestClient {
     /// Start a new DAP test client connected to db-backend
     pub fn start(temp_dir: &Path, ct_rr_support: &Path) -> Result<Self, String> {
-        let db_backend_bin = env!("CARGO_BIN_EXE_db-backend");
+        let db_backend_bin = env!("CARGO_BIN_EXE_replay-server");
         let socket_path = temp_dir.join("dap.sock");
 
         if socket_path.exists() {
@@ -541,7 +541,7 @@ pub struct DapStdioTestClient {
 impl DapStdioTestClient {
     /// Spawn `db-backend dap-server --stdio` and set up pipes.
     pub fn start() -> Result<Self, String> {
-        let db_backend_bin = env!("CARGO_BIN_EXE_db-backend");
+        let db_backend_bin = env!("CARGO_BIN_EXE_replay-server");
         let mut child = Command::new(db_backend_bin)
             .arg("dap-server")
             .arg("--stdio")

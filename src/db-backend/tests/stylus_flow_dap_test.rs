@@ -15,7 +15,7 @@ use ct_dap_client::test_support::{FlowTestConfig, FlowTestRunner};
 mod test_harness;
 
 fn find_db_backend() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_db-backend"))
+    PathBuf::from(env!("CARGO_BIN_EXE_replay-server"))
 }
 
 /// Returns the path to the Stylus trace fixture directory.

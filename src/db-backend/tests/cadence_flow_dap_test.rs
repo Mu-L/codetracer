@@ -12,7 +12,7 @@ mod test_harness;
 use test_harness::{find_cadence_flow_test, find_cadence_recorder, Language, TestRecording};
 
 fn find_db_backend() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_db-backend"))
+    PathBuf::from(env!("CARGO_BIN_EXE_replay-server"))
 }
 
 /// Full Cadence flow test: record → DAP → breakpoint → verify variables.
