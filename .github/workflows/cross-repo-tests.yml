@@ -72,22 +72,21 @@ jobs:
       - name: Clone native-backend
         uses: metacraft-labs/metacraft-github-actions/clone-repo@main
         with:
-          # TODO: update to codetracer-native-backend after the GitHub repo rename
-          repo: metacraft-labs/codetracer-rr-backend
+          repo: metacraft-labs/codetracer-native-backend
           ref: ${{ steps.resolve-ref.outputs.ref }}
-          path: ${{ github.workspace }}/../codetracer-rr-backend
+          path: ${{ github.workspace }}/../codetracer-native-backend
           gh-token: ${{ secrets.GH_READ_METACRAFT_PRIVATE_REPOS }}
 
       - name: Build ct-native-replay
         run: |
-          CLONE_DIR="$(pwd)/../codetracer-rr-backend"
+          CLONE_DIR="$(pwd)/../codetracer-native-backend"
           nix develop "$CLONE_DIR" --command \
             bash -c "cd '$CLONE_DIR' && cargo build"
 
       - name: Resolve rr-backend environment paths
         id: rr-libs
         run: |
-          CLONE_DIR="$(pwd)/../codetracer-rr-backend"
+          CLONE_DIR="$(pwd)/../codetracer-native-backend"
           # Use markers to extract paths cleanly (nix develop may print banners)
           RAW="$(nix develop "$CLONE_DIR" --command bash -c \
             'echo "___LD_PATH_START___"; echo "$LD_LIBRARY_PATH"; echo "___LD_PATH_END___";
@@ -101,7 +100,7 @@ jobs:
 
       - name: Run cross-repo integration tests
         run: |
-          CT_NATIVE_REPLAY="$(pwd)/../codetracer-rr-backend/target/debug/ct-native-replay"
+          CT_NATIVE_REPLAY="$(pwd)/../codetracer-native-backend/target/debug/ct-native-replay"
           echo "Using ct-native-replay: $CT_NATIVE_REPLAY"
           RR_EXTRA_PATH="${{ steps.rr-libs.outputs.extra_path }}"
           RR_LD="${{ steps.rr-libs.outputs.ld_library_path }}"
