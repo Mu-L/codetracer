@@ -436,11 +436,7 @@ pub fn read_dap_message_from_reader<R: std::io::BufRead>(reader: &mut R) -> DapR
 
 #[cfg(feature = "browser-transport")]
 pub fn setup_onmessage_callback() -> Result<(), DapError> {
-    use std::{
-        cell::RefCell,
-        collections::{HashMap, HashSet},
-        rc::Rc,
-    };
+    use std::rc::Rc;
 
     use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
     use web_sys::{
@@ -448,11 +444,7 @@ pub fn setup_onmessage_callback() -> Result<(), DapError> {
         MessageEvent,
     };
 
-    use crate::{
-        dap_server::{make_transport, Ctx},
-        dap_handler::Handler,
-        transport::{DapTransport, WorkerTransport},
-    };
+    use crate::dap_server::Ctx;
 
     let global = js_sys::global();
 
@@ -460,72 +452,44 @@ pub fn setup_onmessage_callback() -> Result<(), DapError> {
         .dyn_into()
         .map_err(|_| wasm_bindgen::JsValue::from_str("Not running inside a DedicatedWorkerGlobalScope"))?;
 
-    let seq = 1i64;
-    let breakpoints: HashMap<String, HashSet<i64>> = HashMap::new();
-    let handler: Option<Handler> = None;
-    let received_launch = false;
-    let launch_trace_folder = PathBuf::from("");
-    let launch_trace_file = PathBuf::from("");
-    let received_configuration_done = false;
-    let launch_raw_diff_index = None;
-
-    // NOTE: This does not have to be wrapped in a lock
+    // NOTE: This does not have to be wrapped in a lock.
     // This will run in the browser and JS callback code blocks are "critical sections".
-    let mut ctx = Ctx {
-        seq,
-        breakpoints,
-        handler,
-        received_launch,
-        launch_trace_folder,
-        launch_trace_file,
-        received_configuration_done,
-        launch_raw_diff_index,
-    };
-
-    // TODO: Handle error
-    let mut transport = make_transport().unwrap();
+    let mut ctx = Ctx::default();
 
     let t = Rc::new(scope);
 
     let t_clone = t.clone();
 
     let callback = Closure::wrap(Box::new(move |event: MessageEvent| {
-        use serde_wasm_bindgen::to_value;
-        use wasm_bindgen::{JsValue, UnwrapThrowExt};
+        use wasm_bindgen::UnwrapThrowExt;
         use web_sys::js_sys::JSON;
 
         use crate::dap_server::handle_message;
 
         let dap_message_raw = event.data();
 
-        web_sys::console::log_1(&"RAW DAP MESSAGE".into());
-        web_sys::console::log_1(&dap_message_raw);
-
-        t_clone
-            .post_message(&JsValue::from_str("This is a message from the worker!"))
-            .map_err(|_| "Could not convert message")
-            .unwrap_throw();
-
         let dap_message_str = JSON::stringify(&dap_message_raw)
             .unwrap_throw()
             .as_string()
             .unwrap_throw();
 
-        web_sys::console::log_1(&"DAP MESSAGE AS STR".into());
-        web_sys::console::log_1(&JsValue::from_str(&dap_message_str));
-
         let dap_message = from_json(&dap_message_str)
             .map_err(|_| "Could not convert message")
             .unwrap_throw();
 
-        let payload = to_value(&dap_message)
-            .map_err(|_| "Could not convert message")
-            .unwrap_throw();
+        // Create a channel pair. handle_message sends responses via the Sender.
+        // After it returns, we drain the Receiver and post each message to the
+        // main thread via the worker scope. This works because WASM is
+        // single-threaded, so the drain happens synchronously.
+        let (sender, receiver) = std::sync::mpsc::channel::<DapMessage>();
 
-        t_clone.post_message(&payload).unwrap_throw();
+        handle_message(&dap_message, sender, &mut ctx).unwrap_throw();
 
-        // TODO: Handle error
-        handle_message(&dap_message, &mut transport, &mut ctx).unwrap_throw();
+        // Drain all response messages and post them to the main thread.
+        while let Ok(msg) = receiver.try_recv() {
+            let json = serde_json::to_string(&msg).unwrap_throw();
+            t_clone.post_message(&JsValue::from_str(&json)).unwrap_throw();
+        }
     }) as Box<dyn FnMut(_)>)
     .into_js_value()
     .unchecked_into::<Function>();
