@@ -134,10 +134,10 @@ proc uploadSplitTrace*(trace: Trace, slicesDir: string,
 
     # Collect and sort slice .ct files so they upload in the correct order
     # (slice_0000.ct, slice_0001.ct, ...).
-    let sliceFiles = sorted(collect:
+    let sliceFiles = sorted(collect(
       for f in walkDir(slicesDir):
         if f.kind == pcFile and f.path.endsWith(".ct"):
-          f.path)
+          f.path), SortOrder.Ascending)
 
     let sliceCount = sliceFiles.len
     echo "Uploading " & $sliceCount & " pre-split slices from: " & slicesDir
