@@ -337,7 +337,7 @@
 
             installPhase = ''
               mkdir -p $out/bin
-              cp target/release/db-backend $out/bin/
+              cp target/release/replay-server $out/bin/
               cp target/release/virtualization-layers $out/bin/
               cp target/release/schema-generator $out/bin/
             '';
