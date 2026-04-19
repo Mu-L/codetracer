@@ -423,6 +423,20 @@ proc makeScratchpadComponent*(data: Data, id: int, inExtension: bool = false): S
   )
   data.registerComponent(result, Content.Scratchpad)
 
+proc makeRequestPanelComponent*(data: Data, id: int, inExtension: bool = false): RequestPanelComponent =
+  result = RequestPanelComponent(
+    id: id,
+    inExtension: inExtension,
+    panelState: RequestPanelState(
+      requests: @[],
+      selectedIndex: -1,
+      filterMethod: cstring"",
+      filterStatus: cstring"",
+      searchText: cstring"",
+    ),
+  )
+  data.registerComponent(result, Content.RequestPanel)
+
 func setId*(c: ChartComponent, id: int) =
   c.chartId = id
 
@@ -799,6 +813,7 @@ proc makeComponent*(data: Data, content: Content, id: int, path: cstring = "", n
   of Content.AgentWorkspace:  data.makeAgentWorkspaceComponent(id)
   of Content.CaptionBarProgress: data.makeCaptionBarProgressComponent(id)
   of Content.AgentActivityDeepReview: data.makeAgentActivityDeepReviewComponent(id)
+  of Content.RequestPanel:    data.makeRequestPanelComponent(id)
   # of Content.PointList:       data.makePointListComponent()
   else:
     raise newException(ValueError, &"Could not create a component. Unexpected content {content} type was given.")

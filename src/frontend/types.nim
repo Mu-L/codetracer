@@ -878,6 +878,28 @@ type
     testResults*: seq[DeepReviewNotification]
     expanded*: bool
 
+  # -- HTTP Request Panel (M3) ------------------------------------------------
+  HttpRequestEntry* = object
+    ## A single captured HTTP request with timing and size metadata.
+    id*: int
+    httpMethod*: cstring
+    url*: cstring
+    statusCode*: int
+    durationMs*: int
+    responseSize*: int
+    startGEID*: int64        ## Global Event ID at handler entry
+    sliceFile*: cstring      ## Optional path to the trace slice
+
+  RequestPanelState* = object
+    requests*: seq[HttpRequestEntry]
+    selectedIndex*: int
+    filterMethod*: cstring   ## "" = all, "GET", "POST", etc.
+    filterStatus*: cstring   ## "" = all, "2xx", "4xx", "5xx"
+    searchText*: cstring     ## Free-text URL search
+
+  RequestPanelComponent* = ref object of Component
+    panelState*: RequestPanelState
+
   LowLevelCodeComponent* = ref object of Component
     editor*: EditorViewComponent
     instructionsMapping*: JsAssoc[int, int]

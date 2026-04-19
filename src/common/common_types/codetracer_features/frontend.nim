@@ -260,7 +260,8 @@ type
     DeepReview = 36,
     AgentWorkspace = 37,
     CaptionBarProgress = 38,
-    AgentActivityDeepReview = 39
+    AgentActivityDeepReview = 39,
+    RequestPanel = 40
 
   ConnectionLossReason* = enum
     ConnectionLossNone,
