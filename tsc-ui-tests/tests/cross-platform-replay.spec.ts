@@ -19,8 +19,7 @@ import * as path from "node:path";
 import * as childProcess from "node:child_process";
 import * as process from "node:process";
 
-import { test as base, expect } from "@playwright/test";
-import { chromium } from "playwright";
+import { test as base, expect, chromium } from "@playwright/test";
 
 import { getFreeTcpPort } from "../lib/port-allocator";
 
@@ -232,14 +231,10 @@ const platforms: string[] = (() => {
 // Tests
 // ---------------------------------------------------------------------------
 
-// Use a longer timeout: the backend needs to parse a trace that may have been
-// produced on a different platform.
-base.setTimeout(120_000);
-
 base.describe("cross-platform trace replay", () => {
   // Each test spawns ct host on its own ports, but run serially to avoid
   // resource contention.
-  base.describe.configure({ mode: "serial" });
+  base.describe.configure({ mode: "serial", timeout: 120_000 });
 
   base.skip(
     platforms.length === 0,
@@ -273,7 +268,7 @@ base.describe("cross-platform trace replay", () => {
           codetracerPath,
           [
             "host",
-            "--trace-path", traceFolder,
+            `--trace-path=${traceFolder}`,
             `--port=${httpPort}`,
             `--backend-socket-port=${backendPort}`,
             `--frontend-socket=${backendPort}`,
