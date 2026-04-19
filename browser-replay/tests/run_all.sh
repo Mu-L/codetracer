@@ -22,6 +22,7 @@ echo "=== Browser Replay Test Suite ==="
 
 run_test "Transport Infrastructure" "$SCRIPT_DIR/test_transport.sh"
 run_test "Emulator WASM API (native)" "$SCRIPT_DIR/test_emulator_api_native.sh"
+run_test "E2E WASM Module Serving" "$SCRIPT_DIR/test_wasm_e2e.sh"
 
 echo ""
 echo "=========================================="
