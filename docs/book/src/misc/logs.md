@@ -121,6 +121,42 @@ zip -j codetracer-logs.zip \
 echo "Logs saved to codetracer-logs.zip"
 ```
 
+## Frontend logs
+
+The CodeTracer frontend (the GUI) logs to the browser/Electron console.
+These logs are visible in the browser's Developer Tools (F12).
+
+### Desktop (Electron)
+
+Open the Developer Tools console:
+
+- **Menu**: View → Toggle Developer Tools
+- **Keyboard**: `Ctrl+Shift+I` (Linux/Windows) or `Cmd+Option+I` (macOS)
+
+The console shows frontend log messages with timestamps, log levels
+(DEBUG/WARN/ERROR), file locations, and task IDs.
+
+To capture Electron console output to a file, launch CodeTracer with
+the `--enable-logging` flag:
+
+```bash
+ct replay my-trace -- --enable-logging --log-file=/tmp/ct-frontend.log
+```
+
+### Browser mode (ct host)
+
+Open the browser's Developer Tools (F12) and switch to the Console tab.
+Frontend log messages appear with the same format as in Electron.
+
+To filter CodeTracer messages from other page output, type `ct` or
+`codetracer` in the console filter box.
+
+### Index/server process (ct host)
+
+The `ct host` process logs to stdout. When running `ct host` from a
+terminal, these messages appear directly. In the Playwright test
+infrastructure, they are captured via the process's stdout pipe.
+
 ## Configuration file
 
 CodeTracer's configuration is stored at:
