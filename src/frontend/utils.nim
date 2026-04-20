@@ -362,7 +362,7 @@ proc makeCalltraceComponent*(data: Data, id: int, inExtension: bool = false): Ca
     inExtension: inExtension,
     config: Config(calltrace: true), #TODO: For now hardcoded
     isDbBasedTrace: true, #TODO: For now hardcoded needs to be set dynamically to the component
-    callTraceMode: ctmReal,
+    asyncFlowMode: afmReal,
     continuationLinks: @[],
     asyncThreads: @[],
     continuationsByCallKey: JsAssoc[cstring, ContinuationLinkInfo]{},

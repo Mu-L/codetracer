@@ -1217,15 +1217,15 @@ proc asyncFlowToggleView(self: CalltraceComponent): VNode =
     span(class = "async-toggle-label"):
       text "Call Trace:"
     tdiv(class = "async-toggle-buttons"):
-      let realClass = if self.callTraceMode == ctmReal: "toggle-btn active" else: "toggle-btn"
-      let virtualClass = if self.callTraceMode == ctmVirtual: "toggle-btn active" else: "toggle-btn"
+      let realClass = if self.asyncFlowMode == afmReal: "toggle-btn active" else: "toggle-btn"
+      let virtualClass = if self.asyncFlowMode == afmVirtual: "toggle-btn active" else: "toggle-btn"
       button(class = cstring(realClass)):
         proc onclick(ev: Event, v: VNode) =
-          self.callTraceMode = ctmReal
+          self.asyncFlowMode = afmReal
         text "Real"
       button(class = cstring(virtualClass)):
         proc onclick(ev: Event, v: VNode) =
-          self.callTraceMode = ctmVirtual
+          self.asyncFlowMode = afmVirtual
         text "Virtual"
 
 proc setContinuationLinks*(self: CalltraceComponent, links: seq[ContinuationLinkInfo]) =
@@ -1278,7 +1278,7 @@ method render*(self: CalltraceComponent): VNode =
       # if not self.inExtension and not self.isDbBasedTrace:
       #  filterCalltraceView(self)
     if self.service.isCalltrace:
-      if self.callTraceMode == ctmVirtual:
+      if self.asyncFlowMode == afmVirtual:
         tdiv(class = "calltrace-virtual-placeholder"):
           text "Virtual call trace: follow the ↗ links to navigate async continuations"
       else:

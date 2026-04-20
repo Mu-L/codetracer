@@ -722,9 +722,9 @@ type
     kind*: CalltraceLineKind
     call*: Call
 
-  CallTraceMode* = enum
-    ctmReal      ## Show the actual call trace as executed
-    ctmVirtual   ## Show the logical async flow (follow continuations)
+  AsyncFlowMode* = enum
+    afmReal      ## Show the actual call trace as executed
+    afmVirtual   ## Show the logical async flow (follow continuations)
 
   ContinuationLinkInfo* = ref object
     registrationGEID*: int64
@@ -779,7 +779,7 @@ type
     forceRerender*: JsAssoc[cstring, bool]
 
     # Async flow visualization (M4)
-    callTraceMode*: CallTraceMode
+    asyncFlowMode*: AsyncFlowMode
     continuationLinks*: seq[ContinuationLinkInfo]
     asyncThreads*: seq[AsyncThreadInfo]
     # Map from call key to continuation link (for showing jump icons)
