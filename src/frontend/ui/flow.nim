@@ -1601,13 +1601,32 @@ proc clearLoopStates*(self: FlowComponent) =
 proc clearStepNodes*(self: FlowComponent) =
   self.stepNodes = JsAssoc[int, kdom.Node]{}
 
+proc removeViewZones(self: FlowComponent, zones: JsAssoc[int, int]) =
+  if self.inExtension or self.editorUI.isNil or self.editorUI.monacoEditor.isNil:
+    return
+
+  self.editorUI.monacoEditor.changeViewZones do (view: js):
+    for zoneId in zones:
+      try:
+        view.removeZone(zoneId)
+      except:
+        discard
+
 proc clearViewZones(self: FlowComponent) =
+  self.removeViewZones(self.viewZones)
   self.viewZones = JsAssoc[int, int]{}
+
+proc clearLoopViewZones(self: FlowComponent) =
+  self.removeViewZones(self.loopViewZones)
+  self.loopViewZones = JsAssoc[int, int]{}
 
 proc resetFlow*(self: FlowComponent) =
   self.clearSliders()
-  # self.clearInline()
+  # Inline flow uses Monaco decorations that must be removed before any redraw,
+  # otherwise unrelated UI redraws stack duplicate inline values in the editor.
+  self.clearInline()
   self.clearMultiline()
+  self.clearLoopViewZones()
   self.clearParallel()
 
   self.clearLoopStates()

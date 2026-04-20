@@ -1,5 +1,4 @@
 import ../utils, ../../common/ct_event, value, ui_imports, shell, editor, times, std/[strformat, jsconsole]
-from dom import Node
 
 const HEIGHT_OFFSET = 2
 const AGENT_MSG_DIV = "msg-content"
@@ -18,6 +17,9 @@ proc setDiffModel*(editor: DiffEditor, original, modified: js)
 proc setValue*(model: js, value: cstring)
   {.importjs: "#.setValue(#)".}
 
+proc computedFontSizePx(el: js): float
+  {.importjs: "parseFloat(window.getComputedStyle(#).fontSize)".}
+
 var originalModel = createModel("".cstring, "plaintext".cstring)
 var modifiedModel = createModel("".cstring, "plaintext".cstring)
 
@@ -29,8 +31,14 @@ proc scrollAgentCom() =
 proc autoResizeTextarea(id: cstring) =
   let el = document.getElementById(id)
   if el.isNil: return
+  let fontSizePx = computedFontSizePx(el.toJs)
   el.style.height = "auto"
-  el.style.height = $el.toJs.scrollHeight & "px"
+  let heightInEm =
+    if fontSizePx > 0:
+      el.toJs.scrollHeight.to(float) / fontSizePx
+    else:
+      el.toJs.scrollHeight.to(float)
+  el.style.height = cstring($(heightInEm) & "em")
   el.toJs.scrollTop = el.toJs.scrollHeight.to(int) + HEIGHT_OFFSET
 
 proc componentBySessionId(sessionId: cstring): AgentActivityComponent =
@@ -56,7 +64,7 @@ proc createUserMessageContent(msg: AgentMessage): VNode =
         tdiv(class="user-img")
         span(class="user-name"): text "author"
       tdiv(class="msg-controls"):
-        tdiv(class="command-palette-copy-button")
+        button(class="ct-button-image-sm-secondary command-palette-copy-button", `type`="button")
         # tdiv(class="command-palette-edit-button")
     tdiv(class="msg-content"):
       text msg.content
@@ -74,7 +82,7 @@ proc createAgentMessageContent(self: AgentActivityComponent, msg: AgentMessage):
         if msg.isLoading and not msg.canceled:
           span(class="ai-status")
       tdiv(class="msg-controls"):
-        tdiv(class="command-palette-copy-button")
+        button(class="ct-button-image-sm-secondary command-palette-copy-button", `type`="button")
         # tdiv(class="command-palette-upload-button")
         # tdiv(class="command-palette-redo-button")
     tdiv(class="msg-content", id = fmt"{AGENT_MSG_DIV}-{msg.id}"):
@@ -100,7 +108,7 @@ proc createTerminalContent(self: AgentActivityComponent, term: AgentTerminal): V
     tdiv(class="header-wrapper"):
       tdiv(class="task-name"): text fmt"Terminal {term.id}"
       tdiv(class="msg-controls"):
-        tdiv(class="command-palette-copy-button", style=style(StyleAttr.marginRight, "6px".cstring))
+        button(class="ct-button-image-sm-secondary command-palette-copy-button terminal-copy-button", `type`="button")
         tdiv(class="agent-model-img")
     tdiv(id=fmt"shellComponent-{term.shell.id}{self.commandInputId}", class="shell-container")
 
@@ -242,7 +250,7 @@ proc updateAgentUi*(self: AgentActivityComponent, promptText: cstring) =
   self.updateAgentMessageContent(PLACEHOLDER_MSG, "".cstring, false, AgentMessageAgent)
   # self.addMessageToSession(self.currentSessionKey(), userMessageId)
   # self.addMessageToSession(self.currentSessionKey(), PLACEHOLDER_MSG)
-  discard setTimeout(proc() = scrollAgentCom(), 0)
+  discard kdom.setTimeout(proc() = scrollAgentCom(), 0)
   redrawAll()
   sendAcpPrompt(self, promptText)
   self.promptInFlight = true
@@ -273,7 +281,7 @@ proc passwordPromp(self: AgentActivityComponent): VNode =
   result = buildHtml(tdiv(class="prompt-wrapper")):
     tdiv(class="password-wrapper"):
       input(class="password-prompt-input", `type`="password", placeholder="Password to continue")
-      tdiv(class="password-continue-button"):
+      button(class="ct-button-sm-primary password-continue-button", `type`="button"):
         text "Continue"
 
 proc parseUnifiedDiff(patch: string): (string, string) =
@@ -322,7 +330,7 @@ proc createPasswordPrompt(self: AgentActivityComponent): VNode =
   result = buildHtml(tdiv(class="prompt-wrapper")):
     tdiv(class="password-wrapper"):
       input(class="password-prompt-input", `type`="password", placeholder="Password to continue")
-      tdiv(class="password-continue-button"):
+      button(class="ct-button-sm-primary password-continue-button", `type`="button"):
         text "Continue"
 
 proc createUserPrompt(self: AgentActivityComponent, prompt: cstring, options: seq[cstring]): VNode =
@@ -331,7 +339,7 @@ proc createUserPrompt(self: AgentActivityComponent, prompt: cstring, options: se
       text prompt
     tdiv(class="user-options-wrapper"):
       for option in options:
-        tdiv(class="user-option"):
+        button(class="ct-button-sm-secondary user-option", `type`="button"):
           text option
 
 proc loadingState(self: AgentActivityComponent): VNode =
@@ -349,7 +357,7 @@ method render*(self: AgentActivityComponent): VNode =
   # let source =
   self.kxi.afterRedraws.add(proc() =
     if not self.kxi.isNil:
-      self.inputField = cast[dom.Node](jq(fmt"#{inputId}"))
+      self.inputField = cast[typeof(self.inputField)](jq(fmt"#{inputId}"))
       # self.shell.createShell() #TODO: Maybe pass in the lines and column sizes
 
       # Use "rust" for syntax highlighting on both side
@@ -439,7 +447,7 @@ method render*(self: AgentActivityComponent): VNode =
           #     tdiv(class="task-name"):
           #       text "Running task..."
           #     tdiv(class="msg-controls"):
-          #       tdiv(class="command-palette-copy-button", style=style(StyleAttr.marginRight, "6px".cstring))
+          #       tdiv(class="command-palette-copy-button", style=style(StyleAttr.marginRight, "0.375em".cstring))
           #       tdiv(
           #         class="agent-model-img"
           #       )
@@ -485,8 +493,9 @@ method render*(self: AgentActivityComponent): VNode =
       )
       tdiv(class="agent-buttons-container"):
         if not self.reRecordInProgress:
-          tdiv(
-            class="agent-button new-agent-instance",
+          button(
+            class="ct-button-image-md-secondary agent-button agent-icon-button new-agent-instance",
+            `type`="button",
             onclick = proc =
               let options = RunTestOptions(newWindow: true, path: data.services.debugger.location.path, testName: "")
               self.reRecordInProgress = true
@@ -494,33 +503,38 @@ method render*(self: AgentActivityComponent): VNode =
               redrawAll()
               # TODO: For now only for the demo hardcode before
               #       we figure out how to check when the other process has started
-              discard setTimeout(proc() =
+              discard kdom.setTimeout(proc() =
                 self.reRecordInProgress = false
                 redrawAll(),
                 10000
               )
           )
         else:
-          tdiv(
-            class="agent-button agent-progress-loading"
+          button(
+            class="ct-button-image-md-secondary agent-button agent-icon-button agent-progress-loading",
+            `type`="button",
+            disabled = toDisabled(true)
           )
-        tdiv(
-          class="agent-button",
+        button(
+          class="ct-button-md-secondary agent-button agent-add-context-button",
+          `type`="button",
           onclick = proc =
             echo "#TODO: add a file"
         ):
           span(class="add-file-img")
           text "Add files and more"
-        tdiv(
-          class="agent-button agent-model-select",
+        button(
+          class="ct-button-md-secondary agent-button agent-model-select",
+          `type`="button",
           onclick = proc =
             echo "#TODO: Open the model table"
         ):
           tdiv(): text "GPT 5"
           tdiv(class="agent-model-img")
         if not self.isLoading:
-          tdiv(
-            class="agent-start-button",
+          button(
+            class="ct-button-image-md-primary agent-submit-button agent-start-button",
+            `type`="button",
             onclick = proc =
               self.setActiveAgent()
               self.submitPrompt()
@@ -529,8 +543,9 @@ method render*(self: AgentActivityComponent): VNode =
               self.sessionMessageIds[self.sessionId][^1].isLoading = true
           )
         else:
-          tdiv(
-            class="agent-stop-button",
+          button(
+            class="ct-button-image-md-secondary agent-submit-button agent-stop-button",
+            `type`="button",
             onclick = proc =
               var cancelId = cstring""
               if self.activeAgentMessageId.len > 0:

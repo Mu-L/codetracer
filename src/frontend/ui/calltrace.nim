@@ -519,24 +519,58 @@ proc searchResultsView(self: CalltraceComponent): VNode =
     elif self.searchText.len() > 0:
       emptyResultView(self)
 
+func calltraceSearchInputId(self: CalltraceComponent): cstring =
+  cstring(fmt"calltrace-search-input-{self.id}")
+
+proc submitCalltraceSearch(self: CalltraceComponent) =
+  let query = if self.searchText.isNil: cstring"" else: self.searchText
+
+  if query.len == 0:
+    self.searchResults = @[]
+    self.isSearching = false
+    self.redraw()
+    return
+
+  self.lastQuery = query
+  self.api.emit(CtSearchCalltrace, CallSearchArg(value: query))
+
 proc searchCalltraceView(self: CalltraceComponent): VNode =
   let onSearch = proc(ev: KeyboardEvent, v: VNode) =
-    ev.target.focus()
     if ev.keyCode == ENTER_KEY_CODE:
+      ev.preventDefault()
+      ev.stopPropagation()
       self.searchText = cast[cstring](ev.target.toJs.value)
-      self.api.emit(CtSearchCalltrace, CallSearchArg(value: self.searchText))
+      self.submitCalltraceSearch()
 
   buildHtml(
-    input(
-      tabIndex = "0",
-      class = "ct-input-panel ct-input-search-image",
-      `type` = "text",
-      placeholder = "Search",
-      onkeydown = onSearch,
-      onblur = proc() =
-        self.isSearching = false
-    )
+    tdiv(class = "calltrace-search")
   ):
+    form(
+      class = &"calltrace-search-form-{self.id}",
+      onsubmit = proc(ev: Event, v: VNode) =
+        ev.preventDefault()
+        ev.stopPropagation()
+        self.submitCalltraceSearch()
+    ):
+      input(
+        tabIndex = "0",
+        id = self.calltraceSearchInputId(),
+        class = fmt"calltrace-search-input calltrace-search-input-{self.id} ct-input-panel ct-input-search-image",
+        `type` = "text",
+        value = if self.searchText.isNil: cstring"" else: self.searchText,
+        placeholder = "Search",
+        oninput = proc(ev: Event, v: VNode) =
+          self.searchText = cast[cstring](ev.target.toJs.value)
+          if self.searchText.len == 0 and (self.isSearching or self.searchResults.len > 0):
+            self.searchResults = @[]
+            self.isSearching = false
+            self.redraw()
+        ,
+        onkeydown = onSearch,
+        onblur = proc() =
+          self.isSearching = false
+      )
+
     searchResultsView(self)
 
 method locationLang*(self: CalltraceComponent): Lang =
@@ -808,17 +842,19 @@ proc localCalltraceView*(self: CalltraceComponent): VNode =
     tdiv(class="calltrace-lines")
 
 proc registerSearchRes(self: CalltraceComponent, searchResults: seq[Call]) =
-  self.searchResults = searchResults
-  self.isSearching = true
-  self.redraw()
-
+  let current = if self.searchText.isNil: cstring"" else: self.searchText
 
   self.lastSearch = now()
 
-  let current = cast[cstring](jq(".calltrace-search-input").toJs.value)
-
   if current.len > 0:
+    self.searchResults = searchResults
+    self.isSearching = true
     self.lastChange = self.lastSearch
+  else:
+    self.searchResults = @[]
+    self.isSearching = false
+
+  self.redraw()
 
 func findCall(call: Call, key: cstring): Call =
   if call.key == key:

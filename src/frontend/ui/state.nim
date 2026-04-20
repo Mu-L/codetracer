@@ -14,8 +14,32 @@ from std / dom import nil # imports dom, without directly its items: you need to
 
 proc calculateValueWidth(self: StateComponent):float = self.totalValueWidth - self.nameWidth
 proc watchView(self: StateComponent): VNode
+proc loadLocals*(self: StateComponent)
 # proc headerView(self: StateComponent): VNode
 proc excerpt(self: StateComponent): VNode
+
+func watchInputId(self: StateComponent): cstring =
+  cstring(fmt"watch-{self.id}")
+
+proc submitWatchExpression(self: StateComponent) =
+  if self.stableBusy:
+    return
+
+  let selector = cstring(fmt"#{self.watchInputId()}")
+  let input = jq(selector)
+
+  if input.isNil or input.toJs.length.to(int) == 0:
+    return
+
+  let expression = input.toJs.value.to(cstring)
+
+  if ($expression).find("\n") != NO_INDEX:
+    self.api.errorMessage(cstring"newlines forbidden in watch expressions: not registered")
+    return
+
+  self.watchExpressions.add(expression)
+  self.loadLocals()
+  input.toJs.value = cstring""
 
 
 method restart*(self: StateComponent) =
@@ -257,28 +281,27 @@ proc excerpt(self: StateComponent): VNode =
 
 proc watchView(self: StateComponent): VNode =
   result = buildHtml(
-    input(
+    tdiv(id = "gdb-evaluate")
+  ):
+    form(
       onsubmit = proc(ev: Event, v: VNode) =
-      ev.stopPropagation()
-      ev.preventDefault()
-
-      if not self.stableBusy:
-        var e = jq("#watch").toJs.value.to(cstring)
-
-        if ($e).find("\n") != NO_INDEX:
-          self.api.errorMessage(cstring"newlines forbidden in watch expressions: not registered")
-        else:
-          self.watchExpressions.add(e)
-          self.loadLocals()
-          jq("#watch").toJs.value = cstring"",
+        ev.stopPropagation()
+        ev.preventDefault()
+        self.submitWatchExpression(),
       onmousemove = proc(ev: Event, tg:VNode) = ev.stopPropagation(),
-      onclick = proc(ev: Event, tg:VNode) = ev.stopPropagation(),
-      `type`="text",
-      placeholder="Enter a watch expression",
-      id="watch",
-      class="ct-input-panel ct-fill-available"
-    )
-  )
+      onclick = proc(ev: Event, tg:VNode) = ev.stopPropagation()
+    ):
+      input(
+        `type`="text",
+        placeholder="Enter a watch expression",
+        id = self.watchInputId(),
+        class="ct-input-panel ct-fill-available",
+        onkeydown = proc(ev: KeyboardEvent, v: VNode) =
+          if ev.keyCode == ENTER_KEY_CODE:
+            ev.stopPropagation()
+            ev.preventDefault()
+            self.submitWatchExpression()
+      )
 
 
 method onCompleteMove*(self: StateComponent, response: MoveState) {.async.} =

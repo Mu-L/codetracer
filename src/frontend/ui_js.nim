@@ -1795,16 +1795,15 @@ proc updateEditors(data: Data) =
       options.lineNumbersMinChars = monacoLineNumbersMinChars(diffEditor.getModel().getLineCount())
       options.lineDecorationsWidth = monacoLineDecorationsWidth(data.ui.fontSize)
       diffEditor.updateOptions(options)
-  # # Agent diff Editors
-  # for a in data.ui.componentMapping[Content.AgentActivity]:
-  #   # for now only one TODO: Make more than one diff editor active at a time
-  #   let agent = cast[AgentActivityComponent](a)
-  #   let modEditor = agent.diffEditor.getModifiedEditor()
-  #   let orgEditor = agent.diffEditor.getOriginalEditor()
+  # Agent diff Editors
+  for a in data.ui.componentMapping[Content.AgentActivity]:
+    let agent = cast[AgentActivityComponent](a)
+    for _, diff in agent.diffEditors:
+      let orgEditor = diff.getOriginalEditor()
 
-  #   let options = orgEditor.getOptions()
-  #   options.fontSize = data.ui.fontSize
-  #   agent.diffEditor.updateOptions(cast[MonacoEditorOptions](options))
+      let options = orgEditor.getOptions()
+      options.fontSize = data.ui.fontSize
+      diff.updateOptions(cast[MonacoEditorOptions](options))
 
 proc updateDataTables(data: Data) =
   for _, component in data.ui.componentMapping[Content.EventLog]:
