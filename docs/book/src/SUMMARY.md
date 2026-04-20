@@ -45,6 +45,7 @@
 ### Misc
 
 - [Contributing](./CONTRIBUTING.md)
+- [Logs and Diagnostics](./misc/logs.md)
 - [Troubleshooting](./misc/troubleshooting.md)
 - [Environment variables](./misc/environment_variables.md)
 - [Building the documentation](./misc/building_docs.md)

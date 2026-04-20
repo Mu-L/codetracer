@@ -3,7 +3,8 @@
 CodeTracer is currently in an experimental state, so we expect that there are many bugs that have not been found as of now.
 If you find any bug, please report it as an issue on GitHub.
 
-In the meantime, you can use this page to fix some issues that are somewhat common.
+> **Tip:** When reporting a bug, include the relevant log files. See the
+> [Logs and Diagnostics](./logs.md) page for how to find and collect logs.
 
 ### Fixing outdated configuration/layout files
 
