@@ -146,9 +146,12 @@ proc printMaterializedTrace(path: string, opts: PrintOptions) =
     try:
       let meta = parseJson(readFile(metadataPath))
       echo "Trace metadata:"
-      echo fmt"  Program: {meta{""program""}.getStr(""unknown"")}"
-      echo fmt"  Working dir: {meta{""workdir""}.getStr(""-"")}"
-      echo fmt"  Format: {meta{""format""}.getStr(""-"")}"
+      let program = meta{"program"}.getStr("unknown")
+      let workdir = meta{"workdir"}.getStr("-")
+      let format = meta{"format"}.getStr("-")
+      echo "  Program: " & program
+      echo "  Working dir: " & workdir
+      echo "  Format: " & format
       echo ""
     except CatchableError:
       discard
@@ -202,7 +205,10 @@ proc printMaterializedTrace(path: string, opts: PrintOptions) =
         if opts.format == "json":
           echo trimmed
         elif opts.format == "csv":
-          echo fmt"{evType},{ev{""function""}.getStr(""-"")},{ev{""file""}.getStr(""-"")},{ev{""line""}.getInt(0)}"
+          let fn = ev{"function"}.getStr("-")
+          let file = ev{"file"}.getStr("-")
+          let line = ev{"line"}.getInt(0)
+          echo evType & "," & fn & "," & file & "," & $line
       except CatchableError:
         discard
     if opts.format != "json" and opts.format != "csv":
