@@ -3,7 +3,7 @@ import
   ../../common/[ paths, types, intel_fix, install_utils,
                 trace_index, install_progress ],
   ../utilities/[ git ],
-  ../cli/[ logging, list, help, build],
+  ../cli/[ logging, list, help, build, print_trace],
   ../online_sharing/[ upload, download, delete, remote,
                       activate_command, check_license_command, remote_config ],
   ../trace/[ replay, record, run, metadata, host, import_command ],
@@ -264,6 +264,15 @@ proc runInitial*(conf: CodetracerConf) =
     #   notSupportedCommand(conf.cmd)
     of StartupCommand.list:
       listCommand(conf.listTarget, conf.listFormat)
+    of StartupCommand.print:
+      let printOpts = PrintOptions(
+        path: conf.printPath,
+        filter: conf.printFilter.get(""),
+        function: conf.printFunction.get(""),
+        limit: conf.printLimit.get(0),
+        format: conf.printFormat.get("text"),
+      )
+      runPrint(printOpts)
     of StartupCommand.help:
       displayHelp()
     of StartupCommand.console:

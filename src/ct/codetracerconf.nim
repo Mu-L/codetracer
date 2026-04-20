@@ -64,6 +64,7 @@ type
     # nim,
 
     list,
+    print,    ## Print trace events in human-readable format
     help,
 
     electron,
@@ -297,6 +298,40 @@ type
         defaultValue: "local",
         desc: "target for list: local or remote"
       .}: string
+    of print:
+      printPath* {.
+        argument,
+        desc: "Path to trace directory, " &
+          ".ct file, or JSONL manifest"
+      .}: string
+
+      printFilter* {.
+        name: "filter",
+        abbr: "f",
+        desc: "Filter events " &
+          "(e.g. 'calls', 'steps', " &
+          "'http', 'errors')"
+      .}: Option[string]
+
+      printFunction* {.
+        name: "function",
+        desc: "Show only events for " &
+          "this function name"
+      .}: Option[string]
+
+      printLimit* {.
+        name: "limit",
+        abbr: "n",
+        desc: "Maximum number of events " &
+          "to print"
+      .}: Option[int]
+
+      printFormat* {.
+        name: "format",
+        desc: "Output format: " &
+          "text (default), json, csv"
+      .}: Option[string]
+
     of help:
       helpArgs* {.
         ignore
