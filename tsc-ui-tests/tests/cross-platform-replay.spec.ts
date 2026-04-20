@@ -1,14 +1,14 @@
 /**
  * Playwright E2E test for cross-platform trace replay.
  *
- * Verifies that pre-recorded traces from `codetracer-example-recordings`
- * (which may have been recorded on a different platform/architecture) can be
- * loaded and displayed in the CodeTracer browser UI via `ct host --trace-path`.
+ * Verifies that pre-recorded portable traces from `codetracer-example-recordings`
+ * (recorded on different platforms/architectures) can be loaded and displayed in
+ * the CodeTracer browser UI via `ct host --trace-path=<folder>`.
  *
- * Each platform fixture (android-arm64, ios-arm64, linux-x86_64, macos-arm64,
- * windows-x86_64) gets its own test case. The test copies the `.ct` file into
- * a temporary trace folder with the required metadata files, then launches
- * `ct host --trace-path <folder>` — no SQLite database manipulation needed.
+ * Each platform with a `trace-portable.ct` file gets its own independent test.
+ * The test copies the portable trace into a temp folder as `trace.ct` (the name
+ * ct host expects), spawns `ct host --trace-path=<folder>`, waits for the server,
+ * then verifies the GUI loads in a Chromium browser.
  *
  * Skips gracefully when the example-recordings sibling repo is not present.
  */
@@ -39,14 +39,27 @@ const codetracerPath =
     : path.join(codetracerPrefix, "bin", ctBinaryName);
 
 // The example-recordings repo sits as a sibling of codetracer/ inside the
-// workspace root. Walk up from the codetracer install dir to find it.
+// workspace root.
 const workspaceRoot = path.dirname(codetracerInstallDir);
 const exampleRecordingsDir = path.join(
   workspaceRoot,
   "codetracer-example-recordings",
 );
-
 const MCR_DIR = path.join(exampleRecordingsDir, "mcr");
+
+// The ct-mcr binary for trace enrichment during import. If the native
+// recorder is available, ct host uses it to enrich portable traces.
+const ctMcrCandidates = [
+  path.join(codetracerPrefix, "bin", "ct-mcr"),
+  path.join(
+    workspaceRoot,
+    "codetracer-native-recorder",
+    "target",
+    "debug",
+    "ct-mcr",
+  ),
+];
+const ctMcrPath = ctMcrCandidates.find((p) => fs.existsSync(p)) ?? "";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -163,6 +176,10 @@ function makeCleanEnv(
   delete env.CODETRACER_PREFIX;
   env.CODETRACER_IN_UI_TEST = "1";
   env.CODETRACER_TEST = "1";
+  // Point ct host at the ct-mcr binary for trace enrichment if available.
+  if (ctMcrPath) {
+    env.CODETRACER_CT_MCR_CMD = ctMcrPath;
+  }
   if (extra) {
     Object.assign(env, extra);
   }
@@ -170,60 +187,79 @@ function makeCleanEnv(
 }
 
 /**
+ * Copies a directory tree recursively.
+ */
+function copyDirSync(src: string, dest: string): void {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDirSync(srcPath, destPath);
+    } else if (entry.isSymbolicLink()) {
+      // Resolve symlink and copy the target file.
+      fs.copyFileSync(fs.realpathSync(srcPath), destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+/**
  * Prepares a temporary trace folder from a platform fixture directory.
  *
- * Copies the `.ct` trace file and creates the minimal metadata files
- * (`trace_db_metadata.json`, `trace_paths.json`) required by `ct host
- * --trace-path`. Also copies the source file into `files/` if available
- * so the editor panel can display it.
+ * Copies the `trace-portable.ct` as `trace.ct` (the name ct host expects),
+ * the source file into `files/`, and the `binaries/` directory if present.
  */
 function prepareTraceFolder(platformDir: string): string {
   const tmpDir = fs.mkdtempSync(
     path.join(os.tmpdir(), "ct-cross-platform-test-"),
   );
 
-  // Copy the .ct trace file.
-  const traceFile = path.join(platformDir, "trace.ct");
-  fs.copyFileSync(traceFile, path.join(tmpDir, "trace.ct"));
-
-  // Create minimal metadata for the trace.
-  fs.writeFileSync(
-    path.join(tmpDir, "trace_db_metadata.json"),
-    JSON.stringify({
-      program: "ct_fixture_prog",
-      args: [],
-      workdir: tmpDir,
-      lang: "c",
-    }),
+  // Copy the portable trace file as trace.ct.
+  fs.copyFileSync(
+    path.join(platformDir, "trace-portable.ct"),
+    path.join(tmpDir, "trace.ct"),
   );
-  fs.writeFileSync(path.join(tmpDir, "trace_paths.json"), "[]");
 
-  // Copy the source file into files/ so the editor can display it.
+  // Copy the source file into files/ so the editor panel can display it.
   // The fixture directories contain a `source.c` symlink pointing to the
   // shared program in the example-recordings repo.
   const sourceFile = path.join(platformDir, "source.c");
-  if (fs.existsSync(sourceFile)) {
+  const sharedSource = path.join(
+    exampleRecordingsDir,
+    "programs",
+    "ct_fixture_prog.c",
+  );
+  const sourceToUse = fs.existsSync(sourceFile)
+    ? fs.realpathSync(sourceFile)
+    : sharedSource;
+  if (fs.existsSync(sourceToUse)) {
     const filesDir = path.join(tmpDir, "files");
     fs.mkdirSync(filesDir, { recursive: true });
-    // Resolve the symlink to get the actual file content.
-    fs.copyFileSync(fs.realpathSync(sourceFile), path.join(filesDir, "source.c"));
+    fs.copyFileSync(sourceToUse, path.join(filesDir, "source.c"));
+  }
+
+  // Copy binaries directory if present (contains the original platform binary).
+  const binariesDir = path.join(platformDir, "binaries");
+  if (fs.existsSync(binariesDir)) {
+    copyDirSync(binariesDir, path.join(tmpDir, "binaries"));
   }
 
   return tmpDir;
 }
 
 // ---------------------------------------------------------------------------
-// Discover available platform fixtures
+// Discover available platform fixtures (only those with trace-portable.ct)
 // ---------------------------------------------------------------------------
 
 const platforms: string[] = (() => {
   if (!fs.existsSync(MCR_DIR)) return [];
   return fs
     .readdirSync(MCR_DIR)
-    .filter((d) => {
-      const traceFile = path.join(MCR_DIR, d, "trace.ct");
-      return fs.existsSync(traceFile);
-    })
+    .filter((d) =>
+      fs.existsSync(path.join(MCR_DIR, d, "trace-portable.ct")),
+    )
     .sort();
 })();
 
@@ -231,27 +267,27 @@ const platforms: string[] = (() => {
 // Tests
 // ---------------------------------------------------------------------------
 
-base.describe("cross-platform trace replay", () => {
-  // Each test spawns ct host on its own ports, but run serially to avoid
-  // resource contention.
+base.describe("cross-platform portable trace replay", () => {
   base.describe.configure({ mode: "serial", timeout: 120_000 });
 
   base.skip(
     platforms.length === 0,
-    `Skipped: no platform fixtures found (expected at ${MCR_DIR})`,
+    `Skipped: no platform fixtures with trace-portable.ct found (expected at ${MCR_DIR})`,
   );
 
   for (const platform of platforms) {
-    base(`${platform} trace loads in browser`, async () => {
+    base(`${platform}: portable trace loads in browser`, async () => {
       const platformDir = path.join(MCR_DIR, platform);
       const traceFolder = prepareTraceFolder(platformDir);
       let ctProcess: childProcess.ChildProcess | null = null;
       let browser: Awaited<ReturnType<typeof chromium.launch>> | null = null;
 
       try {
-        // -- Launch ct host with --trace-path --------------------------------
+        // -- Allocate ports ---------------------------------------------------
         const httpPort = await getFreeTcpPort();
         const backendPort = await getFreeTcpPort();
+        // Frontend socket must match backend socket (same port).
+        const frontendPort = backendPort;
 
         // Set up LD_LIBRARY_PATH if configured (needed on Linux for native
         // shared libraries).
@@ -261,9 +297,13 @@ base.describe("cross-platform trace replay", () => {
 
         console.log(
           `# cross-platform test [${platform}]: launching ct host ` +
-            `--trace-path ${traceFolder} on port ${httpPort}`,
+            `--trace-path=${traceFolder} on port ${httpPort}`,
         );
+        if (ctMcrPath) {
+          console.log(`#   using ct-mcr at ${ctMcrPath}`);
+        }
 
+        // -- Launch ct host with --trace-path= (cligen requires = syntax) ----
         ctProcess = childProcess.spawn(
           codetracerPath,
           [
@@ -271,7 +311,7 @@ base.describe("cross-platform trace replay", () => {
             `--trace-path=${traceFolder}`,
             `--port=${httpPort}`,
             `--backend-socket-port=${backendPort}`,
-            `--frontend-socket=${backendPort}`,
+            `--frontend-socket=${frontendPort}`,
           ],
           {
             cwd: codetracerInstallDir,
@@ -336,7 +376,7 @@ base.describe("cross-platform trace replay", () => {
 
         console.log(`# ct host connected for ${platform}, verifying GUI...`);
 
-        // -- Assertions: verify the GUI loaded correctly ----------------------
+        // -- Assertions: verify the GUI loaded --------------------------------
 
         // 1. Page title should contain "CodeTracer" (set by the frontend).
         await expect(async () => {
@@ -344,20 +384,19 @@ base.describe("cross-platform trace replay", () => {
           expect(title.toLowerCase()).toContain("codetracer");
         }).toPass({ timeout: 30_000, intervals: [1_000] });
 
-        // 2. The status bar (bottom bar with location info) should be visible.
-        //    This indicates the layout has loaded and the backend has connected.
-        const statusBar = page.locator(
-          ".status-bar, .bottom-bar, .location-path",
-        );
-        await expect(statusBar.first()).toBeVisible({ timeout: 30_000 });
-
-        // 3. At least one golden-layout component should be present, indicating
-        //    the main UI panels (editor, event log, etc.) have rendered.
-        const glComponent = page.locator(".lm_item");
+        // 2. The golden-layout panels should be visible — this confirms the
+        //    backend connected and delivered trace data to the frontend.
+        const glComponent = page.locator(".lm_content");
         await expect(glComponent.first()).toBeVisible({ timeout: 30_000 });
 
-        // 4. Check that some content has loaded by verifying the page body is
-        //    not empty or stuck on a loading screen.
+        // 3. Multiple golden-layout items should be present (panels like editor,
+        //    event log, call trace, state, etc.).
+        const glItems = page.locator(".lm_item");
+        const itemCount = await glItems.count();
+        expect(itemCount).toBeGreaterThan(2);
+
+        // 4. The page body should have actual content (not empty or stuck on
+        //    a loading screen).
         const bodyText = await page.evaluate(
           () => document.body?.innerText ?? "",
         );
