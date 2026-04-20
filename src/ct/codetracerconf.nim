@@ -332,6 +332,22 @@ type
           "text (default), json, csv"
       .}: Option[string]
 
+      printVerify* {.
+        name: "verify",
+        desc: "Verify recording quality " &
+          "(exit 0 if valid, 1 if not). " &
+          "Checks: trace files exist, " &
+          "events present, " &
+          "HTTP requests found."
+      .}: Option[bool]
+
+      printFollow* {.
+        name: "follow",
+        abbr: "F",
+        desc: "Follow mode: watch for " &
+          "new events (like tail -f)"
+      .}: Option[bool]
+
     of help:
       helpArgs* {.
         ignore

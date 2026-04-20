@@ -23,6 +23,8 @@ type
     function*: string      ## filter by function name
     limit*: int            ## max events to print (0 = unlimited)
     format*: string        ## "text", "json", "csv"
+    verify*: bool          ## verify mode for CI smoke tests
+    follow*: bool          ## follow mode (future: watch for new events)
 
 proc detectTraceType*(path: string): TraceType =
   ## Determine the trace type from a file or directory path.
@@ -253,8 +255,208 @@ proc printTraceDirectory(path: string, opts: PrintOptions) =
     echo fmt"Total: {traceCount} traces"
     echo "Use 'ct print <trace-path>' to inspect a specific trace."
 
+type
+  VerifyResult* = object
+    ## Result of trace verification, used by ``--verify`` for CI smoke tests.
+    valid*: bool
+    traceType*: TraceType
+    eventCount*: int
+    callCount*: int
+    stepCount*: int
+    httpRequestCount*: int
+    sourceFileCount*: int
+    errors*: seq[string]
+
+proc verifySpanManifest(path: string): VerifyResult =
+  ## Verify a JSONL span manifest contains valid HTTP request entries.
+  result.traceType = ttSpanManifest
+  let manifestPath =
+    if fileExists(path): path
+    elif fileExists(path / "session_manifest.jsonl"):
+      path / "session_manifest.jsonl"
+    elif fileExists(path / "codetracer_spans.jsonl"):
+      path / "codetracer_spans.jsonl"
+    else:
+      result.errors.add("No span manifest found")
+      return
+
+  for line in lines(manifestPath):
+    let trimmed = line.strip()
+    if trimmed.len == 0: continue
+    try:
+      let j = parseJson(trimmed)
+      let meta = j{"metadata"}
+      if meta != nil and meta.hasKey("http.method"):
+        result.httpRequestCount += 1
+      else:
+        result.errors.add("Span missing http.method metadata")
+    except CatchableError:
+      result.errors.add("Malformed JSON line")
+
+  result.eventCount = result.httpRequestCount
+  result.valid = result.httpRequestCount > 0 and result.errors.len == 0
+
+proc verifyMaterializedTrace(path: string): VerifyResult =
+  ## Verify a materialized trace directory has the expected files and events.
+  result.traceType = ttMaterialized
+  let traceDir = if dirExists(path): path else: parentDir(path)
+
+  # Check trace files exist
+  let hasMetadata = fileExists(traceDir / "trace_metadata.json")
+  let hasEvents = fileExists(traceDir / "trace.bin") or
+                  fileExists(traceDir / "trace.json") or
+                  fileExists(traceDir / "trace_events.jsonl")
+  let hasPaths = fileExists(traceDir / "trace_paths.json")
+
+  if not hasMetadata:
+    result.errors.add("Missing trace_metadata.json")
+  if not hasEvents:
+    result.errors.add(
+      "Missing trace events file " &
+      "(trace.bin/trace.json/trace_events.jsonl)")
+  if not hasPaths:
+    result.errors.add("Missing trace_paths.json")
+
+  # Count events from JSONL if available
+  if fileExists(traceDir / "trace_events.jsonl"):
+    for line in lines(traceDir / "trace_events.jsonl"):
+      let trimmed = line.strip()
+      if trimmed.len == 0: continue
+      try:
+        let ev = parseJson(trimmed)
+        result.eventCount += 1
+        let evType = ev{"type"}.getStr("")
+        case evType
+        of "call": result.callCount += 1
+        of "step": result.stepCount += 1
+        else: discard
+      except CatchableError:
+        discard
+  elif fileExists(traceDir / "trace.bin"):
+    # Binary trace -- check file size as a proxy for content
+    let size = getFileSize(traceDir / "trace.bin")
+    if size > 100:
+      result.eventCount = 1  # At least something is there
+    else:
+      result.errors.add(
+        "trace.bin is suspiciously small (" &
+        $size & " bytes)")
+
+  # Count source files
+  if hasPaths:
+    try:
+      let paths = parseJson(readFile(traceDir / "trace_paths.json"))
+      result.sourceFileCount = paths.len
+    except CatchableError:
+      discard
+
+  result.valid = result.errors.len == 0 and result.eventCount > 0
+
+proc verifyMcrTrace(path: string): VerifyResult =
+  ## Verify an MCR .ct trace file exists and has reasonable size.
+  result.traceType = ttMcrTrace
+  if not fileExists(path):
+    result.errors.add("File not found: " & path)
+    return
+  let size = getFileSize(path)
+  if size < 100:
+    result.errors.add(
+      "Trace file suspiciously small (" &
+      $size & " bytes)")
+  else:
+    result.eventCount = 1  # We know events exist based on file size
+    result.valid = true
+
+proc verifyTraceDirectory(path: string): VerifyResult =
+  ## Verify a directory containing traces or span manifests.
+  result.traceType = ttTraceDirectory
+  var traceCount = 0
+
+  # Check for span manifest with HTTP requests
+  for candidate in [
+    path / "session_manifest.jsonl",
+    path / "codetracer_spans.jsonl",
+  ]:
+    if fileExists(candidate):
+      let subResult = verifySpanManifest(candidate)
+      result.httpRequestCount += subResult.httpRequestCount
+
+  # Check for individual trace directories
+  for kind, entry in walkDir(path):
+    if kind == pcDir:
+      let subType = detectTraceType(entry)
+      if subType == ttMaterialized:
+        let subResult = verifyMaterializedTrace(entry)
+        result.eventCount += subResult.eventCount
+        result.callCount += subResult.callCount
+        result.stepCount += subResult.stepCount
+        traceCount += 1
+
+  # Check for .ct files
+  for kind, entry in walkDir(path):
+    if kind == pcFile and entry.endsWith(".ct"):
+      traceCount += 1
+      result.eventCount += 1
+
+  if traceCount == 0 and result.httpRequestCount == 0:
+    result.errors.add(
+      "No traces or requests found in directory")
+
+  result.valid = result.errors.len == 0 and
+    (result.eventCount > 0 or result.httpRequestCount > 0)
+
+proc runVerify*(opts: PrintOptions): int =
+  ## Verify a trace and return exit code (0=pass, 1=fail).
+  ## Designed for CI smoke tests:
+  ##   ct print --verify trace-out/ || exit 1
+  let traceType = detectTraceType(opts.path)
+
+  let verifyResult = case traceType
+    of ttSpanManifest:
+      verifySpanManifest(opts.path)
+    of ttMaterialized:
+      verifyMaterializedTrace(opts.path)
+    of ttMcrTrace:
+      verifyMcrTrace(opts.path)
+    of ttTraceDirectory:
+      verifyTraceDirectory(opts.path)
+    of ttUnknown:
+      VerifyResult(
+        valid: false,
+        errors: @[
+          "Cannot detect trace type: " & opts.path])
+
+  # Print concise summary -- one line per metric, PASS/FAIL at end
+  echo "Trace verification: " & opts.path
+  echo "  Type:           " & $verifyResult.traceType
+  echo "  Events:         " & $verifyResult.eventCount
+  if verifyResult.callCount > 0:
+    echo "  Function calls: " & $verifyResult.callCount
+  if verifyResult.stepCount > 0:
+    echo "  Steps:          " & $verifyResult.stepCount
+  if verifyResult.httpRequestCount > 0:
+    echo "  HTTP requests:  " & $verifyResult.httpRequestCount
+  if verifyResult.sourceFileCount > 0:
+    echo "  Source files:   " & $verifyResult.sourceFileCount
+
+  if verifyResult.errors.len > 0:
+    echo "  Errors:"
+    for err in verifyResult.errors:
+      echo "    - " & err
+
+  if verifyResult.valid:
+    echo "  Status:         PASS"
+    return 0
+  else:
+    echo "  Status:         FAIL"
+    return 1
+
 proc runPrint*(opts: PrintOptions) =
   ## Main entry point for the print command.
+  if opts.verify:
+    let exitCode = runVerify(opts)
+    quit(exitCode)
+
   let traceType = detectTraceType(opts.path)
 
   case traceType
