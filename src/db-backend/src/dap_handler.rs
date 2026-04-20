@@ -1888,7 +1888,9 @@ impl Handler {
         args: UpdateTableArgs,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
+        eprintln!("[DEBUG update_table] event_db single_tables={}, global_table={}", self.event_db.single_tables.len(), self.event_db.global_table.len());
         let (table_update, trace_values_option) = self.event_db.update_table(args)?;
+        eprintln!("[DEBUG update_table] result returned");
         if let Some(trace_values) = trace_values_option.as_ref() {
             let trace_event = self.dap_client.tracepoint_locals_event(trace_values)?;
             sender.send(trace_event)?;

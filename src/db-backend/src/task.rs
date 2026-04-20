@@ -115,6 +115,20 @@ where
             Ok(result)
         }
         Value::Object(map) => {
+            // Handle Node.js Buffer format: {"data": [1,1,1,...], "type": "Buffer"}
+            // Nim 2.2's JS backend serializes array[enum, bool] as a Buffer.
+            if let Some(Value::Array(data_arr)) = map.get("data") {
+                if map.get("type").and_then(Value::as_str) == Some("Buffer") {
+                    let mut result = [false; EVENT_KINDS_COUNT];
+                    for (i, v) in data_arr.iter().enumerate() {
+                        if i < EVENT_KINDS_COUNT {
+                            result[i] = value_as_truthy(v);
+                        }
+                    }
+                    return Ok(result);
+                }
+            }
+            // Handle plain object format: {"0": true, "1": true, ...}
             let mut result = [false; EVENT_KINDS_COUNT];
             for (key, val) in &map {
                 if let Ok(idx) = key.parse::<usize>() {
