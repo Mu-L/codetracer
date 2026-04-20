@@ -112,6 +112,8 @@ const EVENT_KIND_TO_DAP_MAPPING: array[CtEventKind, cstring] = [
   InternalNewOperation: "",
   InternalTraceMapUpdate: "",
   CtNotification: "ct/notification",
+  TracepointLocals: "tracepoint-locals",
+  CtTracepointResults: "ct/tracepoint-results",
 ]
 
 var DAP_TO_EVENT_KIND_MAPPING = JsAssoc[cstring, CtEventKind]{}

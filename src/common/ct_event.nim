@@ -71,6 +71,8 @@ type
     InternalNewOperation,
     InternalTraceMapUpdate,
     CtNotification,
+    TracepointLocals,
+    CtTracepointResults,
 
 when defined(js):
   import std / jsffi

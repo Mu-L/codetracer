@@ -531,7 +531,7 @@ proc renderTableResults(
           kind: TraceLogEvent,
           highLevelPath: self.name,
           highLevelLine: self.line,
-          rrEventId: cast[int](datatableRow.rrEventId),
+          # rrEventId: cast[int](datatableRow.rrEventId),
           directLocationRRTicks: cast[int](datatableRow.directLocationRRTicks),
           content: cstring"",
           metadata: cstring"",
@@ -1458,6 +1458,9 @@ method register*(self: TraceComponent, api: MediatorWithSubscribers) =
   )
   api.subscribe(CtUpdatedTrace, proc(kind: CtEventKind, response: TraceUpdate, sub: Subscriber) =
     discard self.onUpdatedTrace(response)
+  )
+  api.subscribe(CtEventKind.TracepointLocals, proc(kind: CtEventKind, response: TraceValues, sub: Subscriber) =
+    discard self.onTracepointLocals(response)
   )
   api.emit(InternalLastCompleteMove, EmptyArg())
 

@@ -34,7 +34,7 @@ proc menuNestedStyle*(self: MenuComponent, value: int, depth: int, separators: i
       left += cast[int](jq(cstring(fmt"#menu-nested-elements-{i}")).toJs.clientWidth)
 
   result = style(
-    (StyleAttr.top, cstring(fmt"{value * 28 + separators * 28 - 28}px")),
+    (StyleAttr.top, cstring(fmt"{value * 28 + separators * 28 - 56}px")),
     (StyleAttr.left, cstring(fmt"calc({left}px + {2 * depth}px)"))
   )
 
