@@ -82,7 +82,7 @@ proc printSpanManifest(path: string, opts: PrintOptions) =
     echo "method,url,status_code,duration_ms,status"
   elif opts.format != "json":
     # Text table header
-    echo fmt"{"#":>4}  {"Method":<8} {"URL":<30} {"Status":<7} {"Duration":<10} {"Status":<6}"
+    echo "   #  Method   URL                            Status  Duration    Status"
     echo "-".repeat(75)
 
   var count = 0
