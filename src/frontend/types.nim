@@ -1451,6 +1451,7 @@ type
     maxNotificationsCount*: int
     showNotifications*: bool
     activeNotificationDuration*: int
+    activeNotificationsHovered*: bool
     searchResults*: SearchResultsComponent
     versionControlBranch*: cstring
     service*: DebuggerService

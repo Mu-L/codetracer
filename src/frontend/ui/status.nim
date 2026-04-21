@@ -1,5 +1,5 @@
 import
-  std/sequtils,
+  std/[sequtils, strutils],
   ../communication,
   ../../common/ct_event,
   ui_imports, flow, shell
@@ -393,12 +393,33 @@ proc deactivateNotification*(self: StatusComponent, notification: Notification) 
 
   self.redraw()
 
-proc convertNotificationKind(notificationKind: NotificationKind): cstring =
-  return cstring(($notificationKind)["Notification".len .. ^1])
+proc canAutoDismiss(notification: Notification): bool =
+  notification.active and not notification.isOperationStatus and notification.actions.len == 0
+
+proc clearNotificationTimer(notification: Notification) =
+  if not notification.hasTimeout:
+    return
+
+  notification.hasTimeout = false
+  windowClearTimeout(notification.timeoutId)
+
+proc notificationKindClass(notificationKind: NotificationKind): string =
+  (($notificationKind)["Notification".len .. ^1]).toLowerAscii()
+
+proc notificationVariantClass(notification: Notification, dismiss: bool): string =
+  ## Keep the three notification variants tied to their current UI context:
+  ## dismissible toast stack -> primary, notification history -> secondary,
+  ## operation-status/debug line -> tertiary.
+  if notification.isOperationStatus:
+    "tertiary"
+  elif dismiss:
+    "primary"
+  else:
+    "secondary"
 
 proc buttonActionView(self: StatusComponent, notification: Notification, buttonAction: NotificationAction): VNode =
 
-  let notificationKind = convertNotificationKind(notification.kind)
+  let notificationKind = notificationKindClass(notification.kind)
 
   buildHtml(
     tdiv(class = "notification-action-wrapper")
@@ -415,30 +436,50 @@ proc notificationActionView(self: StatusComponent, notification: Notification, a
       buttonActionView(self, notification, action)
 
 proc setNotificationTimer(self: StatusComponent, notification: Notification) =
-  if not notification.hasTimeout and notification.actions.len == 0:
-    notification.timeoutId = windowSetTimeout(proc =
-      self.deactivateNotification(notification), self.activeNotificationDuration)
-    notification.hasTimeout = true
+  if self.activeNotificationsHovered or not canAutoDismiss(notification) or notification.hasTimeout:
+    return
+
+  notification.timeoutId = windowSetTimeout(proc =
+    self.deactivateNotification(notification), self.activeNotificationDuration)
+  notification.hasTimeout = true
+
+proc pauseActiveNotificationTimers(self: StatusComponent) =
+  if self.activeNotificationsHovered:
+    return
+
+  self.activeNotificationsHovered = true
+  for notification in self.notifications:
+    if canAutoDismiss(notification):
+      clearNotificationTimer(notification)
+
+proc resumeActiveNotificationTimers(self: StatusComponent) =
+  if not self.activeNotificationsHovered:
+    return
+
+  self.activeNotificationsHovered = false
+  for notification in self.notifications:
+    if canAutoDismiss(notification):
+      self.setNotificationTimer(notification)
 
 proc notificationView(
   self: StatusComponent,
   notification: Notification,
   dismiss: bool = false): VNode =
-  let notificationKind = convertNotificationKind(notification.kind)
-  let secondaryClass = if notification.isOperationStatus: "secondary-notification" else: ""
+  let notificationKind = notificationKindClass(notification.kind)
+  let notificationVariant = notificationVariantClass(notification, dismiss)
   self.setNotificationTimer(notification)
 
   buildHtml(
-    tdiv(class = &"status-notification {notificationKind.toLowerCase()} {notification.active} {secondaryClass}")
+    tdiv(class = &"status-notification ct-notification ct-notification-{notificationKind}-{notificationVariant}")
   ):
     tdiv(class = "notification-wrapper"):
-      tdiv(class = &"notification-icon {notificationKind.toLowerCase()}")
+      tdiv(class = &"notification-icon {notificationKind}")
       tdiv(class = "notification-message"):
         text notification.text
 
       if dismiss:
         tdiv(
-          class = &"notification-button dismiss-notification-button {notificationKind.toLowerCase()}",
+          class = &"notification-button dismiss-notification-button {notificationKind}",
           onclick = proc = self.deactivateNotification(notification)
         )
     for action in notification.actions:
@@ -449,7 +490,15 @@ proc activeNotificationView(self: StatusComponent, notification: Notification): 
 
 proc activeNotificationsView(self: StatusComponent): VNode =
   var count = 0
-  buildHtml(tdiv(id = "active-notifications")):
+  buildHtml(
+    tdiv(
+      id = "active-notifications",
+      onmouseenter = proc(ev: Event, n: VNode) =
+        self.pauseActiveNotificationTimers(),
+      onmouseleave = proc(ev: Event, n: VNode) =
+        self.resumeActiveNotificationTimers()
+    )
+  ):
     for notification in self.notifications:
       if notification.active and not notification.isOperationStatus and count < NOTIFICATION_LIMIT:
         activeNotificationView(self, notification)
