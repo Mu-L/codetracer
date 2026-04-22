@@ -3,7 +3,9 @@ use std::io::{BufRead, Write};
 use crate::protocol::{from_json, to_json, DapMessage};
 
 /// Read a DAP message using Content-Length framing from a buffered reader.
-pub fn read_dap_message<R: BufRead>(reader: &mut R) -> Result<DapMessage, Box<dyn std::error::Error + Send + Sync>> {
+pub fn read_dap_message<R: BufRead>(
+    reader: &mut R,
+) -> Result<DapMessage, Box<dyn std::error::Error + Send + Sync>> {
     let mut header = String::new();
     reader.read_line(&mut header)?;
 
@@ -33,7 +35,10 @@ pub fn read_dap_message<R: BufRead>(reader: &mut R) -> Result<DapMessage, Box<dy
 }
 
 /// Write a DAP message using Content-Length framing to a writer.
-pub fn write_dap_message<W: Write>(writer: &mut W, message: &DapMessage) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub fn write_dap_message<W: Write>(
+    writer: &mut W,
+    message: &DapMessage,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let json = to_json(message)?;
     let header = format!("Content-Length: {}\r\n\r\n", json.len());
     writer.write_all(header.as_bytes())?;

@@ -208,7 +208,10 @@ impl FlowTestRunner {
         eprintln!("[flow-runner] spawn: {:.1}s", t0.elapsed().as_secs_f64());
 
         let _caps = client.initialize()?;
-        eprintln!("[flow-runner] initialize: {:.1}s", t0.elapsed().as_secs_f64());
+        eprintln!(
+            "[flow-runner] initialize: {:.1}s",
+            t0.elapsed().as_secs_f64()
+        );
 
         client.launch(LaunchRequestArguments {
             trace_folder: Some(launch_folder),
@@ -218,7 +221,10 @@ impl FlowTestRunner {
         eprintln!("[flow-runner] launch: {:.1}s", t0.elapsed().as_secs_f64());
 
         client.configuration_done()?;
-        eprintln!("[flow-runner] configurationDone: {:.1}s", t0.elapsed().as_secs_f64());
+        eprintln!(
+            "[flow-runner] configurationDone: {:.1}s",
+            t0.elapsed().as_secs_f64()
+        );
 
         client.wait_for_stopped(Duration::from_secs(10))?;
         eprintln!("[flow-runner] stopped: {:.1}s", t0.elapsed().as_secs_f64());
@@ -299,11 +305,14 @@ impl FlowTestRunner {
     ) -> Result<(), BoxError> {
         // Collect all breakpoint lines and set them in one request.
         let lines: Vec<usize> = config.breakpoints.iter().map(|b| b.line).collect();
-        self.client
-            .set_breakpoints(&config.source_file, &lines)?;
+        self.client.set_breakpoints(&config.source_file, &lines)?;
 
         for (i, bp) in config.breakpoints.iter().enumerate() {
-            println!("\n--- Multi-breakpoint: continuing to breakpoint {} (line {}) ---", i + 1, bp.line);
+            println!(
+                "\n--- Multi-breakpoint: continuing to breakpoint {} (line {}) ---",
+                i + 1,
+                bp.line
+            );
 
             let move_state = self.client.dap_continue()?;
             println!(
@@ -326,9 +335,8 @@ impl FlowTestRunner {
                 excluded_identifiers: vec![],
                 expected_values: bp.expected_values.clone(),
             };
-            verify_flow_results(&check_config, &flow).map_err(|e| {
-                format!("Breakpoint {} (line {}): {}", i + 1, bp.line, e)
-            })?;
+            verify_flow_results(&check_config, &flow)
+                .map_err(|e| format!("Breakpoint {} (line {}): {}", i + 1, bp.line, e))?;
         }
 
         println!("\nMulti-breakpoint test completed successfully!");
@@ -341,10 +349,7 @@ impl FlowTestRunner {
     ///
     /// Uses the standard DAP step commands (`next`, `stepIn`, `stepOut`)
     /// via `dap_step`, which is compatible with the stdio-based DAP server.
-    pub fn run_stepping_test(
-        &mut self,
-        config: &SteppingTestConfig,
-    ) -> Result<(), BoxError> {
+    pub fn run_stepping_test(&mut self, config: &SteppingTestConfig) -> Result<(), BoxError> {
         // Set breakpoint and continue to it.
         self.client
             .set_breakpoints(&config.source_file, &[config.breakpoint_line])?;
@@ -393,10 +398,7 @@ impl FlowTestRunner {
 
     /// Run a call-stack test: hit a breakpoint, then request the stack trace
     /// and verify that the expected function names appear in the correct order.
-    pub fn run_call_stack_test(
-        &mut self,
-        config: &CallStackTestConfig,
-    ) -> Result<(), BoxError> {
+    pub fn run_call_stack_test(&mut self, config: &CallStackTestConfig) -> Result<(), BoxError> {
         // Set breakpoint and continue to it.
         self.client
             .set_breakpoints(&config.source_file, &[config.breakpoint_line])?;
@@ -408,11 +410,7 @@ impl FlowTestRunner {
 
         // Request the call stack.
         let stack = self.client.stack_trace()?;
-        let frame_names: Vec<&str> = stack
-            .stack_frames
-            .iter()
-            .map(|f| f.name.as_str())
-            .collect();
+        let frame_names: Vec<&str> = stack.stack_frames.iter().map(|f| f.name.as_str()).collect();
         println!("  Stack frames ({}): {:?}", frame_names.len(), frame_names);
 
         // Verify expected frame count if specified.
@@ -471,10 +469,7 @@ impl FlowTestRunner {
 /// This is extracted as a free function so it can be unit-tested without
 /// needing a full `FlowTestRunner` (which requires a live DAP subprocess).
 /// The `FlowTestRunner::verify_flow_results` method delegates to this.
-fn verify_flow_results(
-    config: &FlowTestConfig,
-    flow: &FlowData,
-) -> Result<(), BoxError> {
+fn verify_flow_results(config: &FlowTestConfig, flow: &FlowData) -> Result<(), BoxError> {
     println!("\nVerifying flow data...");
     println!(
         "  Total steps: {}, all_variables: {:?}",
@@ -700,10 +695,7 @@ mod tests {
             expected_values: HashMap::new(),
         };
         // FlowData contains both "x" and "printf" — printf should be rejected.
-        let flow = flow_with_vars(&[
-            ("x", int_flow_value(10)),
-            ("printf", int_flow_value(0)),
-        ]);
+        let flow = flow_with_vars(&[("x", int_flow_value(10)), ("printf", int_flow_value(0))]);
 
         let result = verify_flow_results(&config, &flow);
         assert!(

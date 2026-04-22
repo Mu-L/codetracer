@@ -986,10 +986,7 @@ pub fn find_ct_rr_support() -> Option<PathBuf> {
             if p.exists() && p.is_file() {
                 return Some(p);
             }
-            eprintln!(
-                "WARNING: {}='{}' but file does not exist; falling back",
-                var_name, path
-            );
+            eprintln!("WARNING: {}='{}' but file does not exist; falling back", var_name, path);
         }
     }
 
@@ -2490,8 +2487,7 @@ fn record_noir_trace(project_dir: &Path, trace_dir: &Path) -> Result<(), String>
     if nargo_tmp.exists() {
         let _ = fs::remove_dir_all(&nargo_tmp);
     }
-    fs::create_dir_all(&nargo_tmp)
-        .map_err(|e| format!("failed to create nargo temp dir: {}", e))?;
+    fs::create_dir_all(&nargo_tmp).map_err(|e| format!("failed to create nargo temp dir: {}", e))?;
 
     let output = Command::new("nargo")
         .args(["trace", "--out-dir", trace_dir.to_str().unwrap()])

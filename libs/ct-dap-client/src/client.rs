@@ -172,10 +172,7 @@ impl DapStdioClient {
             if remaining.is_zero() {
                 let stderr = self.recent_stderr(20);
                 let elapsed = start.elapsed().as_secs_f64();
-                let mut msg = format!(
-                    "Timeout after {:.1}s waiting for event 'stopped'",
-                    elapsed
-                );
+                let mut msg = format!("Timeout after {:.1}s waiting for event 'stopped'", elapsed);
                 if !received_events.is_empty() {
                     msg.push_str(&format!(
                         "\n  Events received while waiting: {:?}",
@@ -193,10 +190,7 @@ impl DapStdioClient {
                 }
                 // Check if db-backend process is still alive
                 if let Some(status) = self.child.try_wait().ok().flatten() {
-                    msg.push_str(&format!(
-                        "\n  db-backend process EXITED with: {}",
-                        status
-                    ));
+                    msg.push_str(&format!("\n  db-backend process EXITED with: {}", status));
                 } else {
                     msg.push_str("\n  db-backend process is still running");
                 }
@@ -215,8 +209,10 @@ impl DapStdioClient {
                     received_events.push(e.event);
                 }
                 Ok(Ok(DapMessage::Response(r))) => {
-                    received_events
-                        .push(format!("response(seq={}, cmd={})", r.request_seq, r.command));
+                    received_events.push(format!(
+                        "response(seq={}, cmd={})",
+                        r.request_seq, r.command
+                    ));
                 }
                 Ok(Ok(other)) => {
                     received_events.push(format!("{:?}", other));

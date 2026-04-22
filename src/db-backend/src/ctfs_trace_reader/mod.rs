@@ -145,7 +145,8 @@ impl CTFSTraceReader {
              reader is not yet implemented. Container: {}. \
              This path will be filled in when the seek-based writer is available.",
             ctfs.file_names().join(", ")
-        ).into())
+        )
+        .into())
     }
 
     /// Open an old-format CTFS container by deserializing raw events from
@@ -547,11 +548,8 @@ mod tests {
         // Create a container with steps.dat to trigger new-format detection.
         // The content doesn't matter — we just need the file to exist.
         let meta_json = br#"{"workdir":"/tmp","program":"/tmp/test","args":[]}"#;
-        ctfs_container::write_minimal_ctfs(
-            &ct_path,
-            &[("meta.json", meta_json), ("steps.dat", b"placeholder")],
-        )
-        .unwrap();
+        ctfs_container::write_minimal_ctfs(&ct_path, &[("meta.json", meta_json), ("steps.dat", b"placeholder")])
+            .unwrap();
 
         let result = CTFSTraceReader::open(&ct_path);
         // New-format reader is not yet implemented, so this should error
@@ -577,9 +575,9 @@ mod tests {
     #[test]
     fn test_gui_pipeline_with_ctfs_trace() {
         use codetracer_trace_types::{
-            CallRecord, EventLogKind, FunctionId, FunctionRecord, FullValueRecord, Line, PathId,
-            RecordEvent, ReturnRecord, StepRecord, TraceLowLevelEvent, TypeId, TypeKind, TypeRecord,
-            TypeSpecificInfo, ValueRecord, VariableId,
+            CallRecord, EventLogKind, FullValueRecord, FunctionId, FunctionRecord, Line, PathId, RecordEvent,
+            ReturnRecord, StepRecord, TraceLowLevelEvent, TypeId, TypeKind, TypeRecord, TypeSpecificInfo, ValueRecord,
+            VariableId,
         };
         use std::path::PathBuf;
 
@@ -700,11 +698,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let ct_path = dir.path().join("pipeline.ct");
         let meta_json = br#"{"workdir":"/tmp","program":"/tmp/hello.py","args":[]}"#;
-        ctfs_container::write_minimal_ctfs(
-            &ct_path,
-            &[("meta.json", meta_json), ("events.log", &cbor_buf)],
-        )
-        .unwrap();
+        ctfs_container::write_minimal_ctfs(&ct_path, &[("meta.json", meta_json), ("events.log", &cbor_buf)]).unwrap();
 
         // Open with CTFSTraceReader (exercises the full old-format pipeline)
         let reader = CTFSTraceReader::open(&ct_path).unwrap();
@@ -751,7 +745,9 @@ mod tests {
             !vars1.is_empty(),
             "step 1 should have at least 1 variable (name=\"world\")"
         );
-        let has_world = vars1.iter().any(|v| matches!(&v.value, ValueRecord::String { text, .. } if text == "world"));
+        let has_world = vars1
+            .iter()
+            .any(|v| matches!(&v.value, ValueRecord::String { text, .. } if text == "world"));
         assert!(has_world, "step 1 should contain name=\"world\"");
 
         // --- Verify call tree ---
@@ -816,12 +812,225 @@ mod tests {
 
         // New format: has steps.dat
         let new_path = dir.path().join("new.ct");
-        ctfs_container::write_minimal_ctfs(
-            &new_path,
-            &[("meta.json", meta_json), ("steps.dat", b"data")],
-        )
-        .unwrap();
+        ctfs_container::write_minimal_ctfs(&new_path, &[("meta.json", meta_json), ("steps.dat", b"data")]).unwrap();
         let new_ctfs = CtfsReader::open(&new_path).unwrap();
         assert!(is_new_format(&new_ctfs));
+    }
+
+    // ── M43: GUI latency benchmarks ────────────────────────────────────
+
+    /// Build a .ct container with the given number of steps, each with one
+    /// variable value. Returns the path to the temporary .ct file. The
+    /// caller should keep the `TempDir` alive until done.
+    fn build_trace_with_steps(dir: &std::path::Path, step_count: usize) -> std::path::PathBuf {
+        use codetracer_trace_types::{
+            CallRecord, FullValueRecord, FunctionId, FunctionRecord, Line, PathId, StepRecord, TraceLowLevelEvent,
+            TypeId, TypeKind, TypeRecord, TypeSpecificInfo, ValueRecord, VariableId,
+        };
+        use std::path::PathBuf;
+
+        // Build a realistic event stream with `step_count` steps.
+        let mut events: Vec<TraceLowLevelEvent> = Vec::new();
+
+        // Intern 10 paths so path_id varies
+        for i in 0..10 {
+            events.push(TraceLowLevelEvent::Path(PathBuf::from(format!("/src/file_{i}.py"))));
+        }
+
+        // Intern types
+        events.push(TraceLowLevelEvent::Type(TypeRecord {
+            kind: TypeKind::Int,
+            lang_type: "int".to_string(),
+            specific_info: TypeSpecificInfo::None,
+        }));
+
+        // Intern a function
+        events.push(TraceLowLevelEvent::Function(FunctionRecord {
+            path_id: PathId(0),
+            line: Line(1),
+            name: "main".to_string(),
+        }));
+
+        // Intern variable name
+        events.push(TraceLowLevelEvent::VariableName("x".to_string()));
+
+        // Call main
+        events.push(TraceLowLevelEvent::Call(CallRecord {
+            function_id: FunctionId(0),
+            args: vec![],
+        }));
+
+        // N steps with alternating path_id and incrementing lines
+        for i in 0..step_count {
+            events.push(TraceLowLevelEvent::Step(StepRecord {
+                path_id: PathId(i % 10),
+                line: Line((i + 1) as i64),
+            }));
+            events.push(TraceLowLevelEvent::Value(FullValueRecord {
+                variable_id: VariableId(0),
+                value: ValueRecord::Int {
+                    i: i as i64,
+                    type_id: TypeId(0),
+                },
+            }));
+        }
+
+        // Return from main
+        events.push(TraceLowLevelEvent::Return(codetracer_trace_types::ReturnRecord {
+            return_value: ValueRecord::None { type_id: TypeId(0) },
+        }));
+
+        // Serialize as CBOR
+        let mut cbor_buf = Vec::new();
+        for event in &events {
+            cbor_buf = cbor4ii::serde::to_vec(cbor_buf, event).expect("CBOR encode failed");
+        }
+
+        let ct_path = dir.join("bench_trace.ct");
+        let meta_json = br#"{"workdir":"/tmp","program":"/tmp/bench.py","args":[]}"#;
+        ctfs_container::write_minimal_ctfs(&ct_path, &[("meta.json", meta_json), ("events.log", &cbor_buf)]).unwrap();
+
+        ct_path
+    }
+
+    /// Compute the median of a sorted duration slice.
+    fn median_duration(durations: &mut [std::time::Duration]) -> std::time::Duration {
+        durations.sort();
+        let mid = durations.len() / 2;
+        if durations.len() % 2 == 0 {
+            (durations[mid - 1] + durations[mid]) / 2
+        } else {
+            durations[mid]
+        }
+    }
+
+    /// M43 — GUI step navigation latency benchmark.
+    ///
+    /// Creates a trace with 10K steps, measures the time for 100 random
+    /// step navigations via `reader.step()`, and asserts the median latency
+    /// is below a reasonable threshold.
+    ///
+    /// This validates that the GUI can navigate steps interactively without
+    /// perceptible lag. The postprocessed `Db` stores steps in a contiguous
+    /// `DistinctVec`, so random access should be O(1).
+    #[test]
+    fn bench_gui_step_navigation_latency() {
+        use std::time::Instant;
+
+        let dir = tempfile::tempdir().unwrap();
+        let ct_path = build_trace_with_steps(dir.path(), 10_000);
+
+        let reader = CTFSTraceReader::open(&ct_path).unwrap();
+        assert_eq!(reader.step_count(), 10_000);
+
+        // Deterministic pseudo-random step indices (avoid rand dependency).
+        // LCG: seed=42, a=1103515245, c=12345, m=2^31
+        let mut rng_state: u64 = 42;
+        let mut step_indices: Vec<usize> = Vec::with_capacity(100);
+        for _ in 0..100 {
+            rng_state = (rng_state.wrapping_mul(1103515245).wrapping_add(12345)) & 0x7FFFFFFF;
+            step_indices.push((rng_state as usize) % 10_000);
+        }
+
+        // Warm up: access a few steps to ensure any lazy initialization is done
+        for i in 0i64..10 {
+            let _ = reader.step(StepId(i));
+        }
+
+        // Measure 100 random step navigations
+        let mut durations = Vec::with_capacity(100);
+        for &idx in &step_indices {
+            let start = Instant::now();
+            let step = reader.step(StepId(idx as i64));
+            let elapsed = start.elapsed();
+
+            assert!(step.is_some(), "step {idx} should exist");
+            durations.push(elapsed);
+        }
+
+        let median = median_duration(&mut durations);
+
+        // Print results as JSON for CI consumption
+        println!(
+            "{{\"benchmark\":\"gui_step_navigation\",\"step_count\":10000,\
+             \"samples\":100,\"median_us\":{},\"max_us\":{}}}",
+            median.as_micros(),
+            durations.iter().max().unwrap().as_micros()
+        );
+
+        // Assert median < 100us. On modern hardware, indexed Vec access
+        // should be well under 1us. We use 100us as a generous upper bound
+        // to avoid flaky failures on slow CI machines.
+        assert!(
+            median.as_micros() < 100,
+            "step navigation median latency too high: {}us (threshold: 100us)",
+            median.as_micros()
+        );
+    }
+
+    /// M43 — GUI variable load latency benchmark.
+    ///
+    /// Creates a trace with 10K steps (each with one variable), measures
+    /// the time for 100 random `variables_at()` lookups, and asserts the
+    /// median latency is below a reasonable threshold.
+    ///
+    /// This validates that the GUI can load variable panels without lag.
+    /// Variable data is stored in a `DistinctVec<Vec<FullValueRecord>>`,
+    /// so random access should be O(1) with the cost dominated by the
+    /// slice creation.
+    #[test]
+    fn bench_gui_variable_load_latency() {
+        use std::time::Instant;
+
+        let dir = tempfile::tempdir().unwrap();
+        let ct_path = build_trace_with_steps(dir.path(), 10_000);
+
+        let reader = CTFSTraceReader::open(&ct_path).unwrap();
+        assert_eq!(reader.step_count(), 10_000);
+
+        // Deterministic pseudo-random step indices (different seed from above)
+        let mut rng_state: u64 = 137;
+        let mut step_indices: Vec<usize> = Vec::with_capacity(100);
+        for _ in 0..100 {
+            rng_state = (rng_state.wrapping_mul(1103515245).wrapping_add(12345)) & 0x7FFFFFFF;
+            step_indices.push((rng_state as usize) % 10_000);
+        }
+
+        // Warm up
+        for i in 0i64..10 {
+            let _ = reader.variables_at(StepId(i));
+        }
+
+        // Measure 100 random variable loads
+        let mut durations = Vec::with_capacity(100);
+        for &idx in &step_indices {
+            let start = Instant::now();
+            let vars = reader.variables_at(StepId(idx as i64));
+            let elapsed = start.elapsed();
+
+            assert!(vars.is_some(), "variables at step {idx} should exist");
+            // Each step should have exactly 1 variable (x = step_index)
+            assert_eq!(vars.unwrap().len(), 1, "step {idx} should have 1 variable");
+            durations.push(elapsed);
+        }
+
+        let median = median_duration(&mut durations);
+
+        // Print results as JSON for CI consumption
+        println!(
+            "{{\"benchmark\":\"gui_variable_load\",\"step_count\":10000,\
+             \"samples\":100,\"median_us\":{},\"max_us\":{}}}",
+            median.as_micros(),
+            durations.iter().max().unwrap().as_micros()
+        );
+
+        // Assert median < 500us. Variable lookup is a Vec index + slice
+        // creation, should be under 1us on modern hardware. Use 500us as
+        // a generous bound for slow CI.
+        assert!(
+            median.as_micros() < 500,
+            "variable load median latency too high: {}us (threshold: 500us)",
+            median.as_micros()
+        );
     }
 }

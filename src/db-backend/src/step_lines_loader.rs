@@ -6,7 +6,7 @@ use std::sync::Arc;
 use codetracer_trace_types::{CallKey, StepId};
 use log::info;
 
-use crate::db::{Db, MaterializedReplaySession, DbStep};
+use crate::db::{Db, DbStep, MaterializedReplaySession};
 use crate::distinct_vec::DistinctVec;
 use crate::expr_loader::ExprLoader;
 use crate::flow_preloader::FlowPreloader;

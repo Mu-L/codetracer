@@ -61,16 +61,28 @@ impl Default for LaunchRequestArguments {
 /// Capabilities returned by the initialize response.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default, Clone)]
 pub struct Capabilities {
-    #[serde(rename = "supportsLoadedSourcesRequest", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "supportsLoadedSourcesRequest",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub supports_loaded_sources_request: Option<bool>,
     #[serde(rename = "supportsStepBack", skip_serializing_if = "Option::is_none")]
     pub supports_step_back: Option<bool>,
-    #[serde(rename = "supportsConfigurationDoneRequest", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "supportsConfigurationDoneRequest",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub supports_configuration_done_request: Option<bool>,
-    #[serde(rename = "supportsDisassembleRequest", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "supportsDisassembleRequest",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub supports_disassemble_request: Option<bool>,
     #[serde(rename = "supportsLogPoints", skip_serializing_if = "Option::is_none")]
     pub supports_log_points: Option<bool>,
-    #[serde(rename = "supportsRestartRequest", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "supportsRestartRequest",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub supports_restart_request: Option<bool>,
 }

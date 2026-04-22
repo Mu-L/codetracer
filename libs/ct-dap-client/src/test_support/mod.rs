@@ -29,9 +29,7 @@ pub(crate) fn prepare_trace_folder(
 ) -> Result<(PathBuf, Option<PathBuf>), BoxError> {
     // Case 0a (Windows TTD): if the path is a .run file, use the parent dir.
     // db-backend discovers .run files by scanning the trace folder.
-    if rr_trace_dir.extension().and_then(|e| e.to_str()) == Some("run")
-        && rr_trace_dir.is_file()
-    {
+    if rr_trace_dir.extension().and_then(|e| e.to_str()) == Some("run") && rr_trace_dir.is_file() {
         if let Some(parent) = rr_trace_dir.parent() {
             return Ok((parent.to_path_buf(), None));
         }
@@ -40,9 +38,7 @@ pub(crate) fn prepare_trace_folder(
     // Case 0b (MCR): if the path is a .ct file, pass it directly as the trace path.
     // db-backend detects .ct files by extension or CTFS magic bytes and routes
     // them to ct-rr-support which spawns ct-mcr debugserver.
-    if rr_trace_dir.extension().and_then(|e| e.to_str()) == Some("ct")
-        && rr_trace_dir.is_file()
-    {
+    if rr_trace_dir.extension().and_then(|e| e.to_str()) == Some("ct") && rr_trace_dir.is_file() {
         return Ok((rr_trace_dir.to_path_buf(), None));
     }
 
@@ -83,7 +79,7 @@ pub(crate) fn find_ct_rr_support() -> Result<PathBuf, BoxError> {
         "CT_NATIVE_REPLAY_BIN",
         "CODETRACER_CT_NATIVE_REPLAY_CMD",
         "CT_RR_SUPPORT_BIN",            // backwards compat
-        "CODETRACER_CT_RR_SUPPORT_CMD",  // backwards compat
+        "CODETRACER_CT_RR_SUPPORT_CMD", // backwards compat
     ] {
         if let Ok(val) = std::env::var(var) {
             let p = PathBuf::from(&val);
@@ -98,8 +94,8 @@ pub(crate) fn find_ct_rr_support() -> Result<PathBuf, BoxError> {
         let manifest = PathBuf::from(&manifest_dir);
         let names_and_repos: &[(&str, &str)] = &[
             ("ct-native-replay", "codetracer-native-backend"),
-            ("ct-native-replay", "codetracer-rr-backend"),   // legacy repo name
-            ("ct-rr-support", "codetracer-rr-backend"),      // legacy binary name
+            ("ct-native-replay", "codetracer-rr-backend"), // legacy repo name
+            ("ct-rr-support", "codetracer-rr-backend"),    // legacy binary name
         ];
         for &(bin, repo) in names_and_repos {
             let exe_name = format!("{bin}{}", std::env::consts::EXE_SUFFIX);
@@ -131,5 +127,8 @@ pub(crate) fn find_ct_rr_support() -> Result<PathBuf, BoxError> {
         }
     }
 
-    Err("ct-native-replay binary not found (set CT_NATIVE_REPLAY_BIN or build native-backend)".into())
+    Err(
+        "ct-native-replay binary not found (set CT_NATIVE_REPLAY_BIN or build native-backend)"
+            .into(),
+    )
 }

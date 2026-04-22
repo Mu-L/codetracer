@@ -102,8 +102,8 @@ fn base40_decode(mut encoded: u64) -> String {
         chars.pop();
     }
 
-    // Safety: all base40 characters are valid ASCII
-    String::from_utf8(chars).expect("base40 characters are always valid UTF-8")
+    // Safety: all base40 characters are valid ASCII, so from_utf8 cannot fail.
+    String::from_utf8(chars).unwrap_or_default()
 }
 
 // ── Error type ──────────────────────────────────────────────────────────
@@ -232,9 +232,23 @@ impl CtfsReader {
                 break;
             }
 
-            let size = u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap());
-            let map_block = u64::from_le_bytes(data[offset + 8..offset + 16].try_into().unwrap());
-            let name_encoded = u64::from_le_bytes(data[offset + 16..offset + 24].try_into().unwrap());
+            // Safety: bounds are checked above (offset + FILE_ENTRY_SIZE <= data.len()),
+            // so these 8-byte slices are guaranteed to succeed.
+            let size = u64::from_le_bytes(
+                data[offset..offset + 8]
+                    .try_into()
+                    .map_err(|_| CtfsError::Corrupt("file entry size slice".to_string()))?,
+            );
+            let map_block = u64::from_le_bytes(
+                data[offset + 8..offset + 16]
+                    .try_into()
+                    .map_err(|_| CtfsError::Corrupt("file entry map_block slice".to_string()))?,
+            );
+            let name_encoded = u64::from_le_bytes(
+                data[offset + 16..offset + 24]
+                    .try_into()
+                    .map_err(|_| CtfsError::Corrupt("file entry name slice".to_string()))?,
+            );
 
             // Skip empty entries (size=0, map_block=0, name=0)
             if name_encoded == 0 {
@@ -401,7 +415,11 @@ impl CtfsReader {
                 "mapping entry at block {block_num}, index {entry_index} is out of bounds"
             )));
         }
-        Ok(u64::from_le_bytes(self.data[offset..offset + 8].try_into().unwrap()))
+        Ok(u64::from_le_bytes(
+            self.data[offset..offset + 8]
+                .try_into()
+                .map_err(|_| CtfsError::Corrupt("mapping entry slice".to_string()))?,
+        ))
     }
 
     /// List the names of all files in the container.

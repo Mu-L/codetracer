@@ -36,7 +36,13 @@ impl FlowPreloader {
         }
     }
 
-    pub fn load(&mut self, location: Location, mode: FlowMode, kind: TraceKind, replay: &mut dyn ReplaySession) -> FlowUpdate {
+    pub fn load(
+        &mut self,
+        location: Location,
+        mode: FlowMode,
+        kind: TraceKind,
+        replay: &mut dyn ReplaySession,
+    ) -> FlowUpdate {
         info!("flow: load: {:?}", location);
         let path_buf = PathBuf::from(&location.path);
 
@@ -277,7 +283,11 @@ impl<'a> CallFlowPreloader<'a> {
         }
     }
 
-    fn add_return_value(&mut self, mut flow_view_update: FlowViewUpdate, replay: &mut dyn ReplaySession) -> FlowViewUpdate {
+    fn add_return_value(
+        &mut self,
+        mut flow_view_update: FlowViewUpdate,
+        replay: &mut dyn ReplaySession,
+    ) -> FlowViewUpdate {
         // assumes that replay is stopped on the place where return value is available
 
         let return_string = "return".to_string();

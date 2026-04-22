@@ -469,7 +469,8 @@ fn parse_ttd_fixture_by_program_suffix(
 
 fn resolve_ct_rr_support() -> Result<PathBuf, String> {
     test_harness::find_ct_rr_support().ok_or_else(|| {
-        "ct-native-replay binary not found. Set CT_NATIVE_REPLAY_PATH or build codetracer-native-backend first".to_string()
+        "ct-native-replay binary not found. Set CT_NATIVE_REPLAY_PATH or build codetracer-native-backend first"
+            .to_string()
     })
 }
 

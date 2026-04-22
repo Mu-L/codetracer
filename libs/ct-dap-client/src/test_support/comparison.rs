@@ -74,9 +74,16 @@ pub fn assert_tracepoint_results_match(
             "Expected {} trace values but got {}.\nExpected: {:?}\nActual: {:?}",
             expected.len(),
             actual_values.len(),
-            expected.iter().map(|e| format!("{}={}", e.label, e.value)).collect::<Vec<_>>(),
-            actual_values.iter().map(|(id, l, v)| format!("[tp{}] {}={}", id, l, v)).collect::<Vec<_>>(),
-        ).into());
+            expected
+                .iter()
+                .map(|e| format!("{}={}", e.label, e.value))
+                .collect::<Vec<_>>(),
+            actual_values
+                .iter()
+                .map(|(id, l, v)| format!("[tp{}] {}={}", id, l, v))
+                .collect::<Vec<_>>(),
+        )
+        .into());
     }
 
     for (i, (expected_trace, (_tp_id, actual_label, actual_value))) in
@@ -86,7 +93,8 @@ pub fn assert_tracepoint_results_match(
             return Err(format!(
                 "Mismatch at index {}: expected {}={} but got {}={}",
                 i, expected_trace.label, expected_trace.value, actual_label, actual_value,
-            ).into());
+            )
+            .into());
         }
     }
 

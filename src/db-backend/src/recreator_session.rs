@@ -532,14 +532,19 @@ impl ReplaySession for RecreatorReplaySession {
 
     fn step(&mut self, action: Action, forward: bool) -> Result<bool, Box<dyn Error>> {
         self.ensure_active_stable()?;
-        let res = serde_json::from_str::<bool>(&self.stable.dispatch_replay_query(ReplayQuery::Step { action, forward })?)?;
+        let res = serde_json::from_str::<bool>(
+            &self
+                .stable
+                .dispatch_replay_query(ReplayQuery::Step { action, forward })?,
+        )?;
         Ok(res)
     }
 
     fn load_locals(&mut self, arg: CtLoadLocalsArguments) -> Result<Vec<VariableWithRecord>, Box<dyn Error>> {
         self.ensure_active_stable()?;
-        let res =
-            serde_json::from_str::<Vec<VariableWithRecord>>(&self.stable.dispatch_replay_query(ReplayQuery::LoadLocals { arg })?)?;
+        let res = serde_json::from_str::<Vec<VariableWithRecord>>(
+            &self.stable.dispatch_replay_query(ReplayQuery::LoadLocals { arg })?,
+        )?;
         Ok(res)
     }
 
@@ -550,11 +555,13 @@ impl ReplaySession for RecreatorReplaySession {
         lang: Lang,
     ) -> Result<ValueRecordWithType, Box<dyn Error>> {
         self.ensure_active_stable()?;
-        let res = serde_json::from_str::<ValueRecordWithType>(&self.stable.dispatch_replay_query(ReplayQuery::LoadValue {
-            expression: expression.to_string(),
-            depth_limit,
-            lang,
-        })?)?;
+        let res = serde_json::from_str::<ValueRecordWithType>(&self.stable.dispatch_replay_query(
+            ReplayQuery::LoadValue {
+                expression: expression.to_string(),
+                depth_limit,
+                lang,
+            },
+        )?)?;
         Ok(res)
     }
 
@@ -581,14 +588,17 @@ impl ReplaySession for RecreatorReplaySession {
 
     fn load_callstack(&mut self) -> Result<Vec<CallLine>, Box<dyn Error>> {
         self.ensure_active_stable()?;
-        let res = serde_json::from_str::<Vec<CallLine>>(&self.stable.dispatch_replay_query(ReplayQuery::LoadCallstack)?)?;
+        let res =
+            serde_json::from_str::<Vec<CallLine>>(&self.stable.dispatch_replay_query(ReplayQuery::LoadCallstack)?)?;
         Ok(res)
     }
 
     fn load_history(&mut self, arg: &LoadHistoryArg) -> Result<(Vec<HistoryResultWithRecord>, i64), Box<dyn Error>> {
         self.ensure_active_stable()?;
         let res = serde_json::from_str::<(Vec<HistoryResultWithRecord>, i64)>(
-            &self.stable.dispatch_replay_query(ReplayQuery::LoadHistory { arg: arg.clone() })?,
+            &self
+                .stable
+                .dispatch_replay_query(ReplayQuery::LoadHistory { arg: arg.clone() })?,
         )?;
         Ok(res)
     }
@@ -611,10 +621,11 @@ impl ReplaySession for RecreatorReplaySession {
 
     fn add_breakpoint(&mut self, path: &str, line: i64) -> Result<Breakpoint, Box<dyn Error>> {
         self.ensure_active_stable()?;
-        let breakpoint = serde_json::from_str::<Breakpoint>(&self.stable.dispatch_replay_query(ReplayQuery::AddBreakpoint {
-            path: path.to_string(),
-            line,
-        })?)?;
+        let breakpoint =
+            serde_json::from_str::<Breakpoint>(&self.stable.dispatch_replay_query(ReplayQuery::AddBreakpoint {
+                path: path.to_string(),
+                line,
+            })?)?;
         Ok(breakpoint)
     }
 
@@ -636,11 +647,11 @@ impl ReplaySession for RecreatorReplaySession {
 
     fn toggle_breakpoint(&mut self, breakpoint: &Breakpoint) -> Result<Breakpoint, Box<dyn Error>> {
         self.ensure_active_stable()?;
-        Ok(serde_json::from_str::<Breakpoint>(&self.stable.dispatch_replay_query(
-            ReplayQuery::ToggleBreakpoint {
+        Ok(serde_json::from_str::<Breakpoint>(
+            &self.stable.dispatch_replay_query(ReplayQuery::ToggleBreakpoint {
                 breakpoint: breakpoint.clone(),
-            },
-        )?)?)
+            })?,
+        )?)
     }
 
     fn enable_breakpoints(&mut self) -> Result<(), Box<dyn Error>> {
@@ -675,7 +686,8 @@ impl ReplaySession for RecreatorReplaySession {
 
     fn callstack_jump(&mut self, depth: usize) -> Result<(), Box<dyn Error>> {
         self.ensure_active_stable()?;
-        self.stable.dispatch_replay_query(ReplayQuery::CallstackJump { depth })?;
+        self.stable
+            .dispatch_replay_query(ReplayQuery::CallstackJump { depth })?;
         Ok(())
     }
 
@@ -725,7 +737,9 @@ impl ReplaySession for RecreatorReplaySession {
             }),
         };
 
-        let response_json = self.stable.dispatch_replay_query(ReplayQuery::TtdTracepointEvaluate { request })?;
+        let response_json = self
+            .stable
+            .dispatch_replay_query(ReplayQuery::TtdTracepointEvaluate { request })?;
         let response: TtdTracepointEvalResponseEnvelope = serde_json::from_str(&response_json)?;
 
         if let Some(diag) = response.diagnostic {
