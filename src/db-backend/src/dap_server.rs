@@ -16,8 +16,8 @@ use log::{debug, error, info, warn};
 use crate::dap::{self, Capabilities, DapMessage, Event, ProtocolMessage, Response};
 use crate::dap_types;
 
-use crate::db::Db;
 use crate::dap_handler::Handler;
+use crate::db::Db;
 #[cfg(not(windows))]
 use crate::paths::CODETRACER_PATHS;
 use crate::recreator_session::RecreatorArgs;
@@ -32,7 +32,9 @@ use crate::transport_endpoint::unix_socket_path_for_pid;
 use crate::transport_endpoint::windows_named_pipe_path_for_pid;
 use crate::transport_endpoint::DapEndpoint;
 
+use crate::ctfs_trace_reader::CTFSTraceReader;
 use crate::trace_processor::{load_trace_data, load_trace_metadata, TraceProcessor};
+use crate::trace_reader::TraceReader;
 
 use crate::transport::DapTransport;
 
@@ -129,10 +131,7 @@ fn resolve_recreator_exe(from_launch_args: Option<PathBuf>) -> PathBuf {
     for var_name in &["CODETRACER_CT_NATIVE_REPLAY_CMD", "CODETRACER_CT_RR_SUPPORT_CMD"] {
         if let Ok(env_path) = std::env::var(var_name) {
             if !env_path.is_empty() {
-                info!(
-                    "ct-native-replay: using path from {}: {}",
-                    var_name, env_path
-                );
+                info!("ct-native-replay: using path from {}: {}", var_name, env_path);
                 return PathBuf::from(env_path);
             }
         }
@@ -141,7 +140,11 @@ fn resolve_recreator_exe(from_launch_args: Option<PathBuf>) -> PathBuf {
     // 3. Search for ct-native-replay on PATH, falling back to legacy ct-rr-support.
     for exe_name in &["ct-native-replay", "ct-rr-support"] {
         if let Some(path) = find_on_path(exe_name) {
-            info!("ct-native-replay: discovered '{}' on PATH: {}", exe_name, path.display());
+            info!(
+                "ct-native-replay: discovered '{}' on PATH: {}",
+                exe_name,
+                path.display()
+            );
             return path;
         }
     }
@@ -342,8 +345,65 @@ fn setup(
     let is_ttd_run_trace = trace_path
         .extension()
         .is_some_and(|ext| ext == std::ffi::OsStr::new("run"));
+
+    // Check whether the trace is a CTFS binary container (.ct file with valid
+    // CTFS magic bytes).  CTFS containers embed both metadata and events, so
+    // they bypass the separate meta.json + trace.bin loading pipeline.
+    //
+    // We try several candidate paths because different callers pass trace info
+    // differently:
+    //   - `trace_folder` itself may be a .ct file (ct-dap-client test runner)
+    //   - `trace_path` (trace_folder / trace_file) may be the .ct file
+    let ctfs_candidate = if trace_folder.is_file() && is_ctfs_file(trace_folder) {
+        Some(trace_folder.to_path_buf())
+    } else if trace_path.exists() && is_ctfs_file(&trace_path) {
+        Some(trace_path.clone())
+    } else {
+        None
+    };
+
+    if let Some(ctfs_path) = ctfs_candidate {
+        info!("detected CTFS container: {}", ctfs_path.display());
+        match CTFSTraceReader::open(&ctfs_path) {
+            Ok(ctfs_reader) => {
+                info!(
+                    "CTFS trace loaded: {} steps, {} calls, {} events",
+                    ctfs_reader.step_count(),
+                    ctfs_reader.call_count(),
+                    ctfs_reader.event_count(),
+                );
+                let reader: Arc<dyn TraceReader> = Arc::new(ctfs_reader);
+                let mut handler = Handler::construct_with_reader(
+                    TraceKind::Materialized,
+                    RecreatorArgs {
+                        name: thread_name.to_string(),
+                        ..RecreatorArgs::default()
+                    },
+                    reader,
+                    false,
+                );
+                handler.raw_diff_index = raw_diff_index;
+                if for_launch {
+                    handler.run_to_entry(dap::Request::default(), restore_location, sender)?;
+                }
+                handler.initialized = true;
+                return Ok(handler);
+            }
+            Err(e) => {
+                // Not a valid CTFS container — fall through to try other
+                // formats (MCR native replay, rr trace, etc.).
+                info!(
+                    "CTFS open failed for {}: {e} — trying other formats",
+                    ctfs_path.display()
+                );
+            }
+        }
+    }
+
     // MCR traces (.ct files) are handled by ct-native-replay replay-worker,
     // not by the DB trace reader. Skip DB metadata loading for them.
+    // At this point, if the file was a valid CTFS container it would have been
+    // handled above, so any remaining .ct files are MCR native replay traces.
     let is_mcr_trace = trace_folder.is_file()
         && trace_folder
             .extension()
@@ -472,6 +532,28 @@ fn resolve_replay_trace_path(trace_folder: &Path, trace_file: &Path) -> Option<P
     } else {
         None
     }
+}
+
+/// Check whether `path` is a CTFS binary container by reading the first
+/// 5 bytes and comparing against the CTFS magic: `[C0 DE 72 AC E2]`.
+///
+/// Returns `false` for non-existent files, files smaller than 5 bytes,
+/// or any I/O error.  This is intentionally a quick check (no full parse)
+/// so it can be used as a cheap format-detection gate before attempting
+/// the more expensive `CTFSTraceReader::open`.
+fn is_ctfs_file(path: &Path) -> bool {
+    use std::io::Read;
+
+    const CTFS_MAGIC: [u8; 5] = [0xC0, 0xDE, 0x72, 0xAC, 0xE2];
+
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let mut buf = [0u8; 5];
+    if file.read_exact(&mut buf).is_err() {
+        return false;
+    }
+    buf == CTFS_MAGIC
 }
 
 fn patch_message_seq(message: &DapMessage, seq: i64) -> DapMessage {

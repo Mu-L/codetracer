@@ -22,8 +22,8 @@ use crate::flow_preloader::FlowPreloader;
 use crate::in_memory_trace_reader::InMemoryTraceReader;
 use crate::lang::{lang_from_context, Lang};
 use crate::program_search_tool::ProgramSearchTool;
-use crate::replay::ReplaySession;
 use crate::recreator_session::{RecreatorArgs, RecreatorReplaySession};
+use crate::replay::ReplaySession;
 use crate::trace_reader::TraceReader;
 // use crate::response::{};
 use crate::dap_types;
@@ -124,6 +124,21 @@ impl Handler {
         // the TraceReader abstraction. Direct Db access is available via
         // All trace data access goes through the TraceReader trait.
         let reader: Arc<dyn TraceReader> = Arc::new(InMemoryTraceReader::new(*db));
+        Self::construct_with_reader(trace_kind, ct_rr_args, reader, indirect_send)
+    }
+
+    /// Build a `Handler` from a pre-constructed [`TraceReader`].
+    ///
+    /// This is the common path that both `construct` (in-memory Db) and the
+    /// CTFS-backed reader use.  The caller is responsible for building the
+    /// appropriate `Arc<dyn TraceReader>` (e.g. `InMemoryTraceReader` for
+    /// legacy traces, `CTFSTraceReader` for `.ct` containers).
+    pub fn construct_with_reader(
+        trace_kind: TraceKind,
+        ct_rr_args: RecreatorArgs,
+        reader: Arc<dyn TraceReader>,
+        indirect_send: bool,
+    ) -> Handler {
         let calltrace = Calltrace::new(&*reader);
         let trace = CoreTrace::default();
         let mut expr_loader = ExprLoader::new(trace.clone());
@@ -589,7 +604,11 @@ impl Handler {
         let mut flow_replay: Box<dyn ReplaySession> = if self.trace_kind == TraceKind::Materialized {
             Box::new(MaterializedReplaySession::new(Arc::clone(&self.reader)))
         } else {
-            Box::new(RecreatorReplaySession::new("flow", self.load_flow_index, self.ct_rr_args.clone()))
+            Box::new(RecreatorReplaySession::new(
+                "flow",
+                self.load_flow_index,
+                self.ct_rr_args.clone(),
+            ))
         };
         self.load_flow_index += 1;
 
@@ -1888,7 +1907,11 @@ impl Handler {
         args: UpdateTableArgs,
         sender: Sender<DapMessage>,
     ) -> Result<(), Box<dyn Error>> {
-        eprintln!("[DEBUG update_table] event_db single_tables={}, global_table={}", self.event_db.single_tables.len(), self.event_db.global_table.len());
+        eprintln!(
+            "[DEBUG update_table] event_db single_tables={}, global_table={}",
+            self.event_db.single_tables.len(),
+            self.event_db.global_table.len()
+        );
         let (table_update, trace_values_option) = self.event_db.update_table(args)?;
         eprintln!("[DEBUG update_table] result returned");
         if let Some(trace_values) = trace_values_option.as_ref() {
