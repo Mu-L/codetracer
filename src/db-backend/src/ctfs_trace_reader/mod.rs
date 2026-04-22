@@ -450,6 +450,7 @@ impl TraceReader for CTFSTraceReader {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
 
@@ -559,6 +560,245 @@ mod tests {
         assert!(
             err_msg.contains("seek-based reader is not yet implemented"),
             "expected 'not yet implemented' error, got: {err_msg}"
+        );
+    }
+
+    /// M38 — GUI integration test: full trace pipeline through CTFSTraceReader.
+    ///
+    /// Creates a .ct container with CBOR-encoded TraceLowLevelEvent values
+    /// exercising the full pipeline: path registration, function/type interning,
+    /// call entry, step recording with variables, I/O event, and return.
+    /// Then opens it with CTFSTraceReader and verifies:
+    ///   - Step count, step navigation (path/line), step_map lookup
+    ///   - Variable inspection at each step
+    ///   - Call tree structure (function, depth, parent/child)
+    ///   - Event count and content
+    ///   - Interning tables (paths, functions, types, variable names)
+    #[test]
+    fn test_gui_pipeline_with_ctfs_trace() {
+        use codetracer_trace_types::{
+            CallRecord, EventLogKind, FunctionId, FunctionRecord, FullValueRecord, Line, PathId,
+            RecordEvent, ReturnRecord, StepRecord, TraceLowLevelEvent, TypeId, TypeKind, TypeRecord,
+            TypeSpecificInfo, ValueRecord, VariableId,
+        };
+        use std::path::PathBuf;
+
+        // -- Build a realistic event stream --
+        //
+        // Simulates a Python program "hello.py" with:
+        //   path 0: /tmp/hello.py
+        //   type 0: int
+        //   type 1: str
+        //   function 0: main (line 1)
+        //   function 1: greet (line 5)
+        //   variable 0: x
+        //   variable 1: name
+        //
+        //   call main → step line 2 (x = 42) → call greet → step line 6 (name = "world")
+        //     → event Write("Hello world") → return from greet → step line 3 → return from main
+        let events: Vec<TraceLowLevelEvent> = vec![
+            // Intern path
+            TraceLowLevelEvent::Path(PathBuf::from("/tmp/hello.py")),
+            // Intern types
+            TraceLowLevelEvent::Type(TypeRecord {
+                kind: TypeKind::Int,
+                lang_type: "int".to_string(),
+                specific_info: TypeSpecificInfo::None,
+            }),
+            TraceLowLevelEvent::Type(TypeRecord {
+                kind: TypeKind::String,
+                lang_type: "str".to_string(),
+                specific_info: TypeSpecificInfo::None,
+            }),
+            // Intern functions
+            TraceLowLevelEvent::Function(FunctionRecord {
+                path_id: PathId(0),
+                line: Line(1),
+                name: "main".to_string(),
+            }),
+            TraceLowLevelEvent::Function(FunctionRecord {
+                path_id: PathId(0),
+                line: Line(5),
+                name: "greet".to_string(),
+            }),
+            // Intern variable names
+            TraceLowLevelEvent::VariableName("x".to_string()),
+            TraceLowLevelEvent::VariableName("name".to_string()),
+            // Call main (function_id=0)
+            TraceLowLevelEvent::Call(CallRecord {
+                function_id: FunctionId(0),
+                args: vec![],
+            }),
+            // Step at line 2 of hello.py (x = 42)
+            TraceLowLevelEvent::Step(StepRecord {
+                path_id: PathId(0),
+                line: Line(2),
+            }),
+            TraceLowLevelEvent::Value(FullValueRecord {
+                variable_id: VariableId(0),
+                value: ValueRecord::Int {
+                    i: 42,
+                    type_id: TypeId(0),
+                },
+            }),
+            // Call greet (function_id=1)
+            TraceLowLevelEvent::Call(CallRecord {
+                function_id: FunctionId(1),
+                args: vec![FullValueRecord {
+                    variable_id: VariableId(1),
+                    value: ValueRecord::String {
+                        text: "world".to_string(),
+                        type_id: TypeId(1),
+                    },
+                }],
+            }),
+            // Step at line 6 of hello.py (inside greet)
+            TraceLowLevelEvent::Step(StepRecord {
+                path_id: PathId(0),
+                line: Line(6),
+            }),
+            TraceLowLevelEvent::Value(FullValueRecord {
+                variable_id: VariableId(1),
+                value: ValueRecord::String {
+                    text: "world".to_string(),
+                    type_id: TypeId(1),
+                },
+            }),
+            // I/O event: stdout write
+            TraceLowLevelEvent::Event(RecordEvent {
+                kind: EventLogKind::Write,
+                metadata: "stdout".to_string(),
+                content: "Hello world".to_string(),
+            }),
+            // Return from greet
+            TraceLowLevelEvent::Return(ReturnRecord {
+                return_value: ValueRecord::None { type_id: TypeId(0) },
+            }),
+            // Step at line 3 (back in main, after greet returns)
+            TraceLowLevelEvent::Step(StepRecord {
+                path_id: PathId(0),
+                line: Line(3),
+            }),
+            // Return from main
+            TraceLowLevelEvent::Return(ReturnRecord {
+                return_value: ValueRecord::Int {
+                    i: 0,
+                    type_id: TypeId(0),
+                },
+            }),
+        ];
+
+        // Serialize events as sequential CBOR (legacy format).
+        // cbor4ii::serde::to_vec takes ownership of the buffer and returns
+        // the extended buffer, so we chain through each event.
+        let mut cbor_buf = Vec::new();
+        for event in &events {
+            cbor_buf = cbor4ii::serde::to_vec(cbor_buf, event).expect("CBOR encode failed");
+        }
+
+        // Build the .ct container
+        let dir = tempfile::tempdir().unwrap();
+        let ct_path = dir.path().join("pipeline.ct");
+        let meta_json = br#"{"workdir":"/tmp","program":"/tmp/hello.py","args":[]}"#;
+        ctfs_container::write_minimal_ctfs(
+            &ct_path,
+            &[("meta.json", meta_json), ("events.log", &cbor_buf)],
+        )
+        .unwrap();
+
+        // Open with CTFSTraceReader (exercises the full old-format pipeline)
+        let reader = CTFSTraceReader::open(&ct_path).unwrap();
+
+        // --- Verify step count and navigation ---
+        assert_eq!(reader.step_count(), 3, "expected 3 steps (line 2, 6, 3)");
+
+        let step0 = reader.step(StepId(0)).expect("step 0 should exist");
+        assert_eq!(step0.path_id, PathId(0));
+        assert_eq!(step0.line, Line(2));
+
+        let step1 = reader.step(StepId(1)).expect("step 1 should exist");
+        assert_eq!(step1.path_id, PathId(0));
+        assert_eq!(step1.line, Line(6));
+
+        let step2 = reader.step(StepId(2)).expect("step 2 should exist");
+        assert_eq!(step2.path_id, PathId(0));
+        assert_eq!(step2.line, Line(3));
+
+        // --- Verify step_map lookup (path + line → steps) ---
+        let steps_on_line2 = reader.steps_on_line(PathId(0), 2).expect("should have steps on line 2");
+        assert_eq!(steps_on_line2.len(), 1);
+        assert_eq!(steps_on_line2[0].step_id, StepId(0));
+
+        let steps_on_line6 = reader.steps_on_line(PathId(0), 6).expect("should have steps on line 6");
+        assert_eq!(steps_on_line6.len(), 1);
+        assert_eq!(steps_on_line6[0].step_id, StepId(1));
+
+        // --- Verify variable inspection ---
+        // Step 0 has x=42 from the Value event plus name="world" from the
+        // Call(greet) args (the processor pushes call args onto the current
+        // step's variable list before the callee's first step is recorded).
+        let vars0 = reader.variables_at(StepId(0)).expect("step 0 should have variables");
+        assert_eq!(vars0.len(), 2, "step 0 should have 2 variables (x + greet arg)");
+        assert_eq!(vars0[0].variable_id, VariableId(0));
+        match &vars0[0].value {
+            ValueRecord::Int { i, .. } => assert_eq!(*i, 42),
+            other => panic!("expected Int value for x, got {other:?}"),
+        }
+
+        let vars1 = reader.variables_at(StepId(1)).expect("step 1 should have variables");
+        // Step 1 (inside greet) has the explicit Value event for name="world"
+        assert!(
+            !vars1.is_empty(),
+            "step 1 should have at least 1 variable (name=\"world\")"
+        );
+        let has_world = vars1.iter().any(|v| matches!(&v.value, ValueRecord::String { text, .. } if text == "world"));
+        assert!(has_world, "step 1 should contain name=\"world\"");
+
+        // --- Verify call tree ---
+        assert_eq!(reader.call_count(), 2, "expected 2 calls (main, greet)");
+
+        let call0 = reader.call(CallKey(0)).expect("call 0 (main) should exist");
+        assert_eq!(call0.function_id, FunctionId(0));
+        assert_eq!(call0.depth, 0, "main should be at depth 0");
+
+        let call1 = reader.call(CallKey(1)).expect("call 1 (greet) should exist");
+        assert_eq!(call1.function_id, FunctionId(1));
+        assert_eq!(call1.depth, 1, "greet should be at depth 1");
+        assert_eq!(call1.parent_key, CallKey(0), "greet's parent should be main");
+
+        // Verify main has greet as a child
+        assert!(
+            call0.children_keys.contains(&CallKey(1)),
+            "main should list greet as child"
+        );
+
+        // --- Verify events ---
+        assert_eq!(reader.event_count(), 1, "expected 1 I/O event");
+        let io_event = &reader.events()[0];
+        assert_eq!(io_event.kind, EventLogKind::Write);
+        assert_eq!(io_event.content, "Hello world");
+
+        // --- Verify interning tables ---
+        assert_eq!(reader.path_count(), 1);
+        assert_eq!(reader.path(PathId(0)).unwrap(), "/tmp/hello.py");
+        assert_eq!(reader.path_id_for("/tmp/hello.py"), Some(PathId(0)));
+
+        assert_eq!(reader.function_count(), 2);
+        assert_eq!(reader.function(FunctionId(0)).unwrap().name, "main");
+        assert_eq!(reader.function(FunctionId(1)).unwrap().name, "greet");
+
+        assert_eq!(reader.type_count(), 2);
+        assert_eq!(reader.type_record(TypeId(0)).unwrap().lang_type, "int");
+        assert_eq!(reader.type_record(TypeId(1)).unwrap().lang_type, "str");
+
+        assert_eq!(reader.variable_name(VariableId(0)).unwrap(), "x");
+        assert_eq!(reader.variable_name(VariableId(1)).unwrap(), "name");
+
+        // --- Verify metadata ---
+        assert_eq!(reader.workdir().to_str().unwrap(), "/tmp");
+        assert!(
+            matches!(reader.end_of_program(), EndOfProgram::Normal),
+            "expected Normal end of program"
         );
     }
 
