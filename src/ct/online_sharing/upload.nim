@@ -134,7 +134,7 @@ proc uploadSplitTrace*(trace: Trace, slicesDir: string,
 
     # Collect and sort slice .ct files so they upload in the correct order
     # (slice_0000.ct, slice_0001.ct, ...).
-    let sliceFiles = sorted(collect(
+    let sliceFiles = algorithm.sorted(collect(
       for f in walkDir(slicesDir):
         if f.kind == pcFile and f.path.endsWith(".ct"):
           f.path), SortOrder.Ascending)
