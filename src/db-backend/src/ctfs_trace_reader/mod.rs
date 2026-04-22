@@ -1,13 +1,15 @@
 //! [`TraceReader`] implementation that reads from `.ct` CTFS containers.
 //!
 //! See the module-level documentation on [`CTFSTraceReader`] for design
-//! rationale and the phased implementation plan.
+//! rationale and the two-format approach.
 
 pub mod ctfs_container;
 
 use std::collections::HashMap;
 use std::error::Error;
 use std::path::Path;
+
+use log::info;
 
 use codetracer_trace_types::{
     CallKey, FullValueRecord, FunctionId, FunctionRecord, PathId, Place, StepId, TraceLowLevelEvent, TypeId,
@@ -22,33 +24,46 @@ use ctfs_container::CtfsReader;
 
 /// A [`TraceReader`] backed by a `.ct` CTFS container file.
 ///
-/// **Phase 1 (current):** Loads all data into memory at open time, identical
-/// to [`crate::in_memory_trace_reader::InMemoryTraceReader`] but reading from
-/// a CTFS binary container instead of the `trace-processor` pipeline. This
-/// proves the plumbing works end-to-end: CTFS file -> parse container ->
-/// extract events -> `TraceProcessor::postprocess` -> populated `Db` -> serve
-/// via `TraceReader`.
+/// Supports two container layouts:
 ///
-/// **Phase 2 (future):** On-demand loading with LRU cache for per-step data.
-/// The CTFS hierarchical block maps enable O(log n) seeking, so only the data
-/// needed for the current DAP request would be decompressed and loaded.
+/// ## Old format (events-based, requires postprocessing)
 ///
-/// # Container layout
-///
-/// A `.ct` file is a CTFS binary container (see `CTFS-Binary-Format.md` spec)
-/// containing internal files:
+/// Contains raw `TraceLowLevelEvent` values in `events.log` plus JSON
+/// metadata in `meta.json`. These events must be processed by
+/// [`TraceProcessor::postprocess`] at startup to build the in-memory `Db`.
+/// This is the format produced by current recorders (Python, Ruby, JS,
+/// blockchain VMs).
 ///
 /// | File | Purpose |
 /// |------|---------|
 /// | `meta.json` | Trace metadata (workdir, program, args) |
 /// | `events.log` | Encoded `TraceLowLevelEvent` stream (chunked Zstd or legacy CBOR) |
 /// | `events.fmt` | Serialization format marker (`"split-binary"` or absent for CBOR) |
-/// | `paths.idx` | Interned source paths |
-/// | `types.idx` | Interned type records |
-/// | `funcs.idx` | Interned function records |
+///
+/// ## New format (pre-processed, no postprocessing needed)
+///
+/// Contains pre-computed data structures written by the seek-based writer.
+/// The recorder (or a post-recording finalization step) builds the same
+/// data structures that `postprocess` would produce and writes them as
+/// separate CTFS internal files. The reader loads these directly into
+/// `Db`, skipping the expensive event-by-event postprocessing entirely.
+///
+/// The new format is detected by the presence of `steps.dat` in the
+/// container. See `Seek-Based-CTFS-Reader.md` for the full file layout.
+///
+/// | File | Purpose |
+/// |------|---------|
+/// | `meta.dat` | Binary metadata (replaces `meta.json`) |
+/// | `steps.dat` + `steps.idx` | Pre-computed step records with variable values |
+/// | `calls.dat` | Pre-computed call tree records |
+/// | `events.dat` | Pre-computed I/O event records with step cross-references |
+/// | `paths.dat` + `paths.off` | Interned source paths with offset index |
+/// | `funcs.dat` + `funcs.off` | Interned function records with offset index |
+/// | `types.dat` + `types.off` | Interned type records with offset index |
+/// | `varnames.dat` + `varnames.off` | Interned variable names with offset index |
 ///
 /// See [`crate::trace_processor`] for how `TraceLowLevelEvent` values are
-/// processed into the `Db` struct.
+/// processed into the `Db` struct (old format path only).
 #[derive(Debug)]
 pub struct CTFSTraceReader {
     /// The fully-populated in-memory database, built from CTFS contents
@@ -56,20 +71,91 @@ pub struct CTFSTraceReader {
     db: Db,
 }
 
+/// Returns `true` if the CTFS container uses the new pre-processed format
+/// (detected by the presence of `steps.dat`), meaning postprocessing can
+/// be skipped entirely.
+///
+/// Returns `false` for old-format containers that store raw events in
+/// `events.log` and require [`TraceProcessor::postprocess`].
+fn is_new_format(ctfs: &CtfsReader) -> bool {
+    ctfs.has_file("steps.dat")
+}
+
 impl CTFSTraceReader {
     /// Open a `.ct` CTFS trace file, parse its contents, and build the
     /// in-memory database.
+    ///
+    /// Automatically detects the container format:
+    /// - **New format** (has `steps.dat`): loads pre-processed data directly,
+    ///   skipping [`TraceProcessor::postprocess`]. Startup is bounded by I/O
+    ///   and decompression, not by trace size.
+    /// - **Old format** (has `events.log`): deserializes events and runs
+    ///   [`TraceProcessor::postprocess`] to build the `Db`.
     ///
     /// # Errors
     ///
     /// Returns an error if:
     /// - The file cannot be opened or is not a valid CTFS container
-    /// - The `meta.json` internal file is missing or malformed
-    /// - The trace events cannot be deserialized
-    /// - The `TraceProcessor` fails during postprocessing
+    /// - Metadata is missing or malformed
+    /// - The trace data cannot be deserialized
+    /// - (Old format only) The `TraceProcessor` fails during postprocessing
     pub fn open(path: &Path) -> Result<Self, Box<dyn Error>> {
         let mut ctfs = CtfsReader::open(path)?;
 
+        if is_new_format(&ctfs) {
+            info!("CTFS new format detected — skipping postprocessing");
+            Self::open_new_format(&mut ctfs)
+        } else {
+            info!("CTFS old format detected — running postprocessing");
+            Self::open_old_format(&mut ctfs)
+        }
+    }
+
+    /// Open a new-format CTFS container by loading pre-processed data
+    /// directly into the `Db`, bypassing `TraceProcessor::postprocess`.
+    ///
+    /// The new format stores the same data structures that `postprocess`
+    /// would build, but written at recording time (or during a finalization
+    /// step). This eliminates the O(n) startup cost where n is the number
+    /// of trace events.
+    ///
+    /// # Current status
+    ///
+    /// The new-format writer does not exist yet — no recorder currently
+    /// produces `steps.dat`. This method is the reader-side infrastructure
+    /// for M37 (remove postprocessing startup). Once the seek-based writer
+    /// is implemented, this path will be exercised automatically for any
+    /// `.ct` file containing `steps.dat`.
+    fn open_new_format(ctfs: &mut CtfsReader) -> Result<Self, Box<dyn Error>> {
+        // TODO(M37): Implement loading pre-processed data from the new-format
+        // CTFS internal files (steps.dat, calls.dat, events.dat, etc.).
+        //
+        // The implementation will:
+        // 1. Read binary metadata from `meta.dat`
+        // 2. Load interning tables (paths.dat+off, funcs.dat+off, types.dat+off, varnames.dat+off)
+        // 3. Load pre-computed steps, calls, events, step_map, cell_changes
+        //    directly into Db fields — no TraceProcessor involved
+        //
+        // For now, return an error indicating the format is recognized but
+        // the reader is not yet implemented. This preserves forward
+        // compatibility: when the writer starts producing new-format files,
+        // this error will surface clearly during development.
+        Err(format!(
+            "CTFS new format detected (steps.dat present) but the seek-based \
+             reader is not yet implemented. Container: {}. \
+             This path will be filled in when the seek-based writer is available.",
+            ctfs.file_names().join(", ")
+        ).into())
+    }
+
+    /// Open an old-format CTFS container by deserializing raw events from
+    /// `events.log` and running `TraceProcessor::postprocess` to build
+    /// the in-memory `Db`.
+    ///
+    /// This is the original loading path. It will remain available for
+    /// backward compatibility with traces recorded before the seek-based
+    /// writer was introduced.
+    fn open_old_format(ctfs: &mut CtfsReader) -> Result<Self, Box<dyn Error>> {
         // 1. Read and parse trace metadata
         let meta_bytes = ctfs.read_file("meta.json")?;
         let meta: codetracer_trace_types::TraceMetadata = serde_json::from_slice(&meta_bytes)?;
@@ -85,13 +171,14 @@ impl CTFSTraceReader {
         };
 
         // 2. Read the trace events from the container.
-        //    Current format: CBOR-encoded TraceLowLevelEvent sequence in
-        //    `events.log`. Future formats may use seekable Zstd compression
-        //    (see CTFS-Binary-Format.md, Seekable Zstd Compression Layer).
-        let events = Self::load_events(&mut ctfs)?;
+        //    Old format: CBOR-encoded TraceLowLevelEvent sequence in
+        //    `events.log`, optionally with split-binary encoding indicated
+        //    by `events.fmt`.
+        let events = Self::load_events(ctfs)?;
 
-        // 3. Run the same postprocessing pipeline that the existing
-        //    trace-processor uses, populating a Db struct from the events.
+        // 3. Run the postprocessing pipeline to populate a Db struct from
+        //    the raw events. This is the expensive O(n) step that the new
+        //    format eliminates.
         let mut db = Db::new(&workdir);
         let mut processor = TraceProcessor::new(&mut db);
         processor.postprocess(&events)?;
@@ -206,10 +293,14 @@ impl CTFSTraceReader {
 
 // ── TraceReader implementation ─────────────────────────────────────────
 //
-// Phase 1: delegates every method to the inner `Db`, exactly like
-// `InMemoryTraceReader`. The only difference is *how* the Db is
-// populated (from a CTFS container rather than from load_trace_data +
-// TraceProcessor called in the handler).
+// All methods delegate to the inner `Db`, exactly like
+// `InMemoryTraceReader`. The difference is how the Db is populated:
+//
+// - Old format: events.log -> load_events -> TraceProcessor::postprocess -> Db
+// - New format: steps.dat + calls.dat + ... -> direct Db load (no postprocess)
+//
+// Both formats produce the same Db, so the TraceReader implementation is
+// identical regardless of which loading path was used.
 
 impl TraceReader for CTFSTraceReader {
     // ── Interning tables ────────────────────────────────────────────
@@ -426,5 +517,71 @@ mod tests {
 
         let result = CTFSTraceReader::open(&ct_path);
         assert!(result.is_err());
+    }
+
+    /// Verify that old-format detection works: a container with only
+    /// `meta.json` (no `steps.dat`) uses the old postprocessing path.
+    #[test]
+    fn test_ctfs_old_format_detected_without_steps_dat() {
+        let dir = tempfile::tempdir().unwrap();
+        let ct_path = dir.path().join("old-format.ct");
+
+        let meta_json = br#"{"workdir":"/tmp","program":"/tmp/test","args":[]}"#;
+        ctfs_container::write_minimal_ctfs(&ct_path, &[("meta.json", meta_json)]).unwrap();
+
+        // Old format should work fine (goes through postprocess path)
+        let reader = CTFSTraceReader::open(&ct_path).unwrap();
+        assert_eq!(reader.step_count(), 0);
+    }
+
+    /// Verify that new-format detection works: a container with `steps.dat`
+    /// is recognized as new-format. Since the new-format reader is not yet
+    /// implemented, this should return an error indicating the format is
+    /// recognized but unsupported.
+    #[test]
+    fn test_ctfs_new_format_detected_with_steps_dat() {
+        let dir = tempfile::tempdir().unwrap();
+        let ct_path = dir.path().join("new-format.ct");
+
+        // Create a container with steps.dat to trigger new-format detection.
+        // The content doesn't matter — we just need the file to exist.
+        let meta_json = br#"{"workdir":"/tmp","program":"/tmp/test","args":[]}"#;
+        ctfs_container::write_minimal_ctfs(
+            &ct_path,
+            &[("meta.json", meta_json), ("steps.dat", b"placeholder")],
+        )
+        .unwrap();
+
+        let result = CTFSTraceReader::open(&ct_path);
+        // New-format reader is not yet implemented, so this should error
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("seek-based reader is not yet implemented"),
+            "expected 'not yet implemented' error, got: {err_msg}"
+        );
+    }
+
+    /// Verify the `is_new_format` helper function directly.
+    #[test]
+    fn test_is_new_format_detection() {
+        let dir = tempfile::tempdir().unwrap();
+
+        // Old format: no steps.dat
+        let old_path = dir.path().join("old.ct");
+        let meta_json = br#"{"workdir":"/tmp","program":"/tmp/test","args":[]}"#;
+        ctfs_container::write_minimal_ctfs(&old_path, &[("meta.json", meta_json)]).unwrap();
+        let old_ctfs = CtfsReader::open(&old_path).unwrap();
+        assert!(!is_new_format(&old_ctfs));
+
+        // New format: has steps.dat
+        let new_path = dir.path().join("new.ct");
+        ctfs_container::write_minimal_ctfs(
+            &new_path,
+            &[("meta.json", meta_json), ("steps.dat", b"data")],
+        )
+        .unwrap();
+        let new_ctfs = CtfsReader::open(&new_path).unwrap();
+        assert!(is_new_format(&new_ctfs));
     }
 }
