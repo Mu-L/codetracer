@@ -878,6 +878,9 @@ jobs:
           git_user_signingkey: true
           git_commit_gpgsign: true
 
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Build
         run: ./ci/build/dmg.sh
 
@@ -1000,6 +1003,10 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Set up Rust toolchain (macOS)
+        if: matrix.platform == 'macos'
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Install cargo-nextest (macOS)
         if: matrix.platform == 'macos'
         run: curl -LsSf https://get.nexte.st/latest/mac | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
@@ -1079,6 +1086,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Set up Rust toolchain (macOS)
+        if: matrix.platform == 'macos'
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Build CodeTracer (non-nix)
         if: matrix.platform == 'macos'
