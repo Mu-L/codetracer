@@ -68,8 +68,8 @@ test-rust:
   set -e
   pushd src/db-backend
   # Unit tests (inside the binary)
-  cargo nextest run --release --bin db-backend
-  cargo nextest run --release --bin db-backend --run-ignored ignored-only
+  cargo nextest run --release --bin replay-server
+  cargo nextest run --release --bin replay-server --run-ignored ignored-only
   # Integration tests (tests/*.rs): DAP protocol, flow tests, etc.
   # Flow tests that need ct-rr-support/rr skip automatically when unavailable.
   # Shell/JS flow tests require sibling repos (codetracer-shell-recorders, etc.)
