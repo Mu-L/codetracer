@@ -40,7 +40,10 @@ function Ensure-Go {
   }
 
   New-Item -ItemType Directory -Force -Path $goVersionRoot | Out-Null
-  $downloadUrl = "https://go.dev/dl/$asset"
+  # Use dl.google.com for direct downloads and SHA256 checksums.
+  # The go.dev/dl/ URLs return HTML redirects for .sha256 files,
+  # which breaks checksum verification.
+  $downloadUrl = "https://dl.google.com/go/$asset"
   $shaUrl = "$downloadUrl.sha256"
 
   $tempZip = Join-Path $env:TEMP $asset
