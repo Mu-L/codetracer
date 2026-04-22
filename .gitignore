@@ -269,3 +269,5 @@ src/tup.config
 /sub-agent-report-*.txt
 .tmp/
 .tools/
+committed_dap_types.rs
+src/ct/online_sharing/test_mcr_enrichment
