@@ -13,17 +13,17 @@ button
 
 
   &:hover:not(:disabled)
-    color: color-ui-text-primary-body
+    color: colors-ui-text-primary-body
 
   &:focus:not(:disabled)
-    outline: 0.125em solid color-ui-border-focus !important
+    outline: 0.125em solid colors-ui-border-focus !important
 
   &:focus-visible:not(:disabled)
-    outline: 0.125em solid color-ui-border-focus
-    color: color-ui-text-primary-body
+    outline: 0.125em solid colors-ui-border-focus
+    color: colors-ui-text-primary-body
 
   &:disabled
-    color: color-ui-text-disabled-default !important
+    color: colors-ui-text-disabled-default !important
     opacity: 0.5
     pointer-events: none
     cursor: not-allowed
@@ -41,37 +41,37 @@ button
 // TODO: For now restrict to button class -
 // later on maybe combine the three styles?
 [class*="-button-"][class*="-primary"]
-  background-color: color-ui-surface-action-primary
-  color: color-ui-text-on-action-primary
+  background-color: colors-ui-surface-action-primary
+  color: colors-ui-text-on-action-primary
 
   &:hover
-    background-color: color-ui-surface-action-primary-hover !important
+    background-color: colors-ui-surface-action-primary-hover !important
 
 [class*="-button-"][class*="-tertiary"]
-  background-color: color-ui-surface-primary-tertiary
-  color: color-ui-text-primary-body-subtle
+  background-color: colors-ui-surface-primary-tertiary
+  color: colors-ui-text-primary-body-subtle
 
   &:disabled
-    border: 0.03125em solid color-ui-border-disabled
+    border: 0.03125em solid colors-ui-border-disabled
 
 [class*="-button-"][class*="-primary"]
 [class*="-button-"][class*="-tertiary"]
   &:hover
-    background-color: color-ui-surface-primary-tertiary-hover
+    background-color: colors-ui-surface-primary-tertiary-hover
 
   &:disabled
-    background-color: color-ui-surface-primary-disabled
+    background-color: colors-ui-surface-primary-disabled
 
 [class*="-button-"][class*="-secondary"]
-  background-color: color-ui-surface-primary-default
-  border: 0.03125em solid color-ui-border-primary
-  color: color-ui-text-primary-body-subtle
+  background-color: colors-ui-surface-primary-default
+  border: 0.03125em solid colors-ui-border-primary
+  color: colors-ui-text-primary-body-subtle
 
   &:hover
-    background-color: color-ui-surface-primary-default-hover
+    background-color: colors-ui-surface-primary-default-hover
 
   &:focus-visible:not(:disabled)
-    background-color: color-ui-surface-primary-secondary
+    background-color: colors-ui-surface-primary-secondary
 
 [class*="ct-button-sm-secondary"]
     border: 0em !important
@@ -166,8 +166,8 @@ button
     background-color: ACTIVE_LAYOUT_BUTTONS_BACKGROUND
 
 #close-element
-  background-image: ct-images-element-close
-  background-size: 0.75em 0.75em !important
+  background-image: ct-images-close-button
+  background-size: 0.5em 0.5em !important
 
 #backward-loop
   background-image: ct-images-omni-backward
