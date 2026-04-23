@@ -1,0 +1,19 @@
+# Cross-compilation settings for WASM targets.
+#
+# The cc crate uses the host gcc by default, which cannot produce wasm32
+# object files.  We point it at clang with the correct target triple.
+# The CFLAGS include the wasm-sysroot that provides stub C headers
+# needed by zstd-sys and similar C dependencies.
+#
+# Build the WASM lib with:
+#   cargo check --target wasm32-unknown-unknown \
+#     --no-default-features --features browser-transport
+
+[target.wasm32-unknown-unknown]
+linker = "rust-lld"
+
+[env]
+# Tell the cc crate to use clang for wasm32 C compilation.
+# The --target flag ensures clang emits wasm32 object code.
+CC_wasm32-unknown-unknown = "clang"
+CFLAGS_wasm32-unknown-unknown = "--target=wasm32-unknown-unknown -fno-exceptions -fno-builtin"

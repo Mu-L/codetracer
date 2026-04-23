@@ -11,9 +11,13 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+#[cfg(feature = "syntax-highlight")]
 use tree_sitter::{Node, Parser, Tree}; // Language,
+#[cfg(feature = "syntax-highlight")]
 use tree_sitter_traversal2::{traverse_tree, Order};
 
+#[cfg(feature = "syntax-highlight")]
 #[derive(Debug, Clone)]
 pub struct NodeNames {
     if_conditions: Vec<String>,
@@ -26,6 +30,7 @@ pub struct NodeNames {
     comments: Vec<String>,
 }
 
+#[cfg(feature = "syntax-highlight")]
 static NODE_NAMES: Lazy<HashMap<Lang, NodeNames>> = Lazy::new(|| {
     let mut m = HashMap::new();
     m.insert(
@@ -526,6 +531,7 @@ impl FileInfo {
     }
 }
 
+#[cfg(feature = "syntax-highlight")]
 fn field_name_in_parent(node: &Node) -> Option<String> {
     let parent = node.parent()?;
     let mut cursor = parent.walk();
@@ -616,6 +622,7 @@ impl ExprLoader {
         }
     }
 
+    #[cfg(feature = "syntax-highlight")]
     pub fn parse_file(&self, path: &PathBuf) -> Result<Tree, Box<dyn Error>> {
         let raw = &self.processed_files[path].source_code;
         let lang = self.get_current_language(path);
@@ -697,6 +704,7 @@ impl ExprLoader {
         }
     }
 
+    #[cfg(feature = "syntax-highlight")]
     fn extract_expr(&mut self, node: &Node, path: &PathBuf, row: usize) -> String {
         let source_line = self.get_source_line(path, row);
         let start_col = node.start_position().column;
@@ -704,6 +712,7 @@ impl ExprLoader {
         source_line[start_col..end_col].to_string()
     }
 
+    #[cfg(feature = "syntax-highlight")]
     fn get_method_name(&self, node: &Node, path: &PathBuf, row: usize) -> Option<String> {
         let lang = self.get_current_language(path);
         let source_code = self.get_source_line(path, row);
@@ -736,14 +745,17 @@ impl ExprLoader {
         None
     }
 
+    #[cfg(feature = "syntax-highlight")]
     fn get_first_line(&self, node: &Node) -> Position {
         Position((node.start_position().row + 1) as i64)
     }
 
+    #[cfg(feature = "syntax-highlight")]
     fn get_last_line(&self, node: &Node) -> Position {
         Position((node.end_position().row + 1) as i64)
     }
 
+    #[cfg(feature = "syntax-highlight")]
     fn extract_branches(&mut self, node: &Node, start: &Position, path: &PathBuf, opposite: &BranchId) {
         let lang = self.get_current_language(path);
         let mut branch = Branch::new();
@@ -789,10 +801,12 @@ impl ExprLoader {
         line.chars().take_while(|c| c.is_whitespace()).count()
     }
 
+    #[cfg(feature = "syntax-highlight")]
     fn is_child_by_field_name(parent: &Node, node: &Node, field: &str) -> bool {
         parent.child_by_field_name(field) == Some(*node)
     }
 
+    #[cfg(feature = "syntax-highlight")]
     fn is_variable_node(&self, lang: Lang, node: &Node) -> bool {
         match lang {
             Lang::Rust | Lang::RustWasm => {
@@ -1912,6 +1926,7 @@ impl ExprLoader {
         }
     }
 
+    #[cfg(feature = "syntax-highlight")]
     fn process_node(&mut self, node: &Node, path: &PathBuf) -> Result<(), Box<dyn Error>> {
         let row = node.start_position().row + 1;
         let start = self.get_first_line(node);
@@ -2055,6 +2070,7 @@ impl ExprLoader {
                 .extend(source_code.split('\n').map(|s| s.to_string()).collect::<Vec<_>>());
             file_info.source_code = source_code.clone();
             self.processed_files.insert(path.clone(), file_info);
+            #[cfg(feature = "syntax-highlight")]
             match self.parse_file(path) {
                 Ok(tree) => {
                     self.process_file(&tree, path)?;
@@ -2065,6 +2081,8 @@ impl ExprLoader {
                     warn!("can't process file {:?}: error {}", path, e);
                 }
             }
+            #[cfg(not(feature = "syntax-highlight"))]
+            info!("info for {:?} loaded (no syntax highlighting)", path);
         }
         Ok(())
     }
@@ -2118,6 +2136,7 @@ impl ExprLoader {
         None
     }
 
+    #[cfg(feature = "syntax-highlight")]
     fn process_file(&mut self, tree: &Tree, path: &PathBuf) -> Result<(), Box<dyn Error>> {
         let lang = self.get_current_language(path);
         let postorder: Vec<Node<'_>> = traverse_tree(tree, Order::Post).collect::<Vec<_>>();
@@ -2276,7 +2295,7 @@ impl ExprLoader {
 // step_counts: List[StepCount]
 // rr_ticks_for_iterations: List[RRTicks]
 
-#[cfg(test)]
+#[cfg(all(test, feature = "syntax-highlight"))]
 #[allow(clippy::unwrap_used)]
 #[allow(clippy::panic)]
 mod tests {

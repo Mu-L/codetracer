@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
-cc = "*"
+cc = { version = "*", optional = true }
 
 [dependencies]
 num-traits = "0.2"
@@ -57,35 +57,38 @@ shellexpand = { version = "3.1.1", optional = true }
 
 ntest = "0.9.3"
 
-tree-sitter = "*"
+# tree-sitter dependencies — only needed for syntax highlighting / source
+# analysis.  Gated behind the `syntax-highlight` feature so that WASM builds
+# (which cannot compile the C grammars) can omit them.
+tree-sitter = { version = "*", optional = true }
 # helper lib:
-tree-sitter-traversal2 = "0.2.0"
+tree-sitter-traversal2 = { version = "0.2.0", optional = true }
 # language-specific grammar bindings:
-tree-sitter-rust = "0.24"
-tree-sitter-c = "0.24.1"
-tree-sitter-cpp = "0.23.4"
-tree-sitter-pascal = "0.10.0"
-tree-sitter-d = "0.8.2"
-tree-sitter-ruby = "0.23.1"
-tree-sitter-python = "0.25.0"
-tree-sitter-nim = { path = "../../libs/tree-sitter-nim/bindings/rust" }
+tree-sitter-rust = { version = "0.24", optional = true }
+tree-sitter-c = { version = "0.24.1", optional = true }
+tree-sitter-cpp = { version = "0.23.4", optional = true }
+tree-sitter-pascal = { version = "0.10.0", optional = true }
+tree-sitter-d = { version = "0.8.2", optional = true }
+tree-sitter-ruby = { version = "0.23.1", optional = true }
+tree-sitter-python = { version = "0.25.0", optional = true }
+tree-sitter-nim = { path = "../../libs/tree-sitter-nim/bindings/rust", optional = true }
 
 # the binding for our custom tracepoint tresitter grammar:
-tree-sitter-tracepoint = { path = "./tree-sitter-trace/" }
-tree-sitter-go = "0.25.0"
-tree-sitter-javascript = "0.25.0"
-tree-sitter-bash = "0.23.3"
-tree-sitter-solidity = "1.2"
+tree-sitter-tracepoint = { path = "./tree-sitter-trace/", optional = true }
+tree-sitter-go = { version = "0.25.0", optional = true }
+tree-sitter-javascript = { version = "0.25.0", optional = true }
+tree-sitter-bash = { version = "0.23.3", optional = true }
+tree-sitter-solidity = { version = "1.2", optional = true }
 # blockchain-specific grammar bindings (all via git submodules in libs/):
-tree-sitter-cairo = { path = "../../libs/tree-sitter-cairo" }
-tree-sitter-aiken = { path = "../../libs/tree-sitter-aiken" }
-tree-sitter-move-on-aptos = { path = "../../libs/tree-sitter-move-on-aptos" }
-tree-sitter-sway = { path = "../../libs/tree-sitter-sway" }
-tree-sitter-circom = { path = "../../libs/tree-sitter-circom" }
-tree-sitter-leo = { path = "../../libs/tree-sitter-leo" }
-tree-sitter-tolk = { path = "../../libs/tree-sitter-tolk" }
-tree-sitter-masm = { path = "../../libs/tree-sitter-masm/bindings/rust" }
-tree-sitter-cadence = { path = "../../libs/tree-sitter-cadence/bindings/rust" }
+tree-sitter-cairo = { path = "../../libs/tree-sitter-cairo", optional = true }
+tree-sitter-aiken = { path = "../../libs/tree-sitter-aiken", optional = true }
+tree-sitter-move-on-aptos = { path = "../../libs/tree-sitter-move-on-aptos", optional = true }
+tree-sitter-sway = { path = "../../libs/tree-sitter-sway", optional = true }
+tree-sitter-circom = { path = "../../libs/tree-sitter-circom", optional = true }
+tree-sitter-leo = { path = "../../libs/tree-sitter-leo", optional = true }
+tree-sitter-tolk = { path = "../../libs/tree-sitter-tolk", optional = true }
+tree-sitter-masm = { path = "../../libs/tree-sitter-masm/bindings/rust", optional = true }
+tree-sitter-cadence = { path = "../../libs/tree-sitter-cadence/bindings/rust", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59.0", features = [
@@ -121,9 +124,40 @@ tempfile = "3"
 [features]
 debugging = []
 
-default = ["io-transport"]
+default = ["io-transport", "syntax-highlight"]
 
 io-transport = ["dep:shellexpand"]
+
+# Pulls in tree-sitter and all language grammars for source code analysis,
+# variable extraction, and tracepoint compilation.  Disable for WASM builds
+# where the C grammars cannot be cross-compiled.
+syntax-highlight = [
+  "dep:cc",
+  "dep:tree-sitter",
+  "dep:tree-sitter-traversal2",
+  "dep:tree-sitter-rust",
+  "dep:tree-sitter-c",
+  "dep:tree-sitter-cpp",
+  "dep:tree-sitter-pascal",
+  "dep:tree-sitter-d",
+  "dep:tree-sitter-ruby",
+  "dep:tree-sitter-python",
+  "dep:tree-sitter-nim",
+  "dep:tree-sitter-tracepoint",
+  "dep:tree-sitter-go",
+  "dep:tree-sitter-javascript",
+  "dep:tree-sitter-bash",
+  "dep:tree-sitter-solidity",
+  "dep:tree-sitter-cairo",
+  "dep:tree-sitter-aiken",
+  "dep:tree-sitter-move-on-aptos",
+  "dep:tree-sitter-sway",
+  "dep:tree-sitter-circom",
+  "dep:tree-sitter-leo",
+  "dep:tree-sitter-tolk",
+  "dep:tree-sitter-masm",
+  "dep:tree-sitter-cadence",
+]
 nim-reader = ["dep:codetracer_trace_writer_nim"]
 browser-transport = [
   "dep:serde-wasm-bindgen",
