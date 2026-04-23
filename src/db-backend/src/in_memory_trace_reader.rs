@@ -166,11 +166,6 @@ impl TraceReader for InMemoryTraceReader {
         &self.db.end_of_program
     }
 
-    // ── Transitional ───────────────────────────────────────────────
-
-    fn as_db(&self) -> &Db {
-        &self.db
-    }
 }
 
 #[cfg(test)]
@@ -230,11 +225,11 @@ mod tests {
     }
 
     #[test]
-    fn as_db_returns_inner_db() {
+    fn workdir_matches_inner_db() {
         let reader = empty_reader();
-        // Verify the transitional as_db method provides access to the
-        // underlying Db (same workdir we constructed with).
-        assert_eq!(reader.as_db().workdir, PathBuf::from("/tmp/test-workdir"));
+        // Verify the reader exposes the same workdir that the inner Db
+        // was constructed with.
+        assert_eq!(reader.workdir(), Path::new("/tmp/test-workdir"));
     }
 
     #[test]

@@ -6,11 +6,10 @@ use std::sync::Arc;
 use codetracer_trace_types::{CallKey, StepId};
 use log::info;
 
-use crate::db::{Db, DbStep, MaterializedReplaySession};
+use crate::db::{DbStep, MaterializedReplaySession};
 use crate::distinct_vec::DistinctVec;
 use crate::expr_loader::ExprLoader;
 use crate::flow_preloader::FlowPreloader;
-use crate::in_memory_trace_reader::InMemoryTraceReader;
 use crate::task::{FlowMode, LineStep, LineStepKind, LineStepValue, Location, TraceKind};
 use crate::trace_reader::TraceReader;
 
@@ -74,9 +73,8 @@ impl StepLinesLoader {
         location: &Location,
         backward_count: usize,
         forward_count: usize,
-        db: &Db,
+        reader: Arc<dyn TraceReader>,
         flow_preloader: &mut FlowPreloader,
-        _reader: &dyn TraceReader,
     ) -> Vec<LineStep> {
         let mut line_steps = vec![];
         let location_step_index = location.rr_ticks.0;
@@ -96,13 +94,10 @@ impl StepLinesLoader {
                 break;
             }
             let step_id = StepId(step_id_int as i64);
-            let call_key = db.call_key_for_step(step_id);
+            let call_key = reader.call_key_for_step(step_id).unwrap_or(CallKey(-1));
             if !self.flow_loaded.contains(&call_key.0) {
                 let location = self.global_line_steps[step_id].location.clone();
-                // let function_id = db.calls[call_key].function_id;
-                // let function_first = db.functions[function_id].line;
-                let reader: Arc<dyn TraceReader> = Arc::new(InMemoryTraceReader::new(db.clone()));
-                let mut replay = MaterializedReplaySession::new(reader);
+                let mut replay = MaterializedReplaySession::new(Arc::clone(&reader));
                 let flow_update = flow_preloader.load(location, FlowMode::Call, TraceKind::Materialized, &mut replay);
                 if !flow_update.error && !flow_update.view_updates.is_empty() {
                     let flow_view_update = &flow_update.view_updates[0];

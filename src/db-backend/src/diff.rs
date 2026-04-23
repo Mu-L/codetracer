@@ -88,7 +88,7 @@ pub fn load_and_postprocess_trace(trace_folder: &Path) -> Result<Db, Box<dyn Err
 }
 
 // loop shape 2:
-fn index_function_flow(_db: &Db, function_id: FunctionId) -> Result<(), Box<dyn Error>> {
+fn index_function_flow(function_id: FunctionId) -> Result<(), Box<dyn Error>> {
     // recursion?
     // each call: load current flow view update(eventually first N, but also the total count)
     // send a vector with those and the count
@@ -148,8 +148,8 @@ pub fn index_diff(diff: Diff, trace_folder: &Path) -> Result<(), Box<dyn Error>>
     info!("diff_lines {diff_lines:?}");
     let mut flow_preloader = FlowPreloader::new();
     let reader: Arc<dyn crate::trace_reader::TraceReader> = Arc::new(InMemoryTraceReader::new(db.clone()));
-    let mut replay = MaterializedReplaySession::new(reader);
-    let flow_update = match flow_preloader.load_diff_flow(diff_lines, &db, TraceKind::Materialized, &mut replay) {
+    let mut replay = MaterializedReplaySession::new(Arc::clone(&reader));
+    let flow_update = match flow_preloader.load_diff_flow(diff_lines, reader.as_ref(), TraceKind::Materialized, &mut replay) {
         Ok(flow_update_direct) => flow_update_direct,
         Err(_e) => FlowUpdate::error("load diff flow error: {e:?}"),
     };

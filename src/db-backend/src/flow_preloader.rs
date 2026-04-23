@@ -6,7 +6,7 @@ use codetracer_trace_types::{CallKey, Line, StepId, TypeKind, TypeRecord, TypeSp
 use log::{error, info, warn};
 
 use crate::{
-    db::{Db, DbRecordEvent},
+    db::DbRecordEvent,
     expr_loader::ExprLoader,
     lang::{lang_from_context, Lang},
     nim_mangling,
@@ -80,7 +80,7 @@ impl FlowPreloader {
     pub fn load_diff_flow(
         &mut self,
         diff_lines: HashSet<(PathBuf, i64)>,
-        db: &Db,
+        reader: &dyn crate::trace_reader::TraceReader,
         trace_kind: TraceKind,
         replay: &mut dyn ReplaySession,
     ) -> Result<FlowUpdate, Box<dyn Error>> {
@@ -110,18 +110,22 @@ impl FlowPreloader {
         // breakpoint; count a next call for it;
         // maybe this will just work because they're registered as loop first line
 
-        for step in db.step_from(codetracer_trace_types::StepId(0), true) {
-            if diff_lines.contains(&(PathBuf::from(db.paths[step.path_id].clone()), step.line.0)) {
-                diff_call_keys.insert(step.call_key.0);
-                let location = db.load_location(step.step_id, step.call_key, &mut self.expr_loader);
-                // register an artifficial loop for each function from the diff,
-                //   that we track, so we can visualize different global calls to those functions
-                //   with sliders/count etc:
-                self.expr_loader.register_loop(
-                    Position(location.function_first),
-                    Position(location.function_last),
-                    &PathBuf::from(&db.paths[step.path_id]),
-                );
+        for step_idx in 0..reader.step_count() {
+            let step_id = codetracer_trace_types::StepId(step_idx as i64);
+            if let Some(step) = reader.step(step_id) {
+                let path_str = reader.path(step.path_id).unwrap_or("");
+                if diff_lines.contains(&(PathBuf::from(path_str), step.line.0)) {
+                    diff_call_keys.insert(step.call_key.0);
+                    let location = reader.load_location(step.step_id, step.call_key, &mut self.expr_loader);
+                    // register an artifficial loop for each function from the diff,
+                    //   that we track, so we can visualize different global calls to those functions
+                    //   with sliders/count etc:
+                    self.expr_loader.register_loop(
+                        Position(location.function_first),
+                        Position(location.function_last),
+                        &PathBuf::from(path_str),
+                    );
+                }
             }
         }
 

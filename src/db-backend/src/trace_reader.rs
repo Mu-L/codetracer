@@ -9,7 +9,7 @@ use codetracer_trace_types::{
     TypeSpecificInfo, ValueRecord, VariableId, NO_KEY,
 };
 
-use crate::db::{CellChange, Db, DbCall, DbRecordEvent, DbStep, EndOfProgram, NEXT_INTERNAL_STEP_OVERS_LIMIT};
+use crate::db::{CellChange, DbCall, DbRecordEvent, DbStep, EndOfProgram, NEXT_INTERNAL_STEP_OVERS_LIMIT};
 use crate::expr_loader::ExprLoader;
 use crate::task::{Call, CallArg, Location, RRTicks};
 use crate::value::{Type, Value};
@@ -846,13 +846,4 @@ pub trait TraceReader: std::fmt::Debug + Send {
         None
     }
 
-    // ── Transitional ───────────────────────────────────────────────
-
-    /// Direct access to the underlying `Db`.
-    ///
-    /// This is a **transitional** escape hatch that allows code which
-    /// has not yet been migrated to the `TraceReader` API to keep
-    /// working.  Once every call-site goes through trait methods, this
-    /// method will be removed.
-    fn as_db(&self) -> &Db;
 }
