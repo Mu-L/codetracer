@@ -20,6 +20,9 @@ use crate::db::{CellChange, Db, DbCall, DbRecordEvent, DbStep, EndOfProgram};
 use crate::trace_processor::TraceProcessor;
 use crate::trace_reader::TraceReader;
 
+#[cfg(feature = "nim-reader")]
+use codetracer_trace_writer_nim::NimTraceReaderHandle;
+
 use ctfs_container::CtfsReader;
 
 /// A [`TraceReader`] backed by a `.ct` CTFS container file.
@@ -104,7 +107,7 @@ impl CTFSTraceReader {
 
         if is_new_format(&ctfs) {
             info!("CTFS new format detected — skipping postprocessing");
-            Self::open_new_format(&mut ctfs)
+            Self::open_new_format(&mut ctfs, path)
         } else {
             info!("CTFS old format detected — running postprocessing");
             Self::open_old_format(&mut ctfs)
@@ -119,34 +122,130 @@ impl CTFSTraceReader {
     /// step). This eliminates the O(n) startup cost where n is the number
     /// of trace events.
     ///
+    /// When the `nim-reader` feature is enabled, this uses
+    /// [`NimTraceReaderHandle`] to open the `.ct` file via the Nim
+    /// seek-based reader FFI. Currently it reads metadata and interning
+    /// tables to build a minimal `Db`; full step/call/event population
+    /// will follow.
+    ///
+    /// Without `nim-reader`, returns an error indicating the format is
+    /// recognized but the reader is not available.
+    #[allow(unused_variables)]
+    fn open_new_format(ctfs: &mut CtfsReader, ct_path: &Path) -> Result<Self, Box<dyn Error>> {
+        #[cfg(feature = "nim-reader")]
+        {
+            return Self::open_new_format_nim(ctfs, ct_path);
+        }
+
+        #[cfg(not(feature = "nim-reader"))]
+        {
+            Err(format!(
+                "CTFS new format detected (steps.dat present) but the nim-reader \
+                 feature is not enabled. Container: {}. \
+                 Rebuild with --features nim-reader to use the Nim seek-based reader.",
+                ctfs.file_names().join(", ")
+            )
+            .into())
+        }
+    }
+
+    /// Nim-backed new-format reader implementation.
+    ///
+    /// Opens the `.ct` file via the Nim `NewTraceReader` FFI, reads metadata
+    /// and interning tables, and builds a minimal `Db`. Step, call, and
+    /// event data is read on-demand via JSON queries to the Nim reader.
+    ///
     /// # Current status
     ///
-    /// The new-format writer does not exist yet — no recorder currently
-    /// produces `steps.dat`. This method is the reader-side infrastructure
-    /// for M37 (remove postprocessing startup). Once the seek-based writer
-    /// is implemented, this path will be exercised automatically for any
-    /// `.ct` file containing `steps.dat`.
-    fn open_new_format(ctfs: &mut CtfsReader) -> Result<Self, Box<dyn Error>> {
-        // TODO(M37): Implement loading pre-processed data from the new-format
-        // CTFS internal files (steps.dat, calls.dat, events.dat, etc.).
+    /// This is the first integration point: it proves the FFI bridge works
+    /// end-to-end and populates metadata + interning tables. Full Db
+    /// population (steps, calls, events, step_map) comes next.
+    #[cfg(feature = "nim-reader")]
+    fn open_new_format_nim(_ctfs: &mut CtfsReader, ct_file_path: &Path) -> Result<Self, Box<dyn Error>> {
+        use codetracer_trace_types::{FunctionRecord, Line, PathId, TypeKind, TypeRecord, TypeSpecificInfo};
+        use std::path::PathBuf;
+
+        let ct_path = ct_file_path.to_string_lossy().to_string();
+
+        let reader = NimTraceReaderHandle::open(&ct_path)
+            .map_err(|e| format!("failed to open .ct via Nim reader: {e}"))?;
+
+        info!(
+            "Nim reader opened: {} steps, {} calls, {} events, {} paths, {} functions, {} types, {} varnames",
+            reader.step_count(),
+            reader.call_count(),
+            reader.event_count(),
+            reader.path_count(),
+            reader.function_count(),
+            reader.type_count(),
+            reader.varname_count(),
+        );
+
+        // Build a Db populated with metadata and interning tables from
+        // the Nim reader. Steps/calls/events are not yet loaded — this
+        // proves the FFI bridge works and provides correct metadata to
+        // the GUI.
+        let workdir_str = reader.workdir();
+        let workdir = if workdir_str.is_empty() {
+            PathBuf::from(".")
+        } else {
+            PathBuf::from(&workdir_str)
+        };
+
+        let mut db = Db::new(&workdir);
+
+        // Populate interning tables from the Nim reader.
         //
-        // The implementation will:
-        // 1. Read binary metadata from `meta.dat`
-        // 2. Load interning tables (paths.dat+off, funcs.dat+off, types.dat+off, varnames.dat+off)
-        // 3. Load pre-computed steps, calls, events, step_map, cell_changes
-        //    directly into Db fields — no TraceProcessor involved
-        //
-        // For now, return an error indicating the format is recognized but
-        // the reader is not yet implemented. This preserves forward
-        // compatibility: when the writer starts producing new-format files,
-        // this error will surface clearly during development.
-        Err(format!(
-            "CTFS new format detected (steps.dat present) but the seek-based \
-             reader is not yet implemented. Container: {}. \
-             This path will be filled in when the seek-based writer is available.",
-            ctfs.file_names().join(", ")
-        )
-        .into())
+        // Paths — also populate the reverse path_map for lookups by string.
+        for i in 0..reader.path_count() {
+            let p = reader.path(i).map_err(|e| format!("path {i}: {e}"))?;
+            db.paths.push(p.clone());
+            db.path_map.insert(p, PathId(db.paths.len() - 1));
+            // Ensure step_map has an entry for this path
+            db.step_map.push(HashMap::new());
+        }
+
+        // Functions — the Nim reader only exposes function names (not
+        // path/line), so we create stub FunctionRecords for now.
+        for i in 0..reader.function_count() {
+            let name = reader.function(i).map_err(|e| format!("function {i}: {e}"))?;
+            db.functions.push(FunctionRecord {
+                name,
+                path_id: PathId(0),
+                line: Line(0),
+            });
+        }
+
+        // Types — similarly, only the type name is available via FFI.
+        for i in 0..reader.type_count() {
+            let name = reader.type_name(i).map_err(|e| format!("type {i}: {e}"))?;
+            db.types.push(TypeRecord {
+                kind: TypeKind::Raw,
+                lang_type: name,
+                specific_info: TypeSpecificInfo::None,
+            });
+        }
+
+        // Variable names
+        for i in 0..reader.varname_count() {
+            let name = reader.varname(i).map_err(|e| format!("varname {i}: {e}"))?;
+            db.variable_names.push(name);
+        }
+
+        info!(
+            "Nim reader: Db populated with {} paths, {} functions, {} types, {} varnames (steps/calls/events pending)",
+            db.paths.len(),
+            db.functions.len(),
+            db.types.len(),
+            db.variable_names.len(),
+        );
+
+        // TODO: Populate db.steps, db.calls, db.events, db.step_map from
+        // the Nim reader's step_json/call_json/event_json methods. This
+        // requires JSON parsing and mapping to Db data structures, which
+        // is the next integration step.
+
+        Ok(CTFSTraceReader { db })
     }
 
     /// Open an old-format CTFS container by deserializing raw events from
@@ -552,13 +651,24 @@ mod tests {
             .unwrap();
 
         let result = CTFSTraceReader::open(&ct_path);
-        // New-format reader is not yet implemented, so this should error
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(
-            err_msg.contains("seek-based reader is not yet implemented"),
-            "expected 'not yet implemented' error, got: {err_msg}"
-        );
+        // Without the nim-reader feature, new-format should error; with it,
+        // it may succeed or fail depending on the container contents.
+        #[cfg(not(feature = "nim-reader"))]
+        {
+            assert!(result.is_err());
+            let err_msg = result.unwrap_err().to_string();
+            assert!(
+                err_msg.contains("nim-reader feature is not enabled"),
+                "expected 'nim-reader feature is not enabled' error, got: {err_msg}"
+            );
+        }
+        #[cfg(feature = "nim-reader")]
+        {
+            // With nim-reader, the Nim FFI will attempt to open the container.
+            // A placeholder steps.dat won't parse correctly, so expect an error
+            // from the Nim reader (not the "not enabled" message).
+            assert!(result.is_err(), "placeholder steps.dat should not parse");
+        }
     }
 
     /// M38 — GUI integration test: full trace pipeline through CTFSTraceReader.
