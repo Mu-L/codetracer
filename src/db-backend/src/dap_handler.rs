@@ -2567,9 +2567,8 @@ mod tests {
         Ok(())
     }
 
-    // Test a tracepoint on a loop line
+    // Test a tracepoint on a loop line (processes 10,000 loop iterations; ~7s)
     #[test]
-    #[ignore]
     fn test_tracepoint_in_loop() -> Result<(), Box<dyn Error>> {
         let size = 10000;
         let db: Db = setup_db_loop(size);
@@ -2581,9 +2580,8 @@ mod tests {
         Ok(())
     }
 
-    // Test a given number of steps with individual tracepoint on each
+    // Test a given number of steps with individual tracepoint on each (10,000 steps; ~7s)
     #[test]
-    #[ignore]
     fn test_big_number_tracepoints() -> Result<(), Box<dyn Error>> {
         // Number of tracepoints and steps
         let count: usize = 10000;
