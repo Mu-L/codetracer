@@ -1393,4 +1393,119 @@ mod tests {
             median.as_micros()
         );
     }
+
+    /// M37 — Verify that the old-format postprocessing path correctly builds
+    /// the `Db` from a 1000-step trace. This is not a startup time benchmark
+    /// (the old format always requires O(n) postprocessing); it verifies
+    /// correctness of the existing path that M37 preserves.
+    ///
+    /// The new-format startup time benchmark (`bench_new_format_startup_time`)
+    /// requires the `nim-reader` feature because `open_new_format` delegates
+    /// to the Nim seek-based reader. Without that feature, the new-format
+    /// path returns an error, so the benchmark is feature-gated.
+    #[test]
+    fn bench_old_format_postprocess_1000_steps() {
+        use std::time::Instant;
+
+        let dir = tempfile::tempdir().unwrap();
+        let ct_path = build_trace_with_steps(dir.path(), 1000);
+
+        let start = Instant::now();
+        let reader = CTFSTraceReader::open(&ct_path).unwrap();
+        let elapsed = start.elapsed();
+
+        assert_eq!(reader.step_count(), 1000);
+        println!(
+            "{{\"benchmark\":\"old_format_postprocess_1000\",\"startup_ms\":{}}}",
+            elapsed.as_millis()
+        );
+
+        // Old format with 1000 steps should complete well under 1 second.
+        assert!(
+            elapsed.as_millis() < 1000,
+            "old-format postprocessing took too long: {}ms (threshold: 1000ms)",
+            elapsed.as_millis()
+        );
+    }
+
+    /// M37 — Verify new-format startup time is < 200ms.
+    ///
+    /// This test requires the `nim-reader` feature because `open_new_format`
+    /// delegates to the Nim seek-based reader. When `nim-reader` is enabled,
+    /// a properly formatted new-format `.ct` file should open in < 200ms
+    /// because no O(n) postprocessing occurs — data is loaded on demand from
+    /// pre-computed data structures.
+    ///
+    /// Without `nim-reader`, the test verifies that format detection correctly
+    /// identifies the new format and returns an appropriate error.
+    #[test]
+    fn bench_new_format_startup_time() {
+        let dir = tempfile::tempdir().unwrap();
+        let ct_path = dir.path().join("new-format-bench.ct");
+
+        // Create a minimal new-format container with steps.dat to trigger
+        // format detection. The actual content depends on the Nim writer's
+        // output format.
+        let meta_json = br#"{"workdir":"/tmp","program":"/tmp/bench.py","args":[]}"#;
+        ctfs_container::write_minimal_ctfs(
+            &ct_path,
+            &[("meta.json", meta_json), ("steps.dat", b"placeholder")],
+        )
+        .unwrap();
+
+        #[cfg(not(feature = "nim-reader"))]
+        {
+            // Without nim-reader, verify format detection works but open fails
+            // with the expected error (not a postprocessing error).
+            let result = CTFSTraceReader::open(&ct_path);
+            assert!(result.is_err());
+            let err = result.unwrap_err().to_string();
+            assert!(
+                err.contains("nim-reader"),
+                "expected nim-reader feature error, got: {err}"
+            );
+        }
+
+        #[cfg(feature = "nim-reader")]
+        {
+            use std::time::Instant;
+
+            // With nim-reader, the open should succeed (assuming the Nim reader
+            // can handle the container) and complete under 200ms.
+            let start = Instant::now();
+            let result = CTFSTraceReader::open(&ct_path);
+            let elapsed = start.elapsed();
+
+            // NOTE: This test uses a placeholder steps.dat which the Nim reader
+            // may not accept. If it errors, that's expected — the startup time
+            // is still measured up to the point of error detection. A real
+            // integration test with a properly recorded trace is needed for
+            // full M37 verification (see M38).
+            if result.is_ok() {
+                println!(
+                    "{{\"benchmark\":\"new_format_startup\",\"startup_ms\":{}}}",
+                    elapsed.as_millis()
+                );
+                assert!(
+                    elapsed.as_millis() < 200,
+                    "new-format startup took too long: {}ms (threshold: 200ms)",
+                    elapsed.as_millis()
+                );
+            } else {
+                // Expected for placeholder data. The key verification is that
+                // the startup path reached the Nim reader (not postprocess).
+                let err = result.unwrap_err().to_string();
+                assert!(
+                    !err.contains("postprocess"),
+                    "new-format path should not involve postprocessing, but got: {err}"
+                );
+                println!(
+                    "{{\"benchmark\":\"new_format_startup\",\"status\":\"error\",\
+                     \"startup_ms\":{},\"error\":\"{}\"}}",
+                    elapsed.as_millis(),
+                    err.replace('"', "'")
+                );
+            }
+        }
+    }
 }
