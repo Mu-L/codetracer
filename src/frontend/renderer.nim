@@ -25,19 +25,19 @@ from std / dom import Element, getAttribute, Node, preventDefault, document, win
                 getElementsByClassName, contains, add
 
 
-var configureUiIPC*: js
-var ipc*: js
-var socketdebug*: js
+var configureUiIPC*: js # app-global
+var ipc*: js # app-global
+var socketdebug*: js # app-global
 
-var start* = now()
+var start* = now() # app-global
 
-var electron* {.importc.}: JsObject
-var Chart* {.importc.}: JsObject
-var vex* {.importc.}: JsObject
-var tippy* {.importc.}: JsObject
-var monaco* {.importc.}: Monaco
-var fuzzysort* {.importc.}: Fuzzysort
-var noUiSlider* {.importc.}: js
+var electron* {.importc.}: JsObject # app-global
+var Chart* {.importc.}: JsObject # app-global
+var vex* {.importc.}: JsObject # app-global
+var tippy* {.importc.}: JsObject # app-global
+var monaco* {.importc.}: Monaco # app-global
+var fuzzysort* {.importc.}: Fuzzysort # app-global
+var noUiSlider* {.importc.}: js # app-global
 proc wNumb*(options: js): js {.importc.}
 proc readFileUtf8(path: cstring): Future[cstring] {.importjs: "require('fs').promises.readFile(#, 'utf8')".}
 
@@ -52,9 +52,9 @@ if inElectron:
 else:
   ipc = undefined
 
-var escapeHandler*: proc: void
+var escapeHandler*: proc: void # app-global
 escapeHandler = nil
-var contextMenuHandlers*: seq[proc(ev: Event)]
+var contextMenuHandlers*: seq[proc(ev: Event)] # app-global
 
 template componentContainerClass*(class: string = ""): cstring =
   cstring("component-container " & class)
@@ -197,7 +197,7 @@ proc langs*: string =
     result.add("<option value='$1'>$2</option>" % [toCLang(z), toName(z)])
 
 
-var traceTime = Date.now()
+var traceTime = Date.now() # per-replay
 const traceRedrawLimit = 500
 
 proc maybeRedrawTraces*(length: int) =
@@ -241,7 +241,7 @@ proc loadFlowUI*(ui: cstring): FlowUI =
 
 # IPC HANDLERS
 
-var helpers*: Helpers
+var helpers*: Helpers # app-global
 
 proc destroyLayoutInstance(layout: GoldenLayout) {.importjs: "#.destroy()".}
 
@@ -367,7 +367,7 @@ proc placeByRRTicks*(stops: var seq[Stop], currentStop: Stop): int =
 
   return resultIndex
 
-var tracepointStart* = 0i64
+var tracepointStart* = 0i64 # per-replay
 
 proc onContextStartTrace*(sender: js, response: seq[Tracepoint]) =
   data.services.trace.traceSessions.add(TraceSession(
@@ -474,7 +474,7 @@ proc expand*(path: cstring, line: int) {.exportc, used.} =
   # TODO
   # expandUpdate(path, line, MacroExpansion)
 
-var debugResponse* = DebugOutput(kind: DebugResult, output: cstring"")
+var debugResponse* = DebugOutput(kind: DebugResult, output: cstring"") # per-replay
 
 karaxSilent = true #SILENT_LOG
 
@@ -1219,7 +1219,7 @@ proc debugGDB*(process: cstring, cmd: cstring) {.exportc.} =
   # js: debugGDB("stable", "pi 2 + 2")
   ipc.send "CODETRACER::debug-gdb", js{process: process, cmd: cmd}
 
-var startedSent = false
+var startedSent = false # per-replay
 
 proc onStarted*(sender: js, response: js) =
   if not startedSent:
@@ -1462,6 +1462,6 @@ proc recordFromLaunchConfig*(data: Data, actionData: JsObject = nil) =
     # "Record from Launch Config..." directly. Just show a notification.
     data.viewsApi.infoMessage(cstring"Select a configuration from Debug > Launch Configurations")
 
-var scrollAssembly* = -1
+var scrollAssembly* = -1 # per-replay
 
 export event_log_service, debugger_service, editor_service, flow_service, search_service, shell_service, utils

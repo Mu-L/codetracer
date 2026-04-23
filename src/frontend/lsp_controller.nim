@@ -35,9 +35,9 @@ let controllerConfigs = @[
     includeLinkedProjects: false)
 ]
 
-var controllerStates = initTable[string, ControllerState]()
-var pathModuleCache: JsObject
-var pendingStartUrls = initTable[string, string]()
+var controllerStates = initTable[string, ControllerState]() # per-replay
+var pathModuleCache: JsObject # app-global
+var pendingStartUrls = initTable[string, string]() # per-replay
 
 proc startClient(kind: string; url: string; allowDefer: bool = true)
 

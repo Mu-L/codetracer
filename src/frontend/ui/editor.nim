@@ -109,7 +109,7 @@ func loadCallName(lineText: cstring, column: int): cstring =
   var finish = i - 1
   lineText.slice(start, finish + 1)
 
-var commands = JsAssoc[cstring, (proc(editor: MonacoEditor, e: EditorViewComponent): void)]{ ## commands for each monaco editor instance
+var commands = JsAssoc[cstring, (proc(editor: MonacoEditor, e: EditorViewComponent): void)]{ ## commands for each monaco editor instance # app-global
   # TODO improve or retire other modes
   # cstring"ALT+P":      proc(editor: MonacoEditor, e: EditorViewComponent) = e.flow.switchFlowUI(FlowParallel),
   # cstring"ALT+I":      proc(editor: MonacoEditor, e: EditorViewComponent) = e.flow.switchFlowUI(FlowInline),

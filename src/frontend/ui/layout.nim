@@ -14,7 +14,7 @@ type
   ContextHandler* = proc(tab: js, args: seq[string])
 
 # context handlers for each shortcut
-var contextHandlers*: JsAssoc[cstring, JsAssoc[cstring, ContextHandler]] = JsAssoc[cstring, JsAssoc[cstring, ContextHandler]]{}
+var contextHandlers*: JsAssoc[cstring, JsAssoc[cstring, ContextHandler]] = JsAssoc[cstring, JsAssoc[cstring, ContextHandler]]{} # app-global
 
 # SEARCH
 

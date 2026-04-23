@@ -1627,12 +1627,8 @@ type
     maxRRTicks*:      int
 
   Data* = ref object
-    viewsApi*:              MediatorWithSubscribers
-    services*:              Services
-    ui*:                    Components
     redraw*:                proc: void
     ipc*:                   JsObject
-    network*:               Network
     config*:                Config
     lastNoInfoMessage*:     cstring
     functions*:             Functions
@@ -1643,9 +1639,7 @@ type
     recentTraces*:          seq[Trace]
     recentFolders*:         seq[RecentFolder]
     stylusTransactions*:    seq[StylusTransaction]
-    pointList*:             PointListData
     breakpointMenu*:        JsAssoc[cstring, JsAssoc[int, BreakpointMenu]]
-    connection*:            ConnectionState
 
     # FrontendTestRunner, but i(alexander) don't want
     # to depend on the frontend test code here
@@ -1818,6 +1812,28 @@ template asyncSendCache*(d: Data): untyped = d.sessions[d.activeSessionIndex].as
 template `asyncSendCache=`*(d: Data, v: auto) =
   d.sessions[d.activeSessionIndex].asyncSendCache = v
 
+# M3 migration: services forwarding.
+template services*(d: Data): untyped = d.sessions[d.activeSessionIndex].services
+proc `services=`*(d: Data, v: Services) = d.sessions[d.activeSessionIndex].services = v
+
+# M4 migration: viewsApi forwarding.
+template viewsApi*(d: Data): untyped = d.sessions[d.activeSessionIndex].viewsApi
+proc `viewsApi=`*(d: Data, v: MediatorWithSubscribers) = d.sessions[d.activeSessionIndex].viewsApi = v
+
+# M5 migration: ui (Components) forwarding.
+template ui*(d: Data): untyped = d.sessions[d.activeSessionIndex].ui
+proc `ui=`*(d: Data, v: Components) = d.sessions[d.activeSessionIndex].ui = v
+
+# M6 migration: connection, network, pointList forwarding.
+template connection*(d: Data): untyped = d.sessions[d.activeSessionIndex].connection
+proc `connection=`*(d: Data, v: ConnectionState) = d.sessions[d.activeSessionIndex].connection = v
+
+template network*(d: Data): untyped = d.sessions[d.activeSessionIndex].network
+proc `network=`*(d: Data, v: Network) = d.sessions[d.activeSessionIndex].network = v
+
+template pointList*(d: Data): untyped = d.sessions[d.activeSessionIndex].pointList
+proc `pointList=`*(d: Data, v: PointListData) = d.sessions[d.activeSessionIndex].pointList = v
+
 proc newReplaySession*(id: ReplaySessionId): ReplaySession =
   ## Create a new, minimally-initialized ReplaySession.
   ## The caller is responsible for populating the heavyweight fields
@@ -1847,13 +1863,20 @@ when defined(ctRenderer):
 
   var data* = Data(
     lastAgentPrompt: "",
-    viewsApi: setupSinglePageViewsApi(cstring"single-page-frontend-to-views"),
-    connection: ConnectionState(
-      connected: true,
-      reason: ConnectionLossNone,
-      detail: cstring""
-    ),
-    services: Services(
+    breakpointMenu: JsAssoc[cstring, JsAssoc[int, BreakpointMenu]]{},
+    sessions: @[],
+    activeSessionIndex: 0)
+
+  # Multi-replay-window (M0 + M1 + M2): create the initial (and currently only)
+  # replay session.  Per-replay fields (trace, status, startOptions,
+  # minRRTicks, maxRRTicks, dapApi, asyncSendCache) now live exclusively on
+  # ReplaySession and are forwarded from Data via templates.  The session must
+  # be added to data.sessions before any forwarding template is used.
+  block:
+    var session = newReplaySession(ReplaySessionId(0))
+    session.dapApi = DapApi()
+    session.viewsApi = setupSinglePageViewsApi(cstring"single-page-frontend-to-views")
+    session.services = Services(
       eventLog: EventLogService(),
       debugger: DebuggerService(
         locals: @[],
@@ -1872,8 +1895,6 @@ when defined(ctRenderer):
         closedTabs: @[],
         saveHistoryTimeoutId: -1,
         switchTabHistoryLimit: 2000,
-        # lowLevelTabs: JsAssoc[cstring, LowLevelTab]{},
-        # lowLevel: LowLevel(),
         expandedOpen: JsAssoc[cstring, TabInfo]{},
         cachedFiles: JsAssoc[cstring, TabInfo]{},
         addedDiffId: @[],
@@ -1891,39 +1912,27 @@ when defined(ctRenderer):
       flow: FlowService(),
       trace: TraceService(),
       search: SearchService(
-        # commandData: CommandData(),
         paths: JsAssoc[cstring, bool]{},
         pluginCommands: JsAssoc[cstring, SearchSource]{},
         activeCommandName: cstring"",
         selected: 0),
-      shell: ShellService()),
-    network: Network(
-      futures: JsAssoc[cstring, JsAssoc[cstring, JsObject]]{}),
-    pointList: PointListData(
-      tracepoints: JsAssoc[int, Tracepoint]{}),
-    ui: Components(
+      shell: ShellService())
+    session.ui = Components(
       focusHistory: @[],
       editModeHiddenPanels: @[],
       savedLayoutBeforeEdit: nil,
       editModeLayout: nil,
       lastUsedEditLayout: nil
-    ),
-    breakpointMenu: JsAssoc[cstring, JsAssoc[int, BreakpointMenu]]{},
-    sessions: @[],
-    activeSessionIndex: 0)
-
-  # Multi-replay-window (M0 + M1 + M2): create the initial (and currently only)
-  # replay session.  Per-replay fields (trace, status, startOptions,
-  # minRRTicks, maxRRTicks, dapApi, asyncSendCache) now live exclusively on
-  # ReplaySession and are forwarded from Data via templates.  The session must
-  # be added to data.sessions before any forwarding template is used.
-  block:
-    var session = newReplaySession(ReplaySessionId(0))
-    session.dapApi = DapApi()
-    session.services = data.services
-    session.viewsApi = data.viewsApi
-    session.ui = data.ui
-    session.connection = data.connection
+    )
+    session.connection = ConnectionState(
+      connected: true,
+      reason: ConnectionLossNone,
+      detail: cstring""
+    )
+    session.network = Network(
+      futures: JsAssoc[cstring, JsAssoc[cstring, JsObject]]{})
+    session.pointList = PointListData(
+      tracepoints: JsAssoc[int, Tracepoint]{})
     session.status = StatusState(
       lastDirection: DebForward,
       currentOperation: cstring"",
@@ -1946,8 +1955,6 @@ when defined(ctRenderer):
       frontendSocket: SocketAddressInfo(),
       backendSocket: SocketAddressInfo(),
       idleTimeoutMs: 10 * 60 * 1_000)
-    session.network = data.network
-    session.pointList = data.pointList
     session.maxRRTicks = 100_000 # TODO, not based on events which don't update? somehow record/send from record
     # TODO max for program, maybe min as well?
     data.sessions.add(session)
