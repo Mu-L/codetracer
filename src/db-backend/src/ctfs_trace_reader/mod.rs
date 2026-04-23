@@ -16,6 +16,9 @@ use codetracer_trace_types::{
     TypeRecord, ValueRecord, VariableId,
 };
 
+#[cfg(feature = "nim-reader")]
+use codetracer_trace_types::EventLogKind;
+
 use crate::db::{CellChange, Db, DbCall, DbRecordEvent, DbStep, EndOfProgram};
 use crate::trace_processor::TraceProcessor;
 use crate::trace_reader::TraceReader;
@@ -130,7 +133,7 @@ impl CTFSTraceReader {
     ///
     /// Without `nim-reader`, returns an error indicating the format is
     /// recognized but the reader is not available.
-    #[allow(unused_variables)]
+    #[allow(unused_variables, clippy::needless_return)]
     fn open_new_format(ctfs: &mut CtfsReader, ct_path: &Path) -> Result<Self, Box<dyn Error>> {
         #[cfg(feature = "nim-reader")]
         {
@@ -163,6 +166,7 @@ impl CTFSTraceReader {
     #[cfg(feature = "nim-reader")]
     fn open_new_format_nim(_ctfs: &mut CtfsReader, ct_file_path: &Path) -> Result<Self, Box<dyn Error>> {
         use codetracer_trace_types::{FunctionRecord, Line, PathId, TypeKind, TypeRecord, TypeSpecificInfo};
+        use num_traits::FromPrimitive;
         use std::path::PathBuf;
 
         let ct_path = ct_file_path.to_string_lossy().to_string();
@@ -170,21 +174,21 @@ impl CTFSTraceReader {
         let reader = NimTraceReaderHandle::open(&ct_path)
             .map_err(|e| format!("failed to open .ct via Nim reader: {e}"))?;
 
+        let step_count = reader.step_count();
+        let call_count = reader.call_count();
+        let event_count = reader.event_count();
+
         info!(
             "Nim reader opened: {} steps, {} calls, {} events, {} paths, {} functions, {} types, {} varnames",
-            reader.step_count(),
-            reader.call_count(),
-            reader.event_count(),
+            step_count,
+            call_count,
+            event_count,
             reader.path_count(),
             reader.function_count(),
             reader.type_count(),
             reader.varname_count(),
         );
 
-        // Build a Db populated with metadata and interning tables from
-        // the Nim reader. Steps/calls/events are not yet loaded — this
-        // proves the FFI bridge works and provides correct metadata to
-        // the GUI.
         let workdir_str = reader.workdir();
         let workdir = if workdir_str.is_empty() {
             PathBuf::from(".")
@@ -194,14 +198,14 @@ impl CTFSTraceReader {
 
         let mut db = Db::new(&workdir);
 
-        // Populate interning tables from the Nim reader.
+        // ── Interning tables ───────────────────────────────────────────
         //
-        // Paths — also populate the reverse path_map for lookups by string.
+        // Paths — also populate the reverse path_map for lookups by
+        // string and ensure step_map has a slot per path.
         for i in 0..reader.path_count() {
             let p = reader.path(i).map_err(|e| format!("path {i}: {e}"))?;
             db.paths.push(p.clone());
             db.path_map.insert(p, PathId(db.paths.len() - 1));
-            // Ensure step_map has an entry for this path
             db.step_map.push(HashMap::new());
         }
 
@@ -216,7 +220,7 @@ impl CTFSTraceReader {
             });
         }
 
-        // Types — similarly, only the type name is available via FFI.
+        // Types — only the type name is available via FFI.
         for i in 0..reader.type_count() {
             let name = reader.type_name(i).map_err(|e| format!("type {i}: {e}"))?;
             db.types.push(TypeRecord {
@@ -233,17 +237,268 @@ impl CTFSTraceReader {
         }
 
         info!(
-            "Nim reader: Db populated with {} paths, {} functions, {} types, {} varnames (steps/calls/events pending)",
+            "Nim reader: interning tables loaded — {} paths, {} functions, {} types, {} varnames",
             db.paths.len(),
             db.functions.len(),
             db.types.len(),
             db.variable_names.len(),
         );
 
-        // TODO: Populate db.steps, db.calls, db.events, db.step_map from
-        // the Nim reader's step_json/call_json/event_json methods. This
-        // requires JSON parsing and mapping to Db data structures, which
-        // is the next integration step.
+        // ── Calls ──────────────────────────────────────────────────────
+        //
+        // Load call records first. We need call entry/exit step ranges to
+        // compute the step→call_key mapping for DbStep.
+        //
+        // call_fields returns:
+        //   (function_id, parent_key, entry_step, exit_step, depth, children_count)
+        //
+        // We also store entry_step/exit_step per call so we can later
+        // assign call_key to each step.
+        struct CallRange {
+            entry_step: u64,
+            exit_step: u64,
+        }
+        let mut call_ranges: Vec<CallRange> = Vec::with_capacity(call_count as usize);
+
+        for key in 0..call_count {
+            let (function_id, parent_key, entry_step, exit_step, depth, children_count) = reader
+                .call_fields(key)
+                .map_err(|e| format!("call {key}: {e}"))?;
+
+            let mut children_keys = Vec::with_capacity(children_count as usize);
+            for c in 0..children_count {
+                let child_key = reader
+                    .call_child(key, c)
+                    .map_err(|e| format!("call {key} child {c}: {e}"))?;
+                children_keys.push(CallKey(child_key as i64));
+            }
+
+            db.calls.push(DbCall {
+                key: CallKey(key as i64),
+                function_id: FunctionId(function_id as usize),
+                args: vec![],           // TODO: call args not yet exposed via structured FFI
+                return_value: ValueRecord::None { type_id: TypeId(0) }, // TODO: return values
+                step_id: StepId(entry_step as i64),
+                depth: depth as usize,
+                parent_key: CallKey(parent_key),
+                children_keys,
+            });
+
+            call_ranges.push(CallRange { entry_step, exit_step });
+        }
+
+        info!("Nim reader: {} calls loaded", db.calls.len());
+
+        // ── Step→call mapping ──────────────────────────────────────────
+        //
+        // Build a vector mapping each step index to its innermost
+        // (deepest) enclosing call_key, using the entry_step/exit_step
+        // ranges. A step at index S belongs to the deepest call whose
+        // range [entry_step, exit_step] contains S.
+        //
+        // We sweep calls in key order (which matches recording order)
+        // and use a simple stack to track the current innermost call.
+        let mut step_to_call_key: Vec<CallKey> = vec![CallKey(-1); step_count as usize];
+
+        // For each call, mark all steps in [entry_step, exit_step] with
+        // this call_key. Because calls are ordered by entry_step and
+        // children appear after their parent, later (deeper) calls
+        // overwrite parent assignments — giving us the innermost call.
+        for (key_idx, range) in call_ranges.iter().enumerate() {
+            let call_key = CallKey(key_idx as i64);
+            let start = range.entry_step as usize;
+            let end = std::cmp::min(range.exit_step as usize + 1, step_count as usize);
+            step_to_call_key[start..end].fill(call_key);
+        }
+
+        // Build global_call_key: for each step, the call_key of the last
+        // call that started at or before that step. We sweep calls in
+        // order and advance through steps.
+        let mut step_to_global_call_key: Vec<CallKey> = vec![CallKey(-1); step_count as usize];
+        if call_count > 0 {
+            let mut call_idx: usize = 0;
+            let mut current_global_key = CallKey(0);
+            for (step_idx, slot) in step_to_global_call_key.iter_mut().enumerate() {
+                // Advance to the last call whose entry_step <= step_idx.
+                while call_idx + 1 < call_count as usize
+                    && call_ranges[call_idx + 1].entry_step <= step_idx as u64
+                {
+                    call_idx += 1;
+                    current_global_key = CallKey(call_idx as i64);
+                }
+                // Also check the first call.
+                if call_ranges[call_idx].entry_step <= step_idx as u64 {
+                    current_global_key = CallKey(call_idx as i64);
+                }
+                *slot = current_global_key;
+            }
+        }
+
+        // ── Steps ──────────────────────────────────────────────────────
+        //
+        // Populate db.steps, db.step_map, and per-step scaffolding
+        // (variables, instructions, compound, cells, variable_cells).
+        for i in 0..step_count {
+            let (path_id_raw, line_raw) = reader
+                .step_location(i)
+                .map_err(|e| format!("step {i}: {e}"))?;
+
+            let path_id = PathId(path_id_raw as usize);
+            let line = Line(line_raw as i64);
+            let step_id = StepId(i as i64);
+            let call_key = step_to_call_key[i as usize];
+            let global_call_key = step_to_global_call_key[i as usize];
+
+            let db_step = DbStep {
+                step_id,
+                path_id,
+                line,
+                call_key,
+                global_call_key,
+            };
+
+            db.steps.push(db_step);
+
+            // Per-step parallel vectors that postprocess() also creates.
+            db.instructions.push(vec![]);
+            db.compound.push(HashMap::new());
+            db.cells.push(HashMap::new());
+            db.variable_cells.push(HashMap::new());
+
+            // step_map: (path_id) → { line → [DbStep, ...] }
+            // Ensure enough entries in step_map for this path_id.
+            while db.step_map.len() <= path_id.0 {
+                db.step_map.push(HashMap::new());
+            }
+            if line.0 >= 0 {
+                let line_usize = line.0 as usize;
+                db.step_map[path_id]
+                    .entry(line_usize)
+                    .or_default()
+                    .push(db_step);
+            }
+        }
+
+        info!("Nim reader: {} steps loaded", db.steps.len());
+
+        // ── Variables ──────────────────────────────────────────────────
+        //
+        // For each step, read variable values via the structured FFI.
+        // step_value returns (varname_id, type_id, cbor_data) where
+        // cbor_data is a CBOR-encoded ValueRecord (tagged with "kind").
+        for step_idx in 0..step_count {
+            let val_count = reader.step_value_count(step_idx);
+            let mut step_values: Vec<FullValueRecord> = Vec::with_capacity(val_count as usize);
+
+            for v in 0..val_count {
+                match reader.step_value(step_idx, v) {
+                    Ok((varname_id, _type_id, data)) => {
+                        // Decode the CBOR-encoded ValueRecord. The Nim
+                        // writer produces CBOR maps with a "kind" tag
+                        // matching the serde(tag = "kind") layout of
+                        // ValueRecord.
+                        let value = if data.is_empty() {
+                            ValueRecord::None { type_id: TypeId(0) }
+                        } else {
+                            match cbor4ii::serde::from_reader::<ValueRecord, _>(data.as_slice()) {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    log::warn!(
+                                        "step {step_idx} value {v}: CBOR decode failed: {e}, using Raw fallback"
+                                    );
+                                    ValueRecord::Raw {
+                                        r: format!("<cbor decode error: {e}>"),
+                                        type_id: TypeId(0),
+                                    }
+                                }
+                            }
+                        };
+                        step_values.push(FullValueRecord {
+                            variable_id: VariableId(varname_id as usize),
+                            value,
+                        });
+                    }
+                    Err(e) => {
+                        log::warn!("step {step_idx} value {v}: read failed: {e}");
+                        break;
+                    }
+                }
+            }
+
+            db.variables.push(step_values);
+        }
+
+        info!("Nim reader: variables loaded for {} steps", db.variables.len());
+
+        // ── Events ─────────────────────────────────────────────────────
+        //
+        // event_fields returns (kind: u8, step_id: u64, data: Vec<u8>).
+        // Nim IOEventKind: 0=stdout, 1=stderr, 2=file_op, 3=error.
+        // Map to EventLogKind using num_traits::FromPrimitive for the
+        // standard values, with a fallback mapping for the Nim-specific
+        // kind codes.
+        for idx in 0..event_count {
+            match reader.event_fields(idx) {
+                Ok((kind_byte, step_id_raw, data)) => {
+                    // Map Nim IOEventKind values to EventLogKind.
+                    // Nim: 0=ioStdout → Write, 1=ioStderr → WriteOther,
+                    //      2=ioFileOp → WriteFile, 3=ioError → Error.
+                    let kind = match kind_byte {
+                        0 => EventLogKind::Write,
+                        1 => EventLogKind::WriteOther,
+                        2 => EventLogKind::WriteFile,
+                        3 => EventLogKind::Error,
+                        other => {
+                            // Try the Rust enum's own discriminant values
+                            // for forward compatibility.
+                            EventLogKind::from_u8(other).unwrap_or(EventLogKind::Write)
+                        }
+                    };
+
+                    let step_id = StepId(step_id_raw as i64);
+                    let content = String::from_utf8_lossy(&data).to_string();
+
+                    db.events.push(DbRecordEvent {
+                        kind,
+                        content,
+                        step_id,
+                        metadata: String::new(),
+                    });
+                }
+                Err(e) => {
+                    log::warn!("event {idx}: read failed: {e}");
+                    break;
+                }
+            }
+        }
+
+        info!("Nim reader: {} events loaded", db.events.len());
+
+        // ── end_of_program ─────────────────────────────────────────────
+        //
+        // Match the same logic as TraceProcessor::postprocess: if the
+        // last event is an Error on the last step, mark it as an error
+        // termination.
+        db.end_of_program = if !db.events.is_empty() && !db.steps.is_empty() {
+            let last_event = &db.events[db.events.len() - 1];
+            let on_last_step = (last_event.step_id.0 as usize) == db.steps.len() - 1;
+            if last_event.kind == EventLogKind::Error && on_last_step {
+                let reason = format!("error: {}", last_event.content);
+                EndOfProgram::Error { reason }
+            } else {
+                EndOfProgram::Normal
+            }
+        } else {
+            EndOfProgram::Normal
+        };
+
+        info!(
+            "Nim reader: Db fully populated — {} steps, {} calls, {} events, {} variables",
+            db.steps.len(),
+            db.calls.len(),
+            db.events.len(),
+            db.variables.len(),
+        );
 
         Ok(CTFSTraceReader { db })
     }
