@@ -63,6 +63,50 @@ pub fn _start() {
     wasm_logger::init(wasm_logger::Config::default());
 }
 
+/// Write a file into the in-memory VFS so that trace data is accessible to the
+/// DAP server before any requests arrive.  Called from JavaScript after the WASM
+/// module is initialised but before `wasm_start`.
+///
+/// `path` is a virtual path (e.g. `"trace/metadata.json"`).
+/// `data` is the raw file content as a byte slice.
+#[cfg(feature = "browser-transport")]
+#[wasm_bindgen]
+pub fn vfs_write_file(path: &str, data: &[u8]) -> Result<(), JsValue> {
+    use std::io::Write;
+
+    let root = vfs::trace_vfs_root();
+
+    let target = root
+        .join(path)
+        .map_err(|e| JsValue::from_str(&format!("vfs join error: {e}")))?;
+
+    // Ensure all ancestor directories exist.
+    let parent = target.parent();
+    parent
+        .create_dir_all()
+        .map_err(|e| JsValue::from_str(&format!("vfs mkdir error: {e}")))?;
+
+    // Create (or overwrite) the file.
+    let mut f = target
+        .create_file()
+        .map_err(|e| JsValue::from_str(&format!("vfs create error: {e}")))?;
+    f.write_all(data)
+        .map_err(|e| JsValue::from_str(&format!("vfs write error: {e}")))?;
+
+    Ok(())
+}
+
+/// Returns `true` when a file exists at `path` inside the in-memory VFS.
+/// Useful for JavaScript to verify that trace data was loaded successfully.
+#[cfg(feature = "browser-transport")]
+#[wasm_bindgen]
+pub fn vfs_file_exists(path: &str) -> bool {
+    vfs::trace_vfs_root()
+        .join(path)
+        .map(|p| p.exists().unwrap_or(false))
+        .unwrap_or(false)
+}
+
 #[cfg(feature = "browser-transport")]
 #[wasm_bindgen]
 pub fn wasm_start() -> Result<(), JsValue> {

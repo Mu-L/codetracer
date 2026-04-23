@@ -1,21 +1,24 @@
-<html>
-
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <meta charset="utf-8" />
+    <title>CodeTracer WASM DAP Test</title>
+    <style>
+        body { font-family: monospace; margin: 2em; }
+        #resultField {
+            padding: 1em;
+            background: #f4f4f4;
+            border: 1px solid #ccc;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+    </style>
 </head>
-
 <body>
-    <div id="wrapper">
-        <h1>Main Thread/Wasm Web Worker Interaction</h1>
+    <h1>CodeTracer WASM DAP Test</h1>
+    <p>Open the browser console for detailed logs.</p>
+    <div id="resultField">Loading WASM worker...</div>
 
-        <div id="resultField">PLACEHOLDER</div>
-    </div>
-
-    <!-- Make `wasm_bindgen` available for `index.js` -->
-    <!-- <script src='./pkg/db_backend.js'></script> -->
-    <!-- Note that there is no `type="module"` in the script tag -->
-    <script type ="module" src="./index.js"></script>
-
+    <script type="module" src="./index.js"></script>
 </body>
-
 </html>
