@@ -566,6 +566,40 @@ fn find_ct_file_in_dir(dir: &Path) -> Option<PathBuf> {
     None
 }
 
+/// Determine whether the trace in `folder` is a DB-based trace (JavaScript,
+/// Python, Ruby, etc.) that does NOT require an rr replay worker.
+///
+/// A trace is considered DB-based when the folder contains DB metadata files
+/// (`trace.bin` or `trace.json` + `trace_metadata.json`) or when the resolved
+/// trace file is a CTFS container (`.ct` file with valid magic bytes).
+///
+/// This check prevents `resolve_recreator_exe` from auto-discovering
+/// `ct-native-replay` on PATH for DB traces, which would cause the rr replay
+/// worker to start and fail.
+fn is_db_trace(folder: &Path, trace_file: &Path) -> bool {
+    // DB recorders produce trace_metadata.json alongside either trace.bin
+    // (CBOR+Zstd) or trace.json (legacy JSON format).
+    let metadata_path = folder.join("trace_metadata.json");
+    if metadata_path.is_file() {
+        let trace_path = folder.join(trace_file);
+        if trace_path.is_file() {
+            return true;
+        }
+    }
+
+    // CTFS containers (.ct files with valid magic) are also DB-based traces
+    // that embed events directly — no replay worker needed.
+    let trace_path = folder.join(trace_file);
+    if folder.is_file() && is_ctfs_file(folder) {
+        return true;
+    }
+    if trace_path.exists() && is_ctfs_file(&trace_path) {
+        return true;
+    }
+
+    false
+}
+
 fn is_ctfs_file(path: &Path) -> bool {
     use std::io::Read;
 
@@ -885,7 +919,18 @@ pub fn handle_message(msg: &DapMessage, sender: Sender<DapMessage>, ctx: &mut Ct
                 //info!("stored launch trace folder: {0:?}", ctx.launch_trace_folder)
 
                 ctx.launch_raw_diff_index = args.raw_diff_index.clone();
-                ctx.recreator_exe = resolve_recreator_exe(args.recreator_exe);
+
+                // Only resolve the replay-worker executable for non-DB traces.
+                // DB-based traces (JavaScript, Python, Ruby, etc.) never use
+                // the rr replay worker; auto-discovering ct-native-replay on
+                // PATH for these traces would cause a spurious worker start
+                // that fails and blocks trace loading.
+                ctx.recreator_exe = if is_db_trace(&ctx.launch_trace_folder, &ctx.launch_trace_file) {
+                    info!("DB-based trace detected — skipping replay-worker resolution");
+                    PathBuf::new()
+                } else {
+                    resolve_recreator_exe(args.recreator_exe)
+                };
                 ctx.restore_location = args.restore_location.clone();
 
                 if ctx.received_configuration_done {
@@ -1035,11 +1080,19 @@ fn task_thread(
                 let launch_trace_file = if let Some(trace_file) = &args.trace_file {
                     trace_file.clone()
                 } else {
-                    // Auto-detect trace file format (same logic as the
-                    // initial launch handler above).
+                    // Auto-detect trace file format (same priority as the
+                    // initial launch handler above):
+                    //   1. trace.bin  — binary CBOR+zstd
+                    //   2. trace.json — DB trace (checked before *.ct because
+                    //      some recorders produce both formats)
+                    //   3. *.ct      — CTFS container
+                    //   4. trace.json — fallback
                     let bin_path = folder.join("trace.bin");
+                    let json_path = folder.join("trace.json");
                     if bin_path.is_file() {
                         "trace.bin".into()
+                    } else if json_path.is_file() {
+                        "trace.json".into()
                     } else if let Some(ct_path) = find_ct_file_in_dir(folder) {
                         ct_path
                             .file_name()
@@ -1052,7 +1105,14 @@ fn task_thread(
                 info!("stored launch trace folder: {0:?}", launch_trace_folder);
 
                 let launch_raw_diff_index = args.raw_diff_index.clone();
-                let recreator_exe = resolve_recreator_exe(args.recreator_exe);
+                // Only resolve the replay-worker executable for non-DB traces
+                // (see the parallel comment in the initial launch handler).
+                let recreator_exe = if is_db_trace(&launch_trace_folder, &launch_trace_file) {
+                    info!("DB-based trace detected — skipping replay-worker resolution");
+                    PathBuf::new()
+                } else {
+                    resolve_recreator_exe(args.recreator_exe)
+                };
                 let restore_location = args.restore_location.clone();
 
                 let for_launch = run_to_entry;
