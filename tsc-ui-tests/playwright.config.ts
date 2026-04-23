@@ -1,4 +1,32 @@
+import * as fs from "node:fs";
 import { defineConfig } from "@playwright/test";
+
+/**
+ * Resolve the Chromium executable for Playwright's browser fixtures.
+ *
+ * Priority:
+ *   1. PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH env var (explicit override)
+ *   2. PLAYWRIGHT_BROWSERS_PATH env var (Playwright's own bundled browser dir)
+ *   3. System chromium at /run/current-system/sw/bin/chromium (NixOS)
+ *   4. undefined — let Playwright use its default discovery
+ */
+function resolveChromiumExecutable(): string | undefined {
+  if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
+    return process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+  }
+  // If Playwright's bundled browsers are configured, let it handle discovery.
+  if (process.env.PLAYWRIGHT_BROWSERS_PATH) {
+    return undefined;
+  }
+  // NixOS / nix-managed system: use the system chromium.
+  const nixChromium = "/run/current-system/sw/bin/chromium";
+  if (fs.existsSync(nixChromium)) {
+    return nixChromium;
+  }
+  return undefined;
+}
+
+const chromiumExecutable = resolveChromiumExecutable();
 
 export default defineConfig({
   fullyParallel: false,
@@ -20,6 +48,9 @@ export default defineConfig({
     actionTimeout: 60_000,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
+    ...(chromiumExecutable && {
+      launchOptions: { executablePath: chromiumExecutable },
+    }),
   },
   // Deployment mode (electron vs web) is controlled per-test via
   // test.use({ deploymentMode: "web" }) or defaults to "electron".
