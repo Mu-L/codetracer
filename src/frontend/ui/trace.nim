@@ -138,6 +138,10 @@ proc updateViewZoneHeight(self: TraceComponent, newHeight: int) =
     self.zoneId = cast[int](view.addZone(self.viewZone))
   self.editorUI.monacoEditor.config = getConfiguration(self.editorUI.monacoEditor)
   let traceMain = kdom.document.getElementById(cstring(fmt"trace-{self.id}"))
+  if traceMain.isNil:
+    # The DOM element may not exist yet during early initialization
+    # or in headless test environments. Skip layout update.
+    return
   let editor = self.editorUI.monacoEditor
   let editorLayout = editor.config.layoutInfo
   let editorWidth = editorLayout.width
@@ -828,14 +832,15 @@ proc expandWithEnter*(self: TraceComponent, newHeight: int) =
   )
   self.editorUI.monacoEditor.config = getConfiguration(self.editorUI.monacoEditor)
   let traceMain = kdom.document.getElementById(cstring(fmt"trace-{self.id}"))
-  let editor = self.editorUI.monacoEditor
-  let editorLayout = editor.config.layoutInfo
-  let editorWidth = editorLayout.width
-  let contentLeft = editorLayout.contentLeft
-  let minimapWidth = editorLayout.minimapWidth
-  self.traceWidth = editorWidth - minimapWidth - contentLeft - 8
-  traceMain.style.width = cstring(fmt"{self.traceWidth}px")
-  jq(cstring(fmt"#trace-{self.id} .editor-textarea")).style.height = cstring(fmt"{self.lineCount * (data.ui.fontSize + 5)}px")
+  if not traceMain.isNil:
+    let editor = self.editorUI.monacoEditor
+    let editorLayout = editor.config.layoutInfo
+    let editorWidth = editorLayout.width
+    let contentLeft = editorLayout.contentLeft
+    let minimapWidth = editorLayout.minimapWidth
+    self.traceWidth = editorWidth - minimapWidth - contentLeft - 8
+    traceMain.style.width = cstring(fmt"{self.traceWidth}px")
+    jq(cstring(fmt"#trace-{self.id} .editor-textarea")).style.height = cstring(fmt"{self.lineCount * (data.ui.fontSize + 5)}px")
 
 # proc traceErrorView(self: TraceComponent): VNode =
 #   buildHtml(
@@ -1027,6 +1032,8 @@ proc toggleChartKindMenu(self: TraceComponent) =
 
 proc resizeTraceHandler(self: TraceComponent) =
   let traceMain = document.getElementById(cstring(fmt"trace-{self.id}"))
+  if traceMain.isNil:
+    return
 
   self.calcTraceWidth()
   traceMain.style.width = cstring(fmt"{self.traceWidth}px")
