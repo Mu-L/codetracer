@@ -107,6 +107,71 @@ pub fn vfs_file_exists(path: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Attempt to load a trace from the in-memory VFS.
+///
+/// JavaScript should first push all trace files into the VFS via
+/// [`vfs_write_file`], then call this function to verify that the data can
+/// be parsed.  Returns `true` when the trace is successfully loaded (CTFS
+/// container or DB metadata + events), `false` otherwise.
+///
+/// `trace_folder` is the virtual directory prefix used when writing files
+/// (e.g. `"trace"` if files were written as `"trace/trace_metadata.json"`).
+#[cfg(feature = "browser-transport")]
+#[wasm_bindgen]
+pub fn load_trace_from_vfs(trace_folder: &str) -> bool {
+    use log::{error, info};
+
+    info!("load_trace_from_vfs: folder={trace_folder:?}");
+
+    let root = vfs::trace_vfs_root();
+
+    // Detect the trace file name by checking what exists in the VFS.
+    let join = |file: &str| -> String {
+        if trace_folder.is_empty() {
+            file.to_string()
+        } else {
+            format!("{}/{}", trace_folder.trim_end_matches('/'), file)
+        }
+    };
+
+    let vfs_exists = |vpath: &str| -> bool {
+        root.join(vpath)
+            .map(|p| p.exists().unwrap_or(false))
+            .unwrap_or(false)
+    };
+
+    // Try to read and validate the trace.  We use setup_from_vfs with a
+    // dummy sender (we only care about whether parsing succeeds).
+    let trace_file = if vfs_exists(&join("trace.bin")) {
+        "trace.bin"
+    } else if vfs_exists(&join("trace.json")) {
+        "trace.json"
+    } else {
+        // The folder itself might be a .ct file path.
+        trace_folder
+    };
+
+    let (sender, _receiver) = std::sync::mpsc::channel();
+    match dap_server::setup_from_vfs(
+        trace_folder,
+        trace_file,
+        None,   // raw_diff_index
+        None,   // restore_location
+        sender,
+        false,  // for_launch — skip run_to_entry for validation
+        "vfs-validation",
+    ) {
+        Ok(_handler) => {
+            info!("load_trace_from_vfs: successfully loaded trace from VFS");
+            true
+        }
+        Err(e) => {
+            error!("load_trace_from_vfs: failed to load trace: {e}");
+            false
+        }
+    }
+}
+
 #[cfg(feature = "browser-transport")]
 #[wasm_bindgen]
 pub fn wasm_start() -> Result<(), JsValue> {

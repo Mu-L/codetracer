@@ -117,6 +117,29 @@ impl CTFSTraceReader {
         }
     }
 
+    /// Construct a [`CTFSTraceReader`] from raw bytes already in memory.
+    ///
+    /// This is the VFS-friendly counterpart of [`open`](Self::open): the
+    /// caller supplies the complete `.ct` file contents (e.g. read from
+    /// the in-memory VFS in WASM builds) and the reader parses them
+    /// without touching the filesystem.
+    ///
+    /// Only the **old format** (events-based) is supported here because
+    /// the new format requires the Nim FFI reader which needs a real file
+    /// path.  If the container uses the new format, an error is returned.
+    pub fn from_bytes(data: Vec<u8>) -> Result<Self, Box<dyn Error>> {
+        let mut ctfs = CtfsReader::from_bytes(data)?;
+
+        if is_new_format(&ctfs) {
+            Err("CTFS new format (nim-reader) is not supported via from_bytes; \
+                 only old-format containers can be loaded from in-memory data"
+                .into())
+        } else {
+            info!("CTFS from_bytes: old format detected — running postprocessing");
+            Self::open_old_format(&mut ctfs)
+        }
+    }
+
     /// Open a new-format CTFS container by loading pre-processed data
     /// directly into the `Db`, bypassing `TraceProcessor::postprocess`.
     ///

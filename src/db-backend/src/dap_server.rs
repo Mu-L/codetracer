@@ -477,6 +477,145 @@ fn setup(
     }
 }
 
+/// Browser/WASM-specific setup path that reads trace data from the in-memory
+/// VFS instead of the real filesystem.
+///
+/// In the browser WASM build, trace files are pushed into the VFS via
+/// `vfs_write_file` from JavaScript before any DAP messages arrive. This
+/// function mirrors the logic in [`setup`] but replaces all filesystem
+/// operations (`Path::exists`, `std::fs::File::open`, etc.) with VFS reads.
+///
+/// Only materialized (DB-based) traces are supported in the browser: both
+/// CTFS containers and loose `trace_metadata.json` + `trace.bin`/`trace.json`
+/// layouts.  MCR native replay and rr traces are not available in WASM.
+#[cfg(feature = "browser-transport")]
+pub fn setup_from_vfs(
+    trace_folder: &str,
+    trace_file: &str,
+    raw_diff_index: Option<String>,
+    restore_location: Option<Location>,
+    sender: Sender<DapMessage>,
+    for_launch: bool,
+    thread_name: &str,
+) -> Result<Handler, Box<dyn Error>> {
+    use crate::vfs::trace_vfs_root;
+    use std::io::Read as _;
+
+    let root = trace_vfs_root();
+
+    info!("setup_from_vfs: folder={trace_folder:?}, file={trace_file:?}");
+
+    // Helper: check whether a VFS path exists.
+    let vfs_exists = |virtual_path: &str| -> bool {
+        root.join(virtual_path)
+            .map(|p| p.exists().unwrap_or(false))
+            .unwrap_or(false)
+    };
+
+    // Helper: read all bytes from a VFS path.
+    let vfs_read = |virtual_path: &str| -> Result<Vec<u8>, Box<dyn Error>> {
+        let mut f = root.join(virtual_path)?.open_file()?;
+        let mut bytes = Vec::new();
+        f.read_to_end(&mut bytes)?;
+        Ok(bytes)
+    };
+
+    // Resolve the effective trace file path within the VFS.
+    // The VFS uses forward-slash virtual paths (no OS path separators).
+    let join_vfs = |folder: &str, file: &str| -> String {
+        if folder.is_empty() {
+            file.to_string()
+        } else {
+            format!("{}/{}", folder.trim_end_matches('/'), file)
+        }
+    };
+
+    let trace_vfs_path = join_vfs(trace_folder, trace_file);
+
+    // 1. Try CTFS container (check magic bytes from VFS data).
+    //    We try the trace_folder itself as a virtual path (e.g. "recording.ct")
+    //    and the joined trace_folder/trace_file path.
+    let ctfs_candidates = [trace_folder.to_string(), trace_vfs_path.clone()];
+    for candidate in &ctfs_candidates {
+        if !vfs_exists(candidate) {
+            continue;
+        }
+        let bytes = match vfs_read(candidate) {
+            Ok(b) => b,
+            Err(_) => continue,
+        };
+        // Check CTFS magic: [C0 DE 72 AC E2]
+        if bytes.len() >= 5 && bytes[..5] == [0xC0, 0xDE, 0x72, 0xAC, 0xE2] {
+            info!("setup_from_vfs: detected CTFS container at VFS path {candidate:?}");
+            match CTFSTraceReader::from_bytes(bytes) {
+                Ok(ctfs_reader) => {
+                    info!(
+                        "CTFS trace loaded from VFS: {} steps, {} calls, {} events",
+                        ctfs_reader.step_count(),
+                        ctfs_reader.call_count(),
+                        ctfs_reader.event_count(),
+                    );
+                    let reader: Arc<dyn TraceReader> = Arc::new(ctfs_reader);
+                    let mut handler = Handler::construct_with_reader(
+                        TraceKind::Materialized,
+                        RecreatorArgs {
+                            name: thread_name.to_string(),
+                            ..RecreatorArgs::default()
+                        },
+                        reader,
+                        false,
+                    );
+                    handler.raw_diff_index = raw_diff_index;
+                    if for_launch {
+                        handler.run_to_entry(dap::Request::default(), restore_location, sender)?;
+                    }
+                    handler.initialized = true;
+                    return Ok(handler);
+                }
+                Err(e) => {
+                    info!("CTFS from_bytes failed for VFS path {candidate:?}: {e} — trying other formats");
+                }
+            }
+        }
+    }
+
+    // 2. Try DB trace (trace_metadata.json + trace.bin/trace.json) from VFS.
+    let metadata_vfs_path = join_vfs(trace_folder, "trace_metadata.json");
+    let trace_file_format = if trace_file.ends_with(".json") {
+        codetracer_trace_reader::TraceEventsFileFormat::Json
+    } else {
+        codetracer_trace_reader::TraceEventsFileFormat::Binary
+    };
+
+    if let (Ok(meta), Ok(trace)) = (
+        load_trace_metadata(Path::new(&metadata_vfs_path)),
+        load_trace_data(Path::new(&trace_vfs_path), trace_file_format),
+    ) {
+        let mut db = Db::new(&meta.workdir);
+        let mut proc = TraceProcessor::new(&mut db);
+        proc.postprocess(&trace)?;
+
+        let mut handler = Handler::new(
+            TraceKind::Materialized,
+            RecreatorArgs {
+                name: thread_name.to_string(),
+                ..RecreatorArgs::default()
+            },
+            Box::new(db),
+        );
+        handler.raw_diff_index = raw_diff_index;
+        if for_launch {
+            handler.run_to_entry(dap::Request::default(), restore_location, sender)?;
+        }
+        handler.initialized = true;
+        return Ok(handler);
+    }
+
+    Err("setup_from_vfs: could not load trace from VFS — \
+         no valid CTFS container or DB metadata+trace files found"
+        .into())
+}
+
 fn resolve_replay_trace_path(trace_folder: &Path, trace_file: &Path) -> Option<PathBuf> {
     // MCR traces: if trace_folder itself is a .ct file, use it directly.
     // The ct-dap-client test runner passes the .ct file path as trace_folder
@@ -1021,6 +1160,139 @@ pub fn handle_message(msg: &DapMessage, sender: Sender<DapMessage>, ctx: &mut Ct
         DapMessage::Request(req) => {
             if let Some(to_stable_sender) = ctx.to_stable_sender.clone() {
                 to_stable_sender.send(req.clone())?;
+            }
+        }
+        _ => {}
+    }
+
+    Ok(())
+}
+
+/// Browser/WASM message handler that maintains a [`Handler`] inline.
+///
+/// In the browser build, threads are unavailable and all DAP messages are
+/// processed synchronously in the JS event loop. This function combines the
+/// roles of [`handle_message`] (protocol negotiation) and [`task_thread`]
+/// (request dispatch) into a single entry point.
+///
+/// The `handler` parameter is an `Option<Handler>` owned by the caller's
+/// closure. It starts as `None` and is populated when `configurationDone`
+/// triggers [`setup_from_vfs`].  Subsequent DAP requests (step, variables,
+/// etc.) are dispatched directly to this handler.
+#[cfg(feature = "browser-transport")]
+pub fn handle_message_browser(
+    msg: &DapMessage,
+    sender: Sender<DapMessage>,
+    ctx: &mut Ctx,
+    handler: &mut Option<Handler>,
+) -> Result<(), Box<dyn Error>> {
+    debug!("handle_message_browser: {:?}", msg);
+
+    // Protocol-level messages (initialize, launch, configurationDone,
+    // disconnect) are handled exactly like the native path.
+    match msg {
+        DapMessage::Request(req) if req.command == "initialize" => {
+            // Delegate to the shared protocol handler — it only sends
+            // initialize + initialized responses.
+            handle_message(msg, sender, ctx)?;
+        }
+        DapMessage::Request(req) if req.command == "launch" => {
+            // Store launch parameters in ctx (same as native path).
+            handle_message(msg, sender.clone(), ctx)?;
+
+            // In the browser, auto-detect trace files from VFS.  We
+            // cannot call Path::is_file so we check the VFS directly.
+            if ctx.launch_trace_file.as_os_str().is_empty() {
+                // Try common file names in order of priority.
+                let folder = ctx.launch_trace_folder.to_string_lossy().to_string();
+                let candidates = ["trace.bin", "trace.json"];
+                for name in &candidates {
+                    let vfs_path = if folder.is_empty() {
+                        (*name).to_string()
+                    } else {
+                        format!("{}/{}", folder.trim_end_matches('/'), name)
+                    };
+                    if crate::vfs::trace_vfs_root()
+                        .join(&vfs_path)
+                        .map(|p| p.exists().unwrap_or(false))
+                        .unwrap_or(false)
+                    {
+                        ctx.launch_trace_file = PathBuf::from(*name);
+                        break;
+                    }
+                }
+                // Fallback
+                if ctx.launch_trace_file.as_os_str().is_empty() {
+                    ctx.launch_trace_file = PathBuf::from("trace.json");
+                }
+            }
+        }
+        DapMessage::Request(req) if req.command == "configurationDone" => {
+            // Send the configurationDone response first.
+            handle_message(msg, sender.clone(), ctx)?;
+
+            // Now perform the actual trace setup from VFS.
+            if handler.is_none() && !ctx.launch_trace_folder.as_os_str().is_empty() {
+                let folder = ctx.launch_trace_folder.to_string_lossy().to_string();
+                let file = ctx.launch_trace_file.to_string_lossy().to_string();
+                info!(
+                    "handle_message_browser: configurationDone — setting up from VFS: folder={folder:?}, file={file:?}"
+                );
+
+                match setup_from_vfs(
+                    &folder,
+                    &file,
+                    ctx.launch_raw_diff_index.clone(),
+                    ctx.restore_location.clone(),
+                    sender,
+                    true, // for_launch — run_to_entry
+                    "browser-stable",
+                ) {
+                    Ok(h) => {
+                        info!("handle_message_browser: VFS setup succeeded");
+                        *handler = Some(h);
+                    }
+                    Err(e) => {
+                        error!("handle_message_browser: VFS setup failed: {e}");
+                        return Err(e);
+                    }
+                }
+            }
+        }
+        DapMessage::Request(req) if req.command == "disconnect" => {
+            handle_message(msg, sender, ctx)?;
+        }
+        DapMessage::Request(req) => {
+            // All other requests are dispatched to the handler if it is
+            // initialized. If not, the request is dropped with a warning.
+            if let Some(ref mut h) = handler {
+                if h.initialized {
+                    if let Err(e) = handle_request(h, req.clone(), sender.clone()) {
+                        warn!("handle_message_browser: request {} error: {e}", req.command);
+                        let error_response = DapMessage::Response(Response {
+                            base: ProtocolMessage {
+                                seq: 0,
+                                type_: "response".to_string(),
+                            },
+                            request_seq: req.base.seq,
+                            success: false,
+                            command: req.command.clone(),
+                            message: Some(format!("{e}")),
+                            body: json!({}),
+                        });
+                        sender.send(error_response)?;
+                    }
+                } else {
+                    warn!(
+                        "handle_message_browser: handler not initialized, dropping {:?}",
+                        req.command
+                    );
+                }
+            } else {
+                warn!(
+                    "handle_message_browser: no handler yet, dropping {:?}",
+                    req.command
+                );
             }
         }
         _ => {}

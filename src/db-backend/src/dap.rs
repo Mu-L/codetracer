@@ -456,6 +456,10 @@ pub fn setup_onmessage_callback() -> Result<(), DapError> {
     // This will run in the browser and JS callback code blocks are "critical sections".
     let mut ctx = Ctx::default();
 
+    // The Handler is created lazily when configurationDone triggers VFS-based
+    // trace setup. It lives alongside ctx for the lifetime of the worker.
+    let mut handler: Option<crate::dap_handler::Handler> = None;
+
     let t = Rc::new(scope);
 
     let t_clone = t.clone();
@@ -464,7 +468,7 @@ pub fn setup_onmessage_callback() -> Result<(), DapError> {
         use wasm_bindgen::UnwrapThrowExt;
         use web_sys::js_sys::JSON;
 
-        use crate::dap_server::handle_message;
+        use crate::dap_server::handle_message_browser;
 
         let dap_message_raw = event.data();
 
@@ -477,13 +481,13 @@ pub fn setup_onmessage_callback() -> Result<(), DapError> {
             .map_err(|_| "Could not convert message")
             .unwrap_throw();
 
-        // Create a channel pair. handle_message sends responses via the Sender.
-        // After it returns, we drain the Receiver and post each message to the
-        // main thread via the worker scope. This works because WASM is
-        // single-threaded, so the drain happens synchronously.
+        // Create a channel pair. handle_message_browser sends responses via
+        // the Sender. After it returns, we drain the Receiver and post each
+        // message to the main thread via the worker scope. This works because
+        // WASM is single-threaded, so the drain happens synchronously.
         let (sender, receiver) = std::sync::mpsc::channel::<DapMessage>();
 
-        handle_message(&dap_message, sender, &mut ctx).unwrap_throw();
+        handle_message_browser(&dap_message, sender, &mut ctx, &mut handler).unwrap_throw();
 
         // Drain all response messages and post them to the main thread.
         while let Ok(msg) = receiver.try_recv() {
