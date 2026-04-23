@@ -647,7 +647,8 @@ impl DapStdioTestClient {
         let conf_done = self.client.request("configurationDone", json!({}));
         self.send(&conf_done)?;
 
-        // Send launch — recreator_exe is unused for DB traces, pass empty path.
+        // Send launch — recreator_exe must be None for DB traces so that
+        // db-backend does not attempt to start an rr replay worker.
         let launch_args = LaunchRequestArguments {
             program: None,
             trace_folder: Some(recording.trace_dir.clone()),
@@ -661,7 +662,7 @@ impl DapStdioTestClient {
             request: None,
             typ: None,
             session_id: None,
-            recreator_exe: Some(PathBuf::from("")),
+            recreator_exe: None,
             restore_location: None,
         };
         let launch = self
@@ -3334,11 +3335,9 @@ impl TestRecording {
         let has_any_ct = trace_ct.exists()
             || fs::read_dir(&trace_dir)
                 .map(|entries| {
-                    entries.filter_map(|e| e.ok()).any(|e| {
-                        e.path()
-                            .extension()
-                            .map_or(false, |ext| ext == "ct")
-                    })
+                    entries
+                        .filter_map(|e| e.ok())
+                        .any(|e| e.path().extension().is_some_and(|ext| ext == "ct"))
                 })
                 .unwrap_or(false);
         let trace_metadata = trace_dir.join("trace_metadata.json");

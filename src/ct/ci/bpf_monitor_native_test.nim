@@ -32,7 +32,7 @@ suite "BPF event struct sizes":
     check sizeof(BpfExecArgvEvent) == 268
 
   test "BpfExecEnvpEvent size matches C layout":
-    # type(4) + pid(4) + key(128) + value(256) = 392
+    # type(4) + pid(4) + raw(128 + 256) = 392
     check sizeof(BpfExecEnvpEvent) == 392
 
   test "BpfExecEndEvent size matches C layout":
@@ -200,12 +200,11 @@ suite "Ring buffer callback — ENVP events":
     var envEv: BpfExecEnvpEvent
     envEv.eventType = BPF_EVENT_EXEC_ENVP
     envEv.pid = 4000
-    let envKey = "HOME"
-    let envVal = "/tmp"
-    for i, c in envKey:
-      envEv.key[i] = c
-    for i, c in envVal:
-      envEv.value[i] = c
+    # The raw field stores "KEY=VALUE" as a single string split at the
+    # BPF_MONITOR_ENVKEY_MAX boundary by the ring buffer callback.
+    let envRaw = "HOME=/tmp"
+    for i, c in envRaw:
+      envEv.raw[i] = c
     discard testRingBufferCallback(mon, addr envEv,
       csize_t(sizeof(envEv)))
 
@@ -236,10 +235,8 @@ suite "Ring buffer callback — ENVP events":
       var envEv: BpfExecEnvpEvent
       envEv.eventType = BPF_EVENT_EXEC_ENVP
       envEv.pid = pid
-      let k = "KEY"
-      let v = "VAL"
-      for i, c in k: envEv.key[i] = c
-      for i, c in v: envEv.value[i] = c
+      let kv = "KEY=VAL"
+      for i, c in kv: envEv.raw[i] = c
       discard testRingBufferCallback(mon, addr envEv,
         csize_t(sizeof(envEv)))
 

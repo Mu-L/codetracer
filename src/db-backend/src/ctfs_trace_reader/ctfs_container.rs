@@ -141,7 +141,10 @@ impl fmt::Display for CtfsError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             CtfsError::InvalidMagic => write!(f, "not a valid CTFS file (bad magic bytes)"),
-            CtfsError::UnsupportedVersion(v) => write!(f, "unsupported CTFS version {v} (expected {CTFS_VERSION_MIN}..={CTFS_VERSION_MAX})"),
+            CtfsError::UnsupportedVersion(v) => write!(
+                f,
+                "unsupported CTFS version {v} (expected {CTFS_VERSION_MIN}..={CTFS_VERSION_MAX})"
+            ),
             CtfsError::FileNotFound(name) => write!(f, "internal file not found in CTFS container: {name}"),
             CtfsError::Io(e) => write!(f, "CTFS I/O error: {e}"),
             CtfsError::Corrupt(msg) => write!(f, "corrupt CTFS container: {msg}"),
@@ -517,7 +520,7 @@ pub fn write_minimal_ctfs(path: &Path, files: &[(&str, &[u8])]) -> Result<(), Bo
     // Write header
     buf[0..5].copy_from_slice(&CTFS_MAGIC);
     buf[5] = CTFS_VERSION_MAX; // Write using the latest supported version
-    // bytes 6-7: encryption=0, max_shards=0 (already zero)
+                               // bytes 6-7: encryption=0, max_shards=0 (already zero)
 
     // Write extended header
     buf[8..12].copy_from_slice(&(block_size as u32).to_le_bytes());

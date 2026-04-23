@@ -853,13 +853,24 @@ pub fn handle_message(msg: &DapMessage, sender: Sender<DapMessage>, ctx: &mut Ct
                 } else {
                     // Auto-detect trace file format.  Priority:
                     //   1. trace.bin  — binary CBOR+zstd (Python/Ruby/WASM recorders)
-                    //   2. *.ct      — CTFS container (shell recorders via Nim writer
+                    //   2. trace.json — DB trace (JS and other recorders that emit
+                    //                   trace_metadata.json + trace.json)
+                    //   3. *.ct      — CTFS container (shell recorders via Nim writer
                     //                  may name the file after the program, e.g.
                     //                  `bash_flow_test.ct` instead of `trace.ct`)
-                    //   3. trace.json — legacy JSON format
+                    //   4. trace.json — fallback (legacy JSON format)
+                    //
+                    // trace.json is checked before *.ct because some recorders
+                    // (e.g. JavaScript) produce both a `.ct` file and
+                    // `trace.json` + `trace_metadata.json`. Selecting the `.ct`
+                    // file causes the setup logic to treat the trace as an MCR
+                    // replay trace, skipping the DB metadata loading path.
                     let bin_path = folder.join("trace.bin");
+                    let json_path = folder.join("trace.json");
                     if bin_path.is_file() {
                         ctx.launch_trace_file = "trace.bin".into();
+                    } else if json_path.is_file() {
+                        ctx.launch_trace_file = "trace.json".into();
                     } else if let Some(ct_path) = find_ct_file_in_dir(folder) {
                         // Store just the file name — setup() joins it with the folder.
                         if let Some(name) = ct_path.file_name() {
@@ -1030,10 +1041,9 @@ fn task_thread(
                     if bin_path.is_file() {
                         "trace.bin".into()
                     } else if let Some(ct_path) = find_ct_file_in_dir(folder) {
-                        ct_path.file_name().map_or_else(
-                            || "trace.json".into(),
-                            |name| name.into(),
-                        )
+                        ct_path
+                            .file_name()
+                            .map_or_else(|| "trace.json".into(), |name| name.into())
                     } else {
                         "trace.json".into()
                     }
