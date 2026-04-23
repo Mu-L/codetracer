@@ -653,6 +653,24 @@ test-noir-flow:
   cd src/db-backend && cargo nextest run --no-capture --run-ignored all test_noir_flow
   echo "Noir flow test passed!"
 
+# WASM client-side replay test — verifies the browser-only replay path.
+# The WASM pkg must be pre-built (run `cd src/db-backend && bash build_wasm.sh`).
+# Uses Playwright to drive a real browser that fetches trace files from a dumb
+# HTTP server and runs the DAP protocol entirely in a WebWorker via WASM.
+test-wasm-replay *args:
+  #!/usr/bin/env bash
+  set -e
+  WASM_PKG="src/db-backend/wasm-testing/pkg/db_backend.js"
+  if [ ! -f "$WASM_PKG" ]; then
+    echo "WASM package not found. Building..."
+    cd src/db-backend && bash build_wasm.sh
+    cd ../..
+  fi
+  echo "Running WASM client-side replay tests..."
+  cd tsc-ui-tests && \
+    npm install --no-audit --no-fund && \
+    npx playwright test tests/wasm-replay/ {{args}}
+
 # WASM flow/omniscience integration test (DB-based, no rr required)
 # Requires: wazero on PATH, wasm32-wasip1 Rust target installed
 test-wasm-flow:

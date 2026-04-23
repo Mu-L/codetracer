@@ -5,6 +5,10 @@
 //   2. Worker loads and initialises the WASM module (`init`).
 //   3. Worker waits for optional VFS file payloads from the main thread
 //      (messages with `type: "vfs-write"`).
+//      Alternatively, `{ type: "load-trace" }` fetches trace files from an
+//      HTTP server and pushes them into the VFS automatically — this is the
+//      primary path for pure client-side replay where the server is a dumb
+//      static file server.
 //   4. When the main thread sends `{ type: "start" }`, the worker calls
 //      `wasm_start()` which sets up the DAP `onmessage` handler.
 //   5. After that, every subsequent `postMessage` from the main thread is
@@ -18,6 +22,27 @@ import init, {
 
 const wasmUrl = new URL('./pkg/db_backend_bg.wasm', import.meta.url);
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch a file from an HTTP URL and write it into the in-memory VFS.
+ *
+ * @param {string} url        — HTTP(S) URL to fetch.
+ * @param {string} vfsPath    — Virtual path inside the VFS (e.g. "trace/trace.json").
+ * @returns {Promise<number>} — The number of bytes written.
+ */
+async function fetchIntoVfs(url, vfsPath) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`fetch ${url} failed: ${response.status} ${response.statusText}`);
+  }
+  const data = new Uint8Array(await response.arrayBuffer());
+  vfs_write_file(vfsPath, data);
+  return data.byteLength;
+}
+
 (async () => {
   // --- Phase 1: Initialise WASM ------------------------------------------
   await init(wasmUrl);
@@ -25,10 +50,11 @@ const wasmUrl = new URL('./pkg/db_backend_bg.wasm', import.meta.url);
   // wasm_bindgen(start).
 
   // --- Phase 2: Bootstrap message handler --------------------------------
-  // Before calling wasm_start() we accept VFS file uploads and a "start"
-  // signal.  Once started, `wasm_start()` replaces `onmessage` with the DAP
-  // handler and posts "ready" back to the main thread.
-  self.onmessage = (event) => {
+  // Before calling wasm_start() we accept VFS file uploads, HTTP-based trace
+  // loading, and a "start" signal.  Once started, `wasm_start()` replaces
+  // `onmessage` with the DAP handler and posts "ready" back to the main
+  // thread.
+  self.onmessage = async (event) => {
     const msg = event.data;
 
     if (msg && msg.type === 'vfs-write') {
@@ -48,6 +74,47 @@ const wasmUrl = new URL('./pkg/db_backend_bg.wasm', import.meta.url);
       // Check whether a VFS path exists (useful for debugging).
       const exists = vfs_file_exists(msg.path);
       self.postMessage({ type: 'vfs-exists-result', path: msg.path, exists });
+      return;
+    }
+
+    // -----------------------------------------------------------------------
+    // load-trace: Fetch trace files from a dumb HTTP server into VFS.
+    //
+    // This is the key message for client-side WASM replay. The main thread
+    // tells the worker which trace files to fetch, the worker downloads them
+    // via fetch() and pushes them into the VFS. No server-side logic needed.
+    //
+    // Message shape:
+    //   {
+    //     type: "load-trace",
+    //     // Required: array of { url, vfsPath } objects.
+    //     files: [
+    //       { url: "/traces/trace.json",          vfsPath: "trace/trace.json" },
+    //       { url: "/traces/trace_metadata.json",  vfsPath: "trace/trace_metadata.json" },
+    //       { url: "/traces/trace_paths.json",     vfsPath: "trace/trace_paths.json" },
+    //     ],
+    //   }
+    // -----------------------------------------------------------------------
+    if (msg && msg.type === 'load-trace') {
+      const files = msg.files;
+      if (!Array.isArray(files) || files.length === 0) {
+        self.postMessage({
+          type: 'trace-load-error',
+          error: 'load-trace requires a non-empty "files" array',
+        });
+        return;
+      }
+
+      try {
+        const results = [];
+        for (const { url, vfsPath } of files) {
+          const bytes = await fetchIntoVfs(url, vfsPath);
+          results.push({ vfsPath, bytes });
+        }
+        self.postMessage({ type: 'trace-loaded', files: results });
+      } catch (err) {
+        self.postMessage({ type: 'trace-load-error', error: String(err) });
+      }
       return;
     }
 

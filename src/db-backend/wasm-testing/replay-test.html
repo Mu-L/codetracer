@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>CodeTracer WASM Client-Side Replay Test</title>
+    <style>
+        body { font-family: monospace; margin: 2em; background: #1e1e1e; color: #d4d4d4; }
+        h1 { color: #569cd6; }
+        .status { padding: 0.5em 1em; margin: 0.5em 0; border-left: 4px solid #888; }
+        .status.ok { border-color: #4ec9b0; color: #4ec9b0; }
+        .status.error { border-color: #f44747; color: #f44747; }
+        .status.pending { border-color: #dcdcaa; color: #dcdcaa; }
+        #log { white-space: pre-wrap; word-break: break-all; font-size: 0.85em; color: #9cdcfe; max-height: 60vh; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>CodeTracer WASM Client-Side Replay</h1>
+    <p>The browser fetches trace files from a dumb HTTP server, loads them into
+       the WASM VFS, and runs the DAP server entirely client-side.</p>
+
+    <div id="status" class="status pending">Initializing...</div>
+    <pre id="log"></pre>
+
+    <!--
+      Trace configuration is passed via query parameters:
+        ?traceFolder=trace            — VFS folder name
+        &files=trace.json,trace_metadata.json,trace_paths.json
+                                      — comma-separated file names (relative to /traces/ on the server)
+
+      Or for a CTFS container:
+        ?traceFolder=trace&files=trace.ct
+
+      The test harness (Playwright) sets these when navigating to this page.
+    -->
+    <script type="module" src="./replay-test.js"></script>
+</body>
+</html>
