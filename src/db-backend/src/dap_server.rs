@@ -498,27 +498,7 @@ pub fn setup_from_vfs(
     for_launch: bool,
     thread_name: &str,
 ) -> Result<Handler, Box<dyn Error>> {
-    use crate::vfs::trace_vfs_root;
-    use std::io::Read as _;
-
-    let root = trace_vfs_root();
-
     info!("setup_from_vfs: folder={trace_folder:?}, file={trace_file:?}");
-
-    // Helper: check whether a VFS path exists.
-    let vfs_exists = |virtual_path: &str| -> bool {
-        root.join(virtual_path)
-            .map(|p| p.exists().unwrap_or(false))
-            .unwrap_or(false)
-    };
-
-    // Helper: read all bytes from a VFS path.
-    let vfs_read = |virtual_path: &str| -> Result<Vec<u8>, Box<dyn Error>> {
-        let mut f = root.join(virtual_path)?.open_file()?;
-        let mut bytes = Vec::new();
-        f.read_to_end(&mut bytes)?;
-        Ok(bytes)
-    };
 
     // Resolve the effective trace file path within the VFS.
     // The VFS uses forward-slash virtual paths (no OS path separators).
@@ -537,12 +517,12 @@ pub fn setup_from_vfs(
     //    and the joined trace_folder/trace_file path.
     let ctfs_candidates = [trace_folder.to_string(), trace_vfs_path.clone()];
     for candidate in &ctfs_candidates {
-        if !vfs_exists(candidate) {
+        if !crate::vfs::vfs_exists(candidate) {
             continue;
         }
-        let bytes = match vfs_read(candidate) {
-            Ok(b) => b,
-            Err(_) => continue,
+        let bytes = match crate::vfs::vfs_read(candidate) {
+            Some(b) => b,
+            None => continue,
         };
         // Check CTFS magic: [C0 DE 72 AC E2]
         if bytes.len() >= 5 && bytes[..5] == [0xC0, 0xDE, 0x72, 0xAC, 0xE2] {
@@ -1212,11 +1192,7 @@ pub fn handle_message_browser(
                     } else {
                         format!("{}/{}", folder.trim_end_matches('/'), name)
                     };
-                    if crate::vfs::trace_vfs_root()
-                        .join(&vfs_path)
-                        .map(|p| p.exists().unwrap_or(false))
-                        .unwrap_or(false)
-                    {
+                    if crate::vfs::vfs_exists(&vfs_path) {
                         ctx.launch_trace_file = PathBuf::from(*name);
                         break;
                     }

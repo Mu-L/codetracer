@@ -72,27 +72,7 @@ pub fn _start() {
 #[cfg(feature = "browser-transport")]
 #[wasm_bindgen]
 pub fn vfs_write_file(path: &str, data: &[u8]) -> Result<(), JsValue> {
-    use std::io::Write;
-
-    let root = vfs::trace_vfs_root();
-
-    let target = root
-        .join(path)
-        .map_err(|e| JsValue::from_str(&format!("vfs join error: {e}")))?;
-
-    // Ensure all ancestor directories exist.
-    let parent = target.parent();
-    parent
-        .create_dir_all()
-        .map_err(|e| JsValue::from_str(&format!("vfs mkdir error: {e}")))?;
-
-    // Create (or overwrite) the file.
-    let mut f = target
-        .create_file()
-        .map_err(|e| JsValue::from_str(&format!("vfs create error: {e}")))?;
-    f.write_all(data)
-        .map_err(|e| JsValue::from_str(&format!("vfs write error: {e}")))?;
-
+    vfs::vfs_write(path, data.to_vec());
     Ok(())
 }
 
@@ -101,10 +81,7 @@ pub fn vfs_write_file(path: &str, data: &[u8]) -> Result<(), JsValue> {
 #[cfg(feature = "browser-transport")]
 #[wasm_bindgen]
 pub fn vfs_file_exists(path: &str) -> bool {
-    vfs::trace_vfs_root()
-        .join(path)
-        .map(|p| p.exists().unwrap_or(false))
-        .unwrap_or(false)
+    vfs::vfs_exists(path)
 }
 
 /// Attempt to load a trace from the in-memory VFS.
@@ -123,8 +100,6 @@ pub fn load_trace_from_vfs(trace_folder: &str) -> bool {
 
     info!("load_trace_from_vfs: folder={trace_folder:?}");
 
-    let root = vfs::trace_vfs_root();
-
     // Detect the trace file name by checking what exists in the VFS.
     let join = |file: &str| -> String {
         if trace_folder.is_empty() {
@@ -134,17 +109,11 @@ pub fn load_trace_from_vfs(trace_folder: &str) -> bool {
         }
     };
 
-    let vfs_exists = |vpath: &str| -> bool {
-        root.join(vpath)
-            .map(|p| p.exists().unwrap_or(false))
-            .unwrap_or(false)
-    };
-
     // Try to read and validate the trace.  We use setup_from_vfs with a
     // dummy sender (we only care about whether parsing succeeds).
-    let trace_file = if vfs_exists(&join("trace.bin")) {
+    let trace_file = if vfs::vfs_exists(&join("trace.bin")) {
         "trace.bin"
-    } else if vfs_exists(&join("trace.json")) {
+    } else if vfs::vfs_exists(&join("trace.json")) {
         "trace.json"
     } else {
         // The folder itself might be a .ct file path.

@@ -458,11 +458,11 @@ pub fn load_trace_data(
     trace_file: &Path,
     file_format: codetracer_trace_reader::TraceEventsFileFormat,
 ) -> Result<Vec<TraceLowLevelEvent>, Box<dyn Error>> {
-    use crate::vfs::{load_trace_data_vfs, trace_vfs_root};
+    use crate::vfs::load_trace_data_vfs;
 
     let path_str = trace_file.to_str().unwrap();
 
-    load_trace_data_vfs(trace_vfs_root(), path_str, file_format)
+    load_trace_data_vfs(path_str, file_format)
 }
 
 #[cfg(feature = "io-transport")]
@@ -481,9 +481,9 @@ pub fn load_trace_metadata(trace_metadata_file: &Path) -> Result<TraceMetadata, 
 #[cfg(all(feature = "browser-transport", not(feature = "io-transport")))]
 #[allow(clippy::panic)]
 pub fn load_trace_metadata(trace_metadata_file: &Path) -> Result<TraceMetadata, Box<dyn Error>> {
-    use crate::vfs::{load_trace_metadata_vfs, trace_vfs_root};
+    use crate::vfs::load_trace_metadata_vfs;
 
     let path_str = trace_metadata_file.to_str().unwrap();
 
-    load_trace_metadata_vfs(trace_vfs_root(), path_str)
+    load_trace_metadata_vfs(path_str)
 }
