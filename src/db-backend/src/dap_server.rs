@@ -1180,12 +1180,16 @@ pub fn handle_message_browser(
             // Store launch parameters in ctx (same as native path).
             handle_message(msg, sender.clone(), ctx)?;
 
-            // In the browser, auto-detect trace files from VFS.  We
-            // cannot call Path::is_file so we check the VFS directly.
-            if ctx.launch_trace_file.as_os_str().is_empty() {
-                // Try common file names in order of priority.
+            // In the browser, re-detect trace files from VFS.  The native
+            // path's auto-detect uses Path::is_file() which always returns
+            // false in WASM, causing it to fall back to "trace.json" even
+            // when the VFS contains a different file (e.g. trace.ct).  We
+            // always re-run detection using VFS-aware checks.
+            {
                 let folder = ctx.launch_trace_folder.to_string_lossy().to_string();
-                let candidates = ["trace.bin", "trace.json"];
+                // Priority matches the native path: binary DB traces first,
+                // then JSON DB traces, then CTFS containers (.ct files).
+                let candidates = ["trace.bin", "trace.json", "trace.ct"];
                 for name in &candidates {
                     let vfs_path = if folder.is_empty() {
                         (*name).to_string()
@@ -1194,12 +1198,12 @@ pub fn handle_message_browser(
                     };
                     if crate::vfs::vfs_exists(&vfs_path) {
                         ctx.launch_trace_file = PathBuf::from(*name);
+                        info!(
+                            "handle_message_browser: VFS auto-detect found trace file: {}",
+                            vfs_path
+                        );
                         break;
                     }
-                }
-                // Fallback
-                if ctx.launch_trace_file.as_os_str().is_empty() {
-                    ctx.launch_trace_file = PathBuf::from("trace.json");
                 }
             }
         }
@@ -1225,7 +1229,11 @@ pub fn handle_message_browser(
                     "browser-stable",
                 ) {
                     Ok(h) => {
-                        info!("handle_message_browser: VFS setup succeeded");
+                        info!(
+                            "handle_message_browser: VFS setup succeeded — step_count={}, step_id={:?}",
+                            h.reader.step_count(),
+                            h.step_id
+                        );
                         *handler = Some(h);
                     }
                     Err(e) => {

@@ -5,7 +5,9 @@
 //   2. Creates a WebWorker (worker.js) that loads the WASM DAP server.
 //   3. Tells the worker to fetch trace files from the HTTP server into the VFS.
 //   4. Starts the DAP server and sends the full DAP initialization sequence.
-//   5. Reports results via DOM elements that Playwright can observe.
+//   5. Sends comprehensive DAP requests (threads, stackTrace, scopes, variables,
+//      stepping, events) and collects results.
+//   6. Reports results via window.__replayTestResult that Playwright can observe.
 //
 // The server is assumed to be a dumb static file server — no server-side
 // logic, no WebSocket, no custom endpoints. The browser does everything.
@@ -30,6 +32,12 @@ function appendLog(msg) {
   console.log(`[replay-test] ${msg}`);
 }
 
+/** Safely stringify a value for logging (handles undefined/null). */
+function safeStringify(value, maxLen = 300) {
+  const str = JSON.stringify(value ?? null);
+  return str.length > maxLen ? str.slice(0, maxLen) + '...' : str;
+}
+
 // ---------------------------------------------------------------------------
 // Configuration from query parameters
 // ---------------------------------------------------------------------------
@@ -50,14 +58,24 @@ const fileNames = (params.get('files') || 'trace.json,trace_metadata.json,trace_
 // the current origin.
 const traceBaseUrl = params.get('traceBaseUrl') || '/traces/';
 
+// Mode: "basic" (original DAP init only) or "comprehensive" (full panel verification).
+// Default: "comprehensive".
+const testMode = params.get('mode') || 'comprehensive';
+
 appendLog(`traceFolder=${traceFolder}, files=[${fileNames.join(', ')}]`);
-appendLog(`traceBaseUrl=${traceBaseUrl}`);
+appendLog(`traceBaseUrl=${traceBaseUrl}, mode=${testMode}`);
 
 // ---------------------------------------------------------------------------
 // Worker lifecycle
 // ---------------------------------------------------------------------------
 
 const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+
+// Monotonically increasing DAP sequence number.
+let nextSeq = 1;
+
+// Track whether the worker has crashed.
+let workerAlive = true;
 
 /**
  * Wait for a specific message type from the worker.
@@ -113,10 +131,83 @@ function collectMessages(durationMs = 2000) {
   });
 }
 
+/**
+ * Send a DAP request and collect all responses/events within the timeout window.
+ * Returns an object with the matching response and any events.
+ */
+async function sendDapRequest(command, args = {}, collectMs = 3000) {
+  if (!workerAlive) {
+    return { response: null, events: [], allMessages: [], seq: -1, workerDead: true };
+  }
+  const seq = nextSeq++;
+  const collector = collectMessages(collectMs);
+  worker.postMessage({
+    seq,
+    type: 'request',
+    command,
+    arguments: args,
+  });
+  const allMessages = await collector;
+  const response = allMessages.find(
+    r => r.command === command && r.type === 'response'
+  ) || null;
+  const events = allMessages.filter(r => r.type === 'event');
+  return { response, events, allMessages, seq };
+}
+
 worker.onerror = (event) => {
   appendLog(`WORKER ERROR: ${event.message}`);
+  workerAlive = false;
   setStatus('Worker error — see console', 'error');
 };
+
+// ---------------------------------------------------------------------------
+// Helper: query stack/scopes/variables at the current position
+// ---------------------------------------------------------------------------
+
+/**
+ * Query the current stack trace, scopes, and variables.
+ * Returns an object with all the collected data.
+ */
+async function queryCurrentState() {
+  const state = {};
+
+  // Stack trace
+  const stackResult = await sendDapRequest('stackTrace', {
+    threadId: 1,
+    startFrame: 0,
+    levels: 20,
+  });
+  state.stackTrace = stackResult.response?.body || null;
+  appendLog(`stackTrace: ${safeStringify(state.stackTrace, 500)}`);
+
+  // Scopes and variables (only if we have frames)
+  if (state.stackTrace?.stackFrames?.length > 0) {
+    const topFrameId = state.stackTrace.stackFrames[0].id;
+    const scopesResult = await sendDapRequest('scopes', { frameId: topFrameId });
+    state.scopes = scopesResult.response?.body || null;
+    appendLog(`scopes: ${safeStringify(state.scopes, 500)}`);
+
+    if (state.scopes?.scopes?.length > 0) {
+      const allVariables = [];
+      for (const scope of state.scopes.scopes) {
+        const varsResult = await sendDapRequest('variables', {
+          variablesReference: scope.variablesReference,
+        });
+        const vars = varsResult.response?.body?.variables || [];
+        appendLog(`variables for "${scope.name}": ${safeStringify(vars, 500)}`);
+        allVariables.push({
+          scopeName: scope.name,
+          variablesReference: scope.variablesReference,
+          variables: vars,
+        });
+      }
+      state.variables = allVariables;
+    }
+  }
+
+  return state;
+}
 
 // ---------------------------------------------------------------------------
 // Main sequence
@@ -184,104 +275,125 @@ worker.onerror = (event) => {
 
     // Step 4: Send DAP initialize request.
     setStatus('Sending DAP initialize...', 'pending');
-    const initCollector = collectMessages(3000);
-    worker.postMessage({
-      seq: 1,
-      type: 'request',
-      command: 'initialize',
-      arguments: {
-        clientID: 'wasm-replay-test',
-        clientName: 'WASM Replay Test',
-        adapterID: 'codetracer',
-        linesStartAt1: true,
-        columnsStartAt1: true,
-        supportsRunInTerminalRequest: false,
-      },
+    const initResult = await sendDapRequest('initialize', {
+      clientID: 'wasm-replay-test',
+      clientName: 'WASM Replay Test',
+      adapterID: 'codetracer',
+      linesStartAt1: true,
+      columnsStartAt1: true,
+      supportsRunInTerminalRequest: false,
     });
-    const initResponses = await initCollector;
-    appendLog(`initialize responses (${initResponses.length}):`);
-    for (const resp of initResponses) {
-      appendLog(`  ${JSON.stringify(resp).slice(0, 300)}`);
-    }
-
-    // Check that we got an "initialize" response with success: true.
-    const initResponse = initResponses.find(
-      r => r.command === 'initialize' && r.type === 'response'
-    );
+    const initResponse = initResult.response;
+    appendLog(`initialize: ${safeStringify(initResponse)}`);
     if (!initResponse || !initResponse.success) {
-      throw new Error('DAP initialize failed: ' + JSON.stringify(initResponse));
+      throw new Error('DAP initialize failed: ' + safeStringify(initResponse));
     }
     appendLog('DAP initialize succeeded');
 
-    // Step 5: Send DAP launch request — tells the backend which VFS folder
-    // to load the trace from.
+    // Step 5: Send DAP launch request.
     setStatus('Sending DAP launch...', 'pending');
-    const launchCollector = collectMessages(3000);
-    worker.postMessage({
-      seq: 2,
-      type: 'request',
-      command: 'launch',
-      arguments: {
-        traceFolder: traceFolder,
-      },
+    const launchResult = await sendDapRequest('launch', {
+      traceFolder: traceFolder,
     });
-    const launchResponses = await launchCollector;
-    appendLog(`launch responses (${launchResponses.length}):`);
-    for (const resp of launchResponses) {
-      appendLog(`  ${JSON.stringify(resp).slice(0, 300)}`);
-    }
+    appendLog(`launch: ${safeStringify(launchResult.response)}`);
 
-    // Step 6: Send configurationDone — this triggers VFS setup_from_vfs.
+    // Step 6: Send configurationDone — triggers VFS setup_from_vfs.
     setStatus('Sending DAP configurationDone...', 'pending');
-    const configCollector = collectMessages(5000);
-    worker.postMessage({
-      seq: 3,
-      type: 'request',
-      command: 'configurationDone',
-      arguments: {},
-    });
-    const configResponses = await configCollector;
-    appendLog(`configurationDone responses (${configResponses.length}):`);
-    for (const resp of configResponses) {
-      appendLog(`  ${JSON.stringify(resp).slice(0, 300)}`);
-    }
-
-    // Check for the configurationDone response and any stopped/entry events.
-    const configDoneResp = configResponses.find(
-      r => r.command === 'configurationDone' && r.type === 'response'
-    );
+    const configResult = await sendDapRequest('configurationDone', {}, 5000);
+    const configDoneResp = configResult.response;
+    appendLog(`configurationDone: ${safeStringify(configDoneResp)}`);
     if (!configDoneResp || !configDoneResp.success) {
-      throw new Error('DAP configurationDone failed: ' + JSON.stringify(configDoneResp));
+      throw new Error('DAP configurationDone failed: ' + safeStringify(configDoneResp));
     }
 
-    // After configurationDone + run_to_entry, we expect a "stopped" event
-    // indicating the trace is ready for inspection.
-    const stoppedEvent = configResponses.find(
-      r => r.type === 'event' && r.event === 'stopped'
+    // Check for stopped event (indicates trace loaded and at entry point).
+    const stoppedEvent = configResult.events.find(
+      r => r.event === 'stopped'
     );
-
-    // -----------------------------------------------------------------------
-    // Report final status
-    // -----------------------------------------------------------------------
-    const totalResponses = initResponses.length + launchResponses.length + configResponses.length;
     if (stoppedEvent) {
-      setStatus('DAP replay ready — trace loaded and stopped at entry', 'ok');
-      appendLog(`SUCCESS: stopped event received (reason: ${stoppedEvent.body?.reason})`);
-    } else {
-      // Even without a stopped event, configurationDone success means the
-      // trace loaded. Some traces may not emit a stopped event.
-      setStatus('DAP initialized and configured — trace loaded', 'ok');
-      appendLog(`PARTIAL SUCCESS: configurationDone succeeded but no stopped event`);
+      appendLog(`Stopped event received (reason: ${stoppedEvent.body?.reason})`);
     }
 
-    // Expose results for Playwright assertions.
-    window.__replayTestResult = {
+    // -----------------------------------------------------------------------
+    // Basic result (always computed)
+    // -----------------------------------------------------------------------
+    const totalResponses = initResult.allMessages.length +
+      launchResult.allMessages.length +
+      configResult.allMessages.length;
+
+    const result = {
       success: true,
       initResponse,
       configDoneResponse: configDoneResp,
       stoppedEvent: stoppedEvent || null,
       totalResponses,
     };
+
+    // -----------------------------------------------------------------------
+    // Comprehensive panel verification (when mode=comprehensive)
+    // -----------------------------------------------------------------------
+    if (testMode === 'comprehensive') {
+      setStatus('Running comprehensive panel verification...', 'pending');
+
+      // --- Threads ---
+      appendLog('Requesting threads...');
+      const threadsResult = await sendDapRequest('threads', {});
+      result.threads = threadsResult.response?.body || null;
+      appendLog(`threads: ${safeStringify(result.threads)}`);
+
+      // --- Query state at entry point ---
+      appendLog('Querying state at entry point...');
+      const entryState = await queryCurrentState();
+      result.stackTrace = entryState.stackTrace;
+      result.scopes = entryState.scopes || null;
+      result.variables = entryState.variables || null;
+
+      // --- Step forward (stepIn) to advance into the trace ---
+      // Use stepIn instead of next to ensure we move even if entry is
+      // at a function call boundary. Step multiple times to reach a point
+      // with variables.
+      appendLog('Stepping forward (stepIn x3) to reach a step with variables...');
+      let stepOk = true;
+      for (let i = 0; i < 3 && workerAlive; i++) {
+        const stepResult = await sendDapRequest('stepIn', { threadId: 1 }, 5000);
+        if (!stepResult.response?.success) {
+          appendLog(`stepIn ${i + 1} failed or no response: ${safeStringify(stepResult.response)}`);
+          stepOk = false;
+          break;
+        }
+        appendLog(`stepIn ${i + 1}: success`);
+      }
+      result.steppingSucceeded = stepOk;
+
+      // --- Query state after stepping ---
+      if (stepOk && workerAlive) {
+        appendLog('Querying state after stepping...');
+        const afterStepState = await queryCurrentState();
+        result.stackTraceAfterStep = afterStepState.stackTrace;
+        result.scopesAfterStep = afterStepState.scopes || null;
+        result.variablesAfterStep = afterStepState.variables || null;
+      }
+
+      // --- Event log (ct/event-load) ---
+      if (workerAlive) {
+        appendLog('Requesting ct/event-load...');
+        const eventResult = await sendDapRequest('ct/event-load', {}, 3000);
+        result.eventLog = eventResult.response?.body || null;
+        appendLog(`event-load: ${safeStringify(result.eventLog, 500)}`);
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Final status
+    // -----------------------------------------------------------------------
+    if (stoppedEvent) {
+      setStatus('DAP replay ready — trace loaded and stopped at entry', 'ok');
+    } else {
+      setStatus('DAP initialized and configured — trace loaded', 'ok');
+    }
+
+    // Expose results for Playwright assertions.
+    window.__replayTestResult = result;
 
   } catch (err) {
     appendLog(`ERROR: ${err.message}`);

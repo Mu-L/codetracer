@@ -487,7 +487,12 @@ pub fn setup_onmessage_callback() -> Result<(), DapError> {
         // WASM is single-threaded, so the drain happens synchronously.
         let (sender, receiver) = std::sync::mpsc::channel::<DapMessage>();
 
-        handle_message_browser(&dap_message, sender, &mut ctx, &mut handler).unwrap_throw();
+        if let Err(e) = handle_message_browser(&dap_message, sender, &mut ctx, &mut handler) {
+            web_sys::console::error_1(
+                &JsValue::from_str(&format!("handle_message_browser error: {e}")),
+            );
+            panic!("handle_message_browser failed: {e}");
+        }
 
         // Drain all response messages and post them to the main thread.
         while let Ok(msg) = receiver.try_recv() {
