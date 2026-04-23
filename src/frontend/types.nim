@@ -1636,8 +1636,6 @@ type
     network*:               Network
     asyncSendCache*:        JsAssoc[cstring, JsAssoc[cstring, Future[JsObject]]]
     config*:                Config
-    trace*:                 Trace
-    startOptions*:          StartOptions
     lastNoInfoMessage*:     cstring
     functions*:             Functions
     actions*: array[ClientAction, ClientActionHandler]
@@ -1648,8 +1646,6 @@ type
     recentFolders*:         seq[RecentFolder]
     stylusTransactions*:    seq[StylusTransaction]
     pointList*:             PointListData
-    minRRTicks*:            int
-    maxRRTicks*:            int
     breakpointMenu*:        JsAssoc[cstring, JsAssoc[int, BreakpointMenu]]
     connection*:            ConnectionState
 
@@ -1661,7 +1657,6 @@ type
 
     save*:                  Save
     homedir*:               cstring
-    status*:                StatusState
     lspStarted*:            bool
     lastRestartKind*:       RestartKind
     workspaceFolder*:       cstring  # The folder opened in edit mode (persists across mode switches)
@@ -1798,6 +1793,25 @@ proc activeSession*(d: Data): ReplaySession =
   ## will be added in later milestones.
   d.sessions[d.activeSessionIndex]
 
+# Forwarding templates for per-replay state (M1 migration).
+# These delegate to activeSession so existing code works unchanged.
+# TODO: Remove once all callers are migrated to use activeSession directly.
+
+template trace*(d: Data): untyped = d.sessions[d.activeSessionIndex].trace
+template `trace=`*(d: Data, v: Trace) = d.sessions[d.activeSessionIndex].trace = v
+
+template minRRTicks*(d: Data): untyped = d.sessions[d.activeSessionIndex].minRRTicks
+template `minRRTicks=`*(d: Data, v: int) = d.sessions[d.activeSessionIndex].minRRTicks = v
+
+template maxRRTicks*(d: Data): untyped = d.sessions[d.activeSessionIndex].maxRRTicks
+template `maxRRTicks=`*(d: Data, v: int) = d.sessions[d.activeSessionIndex].maxRRTicks = v
+
+template status*(d: Data): untyped = d.sessions[d.activeSessionIndex].status
+template `status=`*(d: Data, v: StatusState) = d.sessions[d.activeSessionIndex].status = v
+
+template startOptions*(d: Data): untyped = d.sessions[d.activeSessionIndex].startOptions
+template `startOptions=`*(d: Data, v: StartOptions) = d.sessions[d.activeSessionIndex].startOptions = v
+
 proc newReplaySession*(id: ReplaySessionId): ReplaySession =
   ## Create a new, minimally-initialized ReplaySession.
   ## The caller is responsible for populating the heavyweight fields
@@ -1833,18 +1847,6 @@ when defined(ctRenderer):
       connected: true,
       reason: ConnectionLossNone,
       detail: cstring""
-    ),
-    status: StatusState(
-      lastDirection: DebForward,
-      currentOperation: cstring"",
-      currentHistoryOperation: cstring"",
-      finished: false,
-      stableBusy: true,
-      historyBusy: false,
-      traceBusy: false,
-      hasStarted: false,
-      lastAction: cstring"",
-      operationCount: 0,
     ),
     services: Services(
       eventLog: EventLogService(),
@@ -1892,16 +1894,6 @@ when defined(ctRenderer):
       shell: ShellService()),
     network: Network(
       futures: JsAssoc[cstring, JsAssoc[cstring, JsObject]]{}),
-    startOptions: StartOptions(
-      loading: true,
-      screen: true,
-      inTest: false,
-      record: false,
-      edit: false,
-      name: cstring"",
-      frontendSocket: SocketAddressInfo(),
-      backendSocket: SocketAddressInfo(),
-      idleTimeoutMs: 10 * 60 * 1_000),
     pointList: PointListData(
       tracepoints: JsAssoc[int, Tracepoint]{}),
     ui: Components(
@@ -1912,30 +1904,48 @@ when defined(ctRenderer):
       lastUsedEditLayout: nil
     ),
     breakpointMenu: JsAssoc[cstring, JsAssoc[int, BreakpointMenu]]{},
-    maxRRTicks: 100_000, # TODO, not based on events which don't update? somehow record/send from record
-    # TODO max for program, maybe min as well?
     sessions: @[],
     activeSessionIndex: 0)
 
-  # Multi-replay-window (M0): create the initial (and currently only) replay
-  # session, mirroring the per-replay fields that live in Data.  Later
-  # milestones (M1-M6) will migrate callers to go through the session object
-  # and stop writing to the Data fields directly.
+  # Multi-replay-window (M0 + M1): create the initial (and currently only)
+  # replay session.  Per-replay fields (trace, status, startOptions,
+  # minRRTicks, maxRRTicks) now live exclusively on ReplaySession and are
+  # forwarded from Data via templates.  The session must be added to
+  # data.sessions before any forwarding template is used.
   block:
     var session = newReplaySession(ReplaySessionId(0))
-    session.trace = data.trace
     session.dapApi = data.dapApi
     session.services = data.services
     session.viewsApi = data.viewsApi
     session.ui = data.ui
     session.connection = data.connection
-    session.status = data.status
-    session.startOptions = data.startOptions
+    session.status = StatusState(
+      lastDirection: DebForward,
+      currentOperation: cstring"",
+      currentHistoryOperation: cstring"",
+      finished: false,
+      stableBusy: true,
+      historyBusy: false,
+      traceBusy: false,
+      hasStarted: false,
+      lastAction: cstring"",
+      operationCount: 0,
+    )
+    session.startOptions = StartOptions(
+      loading: true,
+      screen: true,
+      inTest: false,
+      record: false,
+      edit: false,
+      name: cstring"",
+      frontendSocket: SocketAddressInfo(),
+      backendSocket: SocketAddressInfo(),
+      idleTimeoutMs: 10 * 60 * 1_000)
     session.network = data.network
     session.asyncSendCache = data.asyncSendCache
     session.pointList = data.pointList
-    session.minRRTicks = data.minRRTicks
-    session.maxRRTicks = data.maxRRTicks
+    session.maxRRTicks = 100_000 # TODO, not based on events which don't update? somehow record/send from record
+    # TODO max for program, maybe min as well?
     data.sessions.add(session)
 
   console.log "data.dapApi"
