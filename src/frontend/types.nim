@@ -1627,14 +1627,12 @@ type
     maxRRTicks*:      int
 
   Data* = ref object
-    dapApi*:                DapApi
     viewsApi*:              MediatorWithSubscribers
     services*:              Services
     ui*:                    Components
     redraw*:                proc: void
     ipc*:                   JsObject
     network*:               Network
-    asyncSendCache*:        JsAssoc[cstring, JsAssoc[cstring, Future[JsObject]]]
     config*:                Config
     lastNoInfoMessage*:     cstring
     functions*:             Functions
@@ -1812,6 +1810,14 @@ template `status=`*(d: Data, v: StatusState) = d.sessions[d.activeSessionIndex].
 template startOptions*(d: Data): untyped = d.sessions[d.activeSessionIndex].startOptions
 template `startOptions=`*(d: Data, v: StartOptions) = d.sessions[d.activeSessionIndex].startOptions = v
 
+# M2 migration: dapApi and asyncSendCache forwarding.
+template dapApi*(d: Data): untyped = d.sessions[d.activeSessionIndex].dapApi
+template `dapApi=`*(d: Data, v: DapApi) = d.sessions[d.activeSessionIndex].dapApi = v
+
+template asyncSendCache*(d: Data): untyped = d.sessions[d.activeSessionIndex].asyncSendCache
+template `asyncSendCache=`*(d: Data, v: auto) =
+  d.sessions[d.activeSessionIndex].asyncSendCache = v
+
 proc newReplaySession*(id: ReplaySessionId): ReplaySession =
   ## Create a new, minimally-initialized ReplaySession.
   ## The caller is responsible for populating the heavyweight fields
@@ -1840,7 +1846,6 @@ when defined(ctRenderer):
     newMediatorWithSubscribers(name, isRemote=true, singleSubscriber=false, transport=x)
 
   var data* = Data(
-    dapApi: DapApi(),
     lastAgentPrompt: "",
     viewsApi: setupSinglePageViewsApi(cstring"single-page-frontend-to-views"),
     connection: ConnectionState(
@@ -1907,14 +1912,14 @@ when defined(ctRenderer):
     sessions: @[],
     activeSessionIndex: 0)
 
-  # Multi-replay-window (M0 + M1): create the initial (and currently only)
+  # Multi-replay-window (M0 + M1 + M2): create the initial (and currently only)
   # replay session.  Per-replay fields (trace, status, startOptions,
-  # minRRTicks, maxRRTicks) now live exclusively on ReplaySession and are
-  # forwarded from Data via templates.  The session must be added to
-  # data.sessions before any forwarding template is used.
+  # minRRTicks, maxRRTicks, dapApi, asyncSendCache) now live exclusively on
+  # ReplaySession and are forwarded from Data via templates.  The session must
+  # be added to data.sessions before any forwarding template is used.
   block:
     var session = newReplaySession(ReplaySessionId(0))
-    session.dapApi = data.dapApi
+    session.dapApi = DapApi()
     session.services = data.services
     session.viewsApi = data.viewsApi
     session.ui = data.ui
@@ -1942,7 +1947,6 @@ when defined(ctRenderer):
       backendSocket: SocketAddressInfo(),
       idleTimeoutMs: 10 * 60 * 1_000)
     session.network = data.network
-    session.asyncSendCache = data.asyncSendCache
     session.pointList = data.pointList
     session.maxRRTicks = 100_000 # TODO, not based on events which don't update? somehow record/send from record
     # TODO max for program, maybe min as well?

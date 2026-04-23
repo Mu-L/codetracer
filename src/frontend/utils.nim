@@ -832,7 +832,9 @@ data.services.eventLog.debugger = data.services.debugger
 data.services.search.data = data
 data.keyPlugins[Content.EditorView] = JsAssoc[cstring, proc(context: KeyPluginContext): Future[void]]{}
 
-data.asyncSendCache = JsAssoc[cstring, JsAssoc[cstring, Future[JsObject]]]{}
+block:
+  let emptyCache = JsAssoc[cstring, JsAssoc[cstring, Future[JsObject]]]{}
+  data.asyncSendCache = emptyCache
 
 # example - if it is an event log component content will be set to 8 which coresponds to Content enumeration in types.nim
 proc openPanel*(
