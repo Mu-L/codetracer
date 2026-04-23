@@ -452,7 +452,7 @@ pub fn load_trace_data(
     Ok(trace_events)
 }
 
-#[cfg(feature = "browser-transport")]
+#[cfg(all(feature = "browser-transport", not(feature = "io-transport")))]
 #[allow(clippy::panic)]
 pub fn load_trace_data(
     trace_file: &Path,
@@ -478,7 +478,7 @@ pub fn load_trace_metadata(trace_metadata_file: &Path) -> Result<TraceMetadata, 
     Ok(trace_metadata)
 }
 
-#[cfg(feature = "browser-transport")]
+#[cfg(all(feature = "browser-transport", not(feature = "io-transport")))]
 #[allow(clippy::panic)]
 pub fn load_trace_metadata(trace_metadata_file: &Path) -> Result<TraceMetadata, Box<dyn Error>> {
     use crate::vfs::{load_trace_metadata_vfs, trace_vfs_root};

@@ -91,7 +91,7 @@ fn panic_handler(info: &PanicHookInfo) {
     error!("PANIC!!! {}", info);
 }
 
-#[cfg(feature = "browser-transport")]
+#[cfg(all(feature = "browser-transport", not(feature = "io-transport")))]
 fn main() {}
 
 // #[cfg(not(any(feature = "io-transport", feature = "browser-transport")))]
