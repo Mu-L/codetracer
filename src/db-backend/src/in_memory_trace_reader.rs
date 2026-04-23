@@ -165,7 +165,6 @@ impl TraceReader for InMemoryTraceReader {
     fn end_of_program(&self) -> &EndOfProgram {
         &self.db.end_of_program
     }
-
 }
 
 #[cfg(test)]

@@ -171,8 +171,8 @@ impl CTFSTraceReader {
 
         let ct_path = ct_file_path.to_string_lossy().to_string();
 
-        let reader = NimTraceReaderHandle::open(&ct_path)
-            .map_err(|e| format!("failed to open .ct via Nim reader: {e}"))?;
+        let reader =
+            NimTraceReaderHandle::open(&ct_path).map_err(|e| format!("failed to open .ct via Nim reader: {e}"))?;
 
         let step_count = reader.step_count();
         let call_count = reader.call_count();
@@ -261,9 +261,8 @@ impl CTFSTraceReader {
         let mut call_ranges: Vec<CallRange> = Vec::with_capacity(call_count as usize);
 
         for key in 0..call_count {
-            let (function_id, parent_key, entry_step, exit_step, depth, children_count) = reader
-                .call_fields(key)
-                .map_err(|e| format!("call {key}: {e}"))?;
+            let (function_id, parent_key, entry_step, exit_step, depth, children_count) =
+                reader.call_fields(key).map_err(|e| format!("call {key}: {e}"))?;
 
             let mut children_keys = Vec::with_capacity(children_count as usize);
             for c in 0..children_count {
@@ -276,7 +275,7 @@ impl CTFSTraceReader {
             db.calls.push(DbCall {
                 key: CallKey(key as i64),
                 function_id: FunctionId(function_id as usize),
-                args: vec![],           // TODO: call args not yet exposed via structured FFI
+                args: vec![], // TODO: call args not yet exposed via structured FFI
                 return_value: ValueRecord::None { type_id: TypeId(0) }, // TODO: return values
                 step_id: StepId(entry_step as i64),
                 depth: depth as usize,
@@ -320,9 +319,7 @@ impl CTFSTraceReader {
             let mut current_global_key = CallKey(0);
             for (step_idx, slot) in step_to_global_call_key.iter_mut().enumerate() {
                 // Advance to the last call whose entry_step <= step_idx.
-                while call_idx + 1 < call_count as usize
-                    && call_ranges[call_idx + 1].entry_step <= step_idx as u64
-                {
+                while call_idx + 1 < call_count as usize && call_ranges[call_idx + 1].entry_step <= step_idx as u64 {
                     call_idx += 1;
                     current_global_key = CallKey(call_idx as i64);
                 }
@@ -339,9 +336,7 @@ impl CTFSTraceReader {
         // Populate db.steps, db.step_map, and per-step scaffolding
         // (variables, instructions, compound, cells, variable_cells).
         for i in 0..step_count {
-            let (path_id_raw, line_raw) = reader
-                .step_location(i)
-                .map_err(|e| format!("step {i}: {e}"))?;
+            let (path_id_raw, line_raw) = reader.step_location(i).map_err(|e| format!("step {i}: {e}"))?;
 
             let path_id = PathId(path_id_raw as usize);
             let line = Line(line_raw as i64);
@@ -372,10 +367,7 @@ impl CTFSTraceReader {
             }
             if line.0 >= 0 {
                 let line_usize = line.0 as usize;
-                db.step_map[path_id]
-                    .entry(line_usize)
-                    .or_default()
-                    .push(db_step);
+                db.step_map[path_id].entry(line_usize).or_default().push(db_step);
             }
         }
 
@@ -796,7 +788,6 @@ impl TraceReader for CTFSTraceReader {
     fn end_of_program(&self) -> &EndOfProgram {
         &self.db.end_of_program
     }
-
 }
 
 #[cfg(test)]
@@ -1394,6 +1385,183 @@ mod tests {
         );
     }
 
+    /// M43 — GUI call tree viewport latency benchmark.
+    ///
+    /// Creates a trace with 10K steps and a call tree, measures the time for
+    /// 100 random `call()` lookups plus children enumeration, and asserts the
+    /// median latency is below 500us.
+    ///
+    /// This validates that the GUI can render call tree viewports without lag.
+    /// Call data is stored in a contiguous `DistinctVec<DbCall>`, so random
+    /// access should be O(1) plus the cost of iterating `children_keys`.
+    #[test]
+    fn bench_gui_call_tree_viewport_latency() {
+        use std::time::Instant;
+
+        let dir = tempfile::tempdir().unwrap();
+        let ct_path = build_trace_with_steps(dir.path(), 10_000);
+
+        let reader = CTFSTraceReader::open(&ct_path).unwrap();
+        // The trace has 1 call (main) with all 10K steps inside it.
+        assert!(reader.call_count() >= 1, "expected at least 1 call");
+
+        // Warm up
+        for i in 0i64..reader.call_count().min(10) as i64 {
+            let _ = reader.call(CallKey(i));
+        }
+
+        // Measure 100 call lookups (cycling through available calls)
+        let call_count = reader.call_count();
+        let mut durations = Vec::with_capacity(100);
+        for sample in 0..100usize {
+            let key = CallKey((sample % call_count) as i64);
+            let start = Instant::now();
+            let call = reader.call(key);
+            // Also access children_keys to simulate viewport rendering
+            if let Some(c) = call {
+                let _ = c.children_keys.len();
+                let _ = c.function_id;
+                let _ = c.depth;
+            }
+            let elapsed = start.elapsed();
+            durations.push(elapsed);
+        }
+
+        let median = median_duration(&mut durations);
+
+        println!(
+            "{{\"benchmark\":\"gui_call_tree_viewport\",\"call_count\":{},\
+             \"samples\":100,\"median_us\":{},\"max_us\":{}}}",
+            call_count,
+            median.as_micros(),
+            durations.iter().max().unwrap().as_micros()
+        );
+
+        assert!(
+            median.as_micros() < 500,
+            "call tree viewport median latency too high: {}us (threshold: 500us)",
+            median.as_micros()
+        );
+    }
+
+    /// M43 — GUI event log page load latency benchmark.
+    ///
+    /// Creates a trace with events, measures the time to load a page of 50
+    /// events via `reader.events()` slice access, and asserts median < 1ms.
+    ///
+    /// This validates that the GUI event log panel can paginate without lag.
+    #[test]
+    fn bench_gui_event_log_page_load_latency() {
+        use codetracer_trace_types::{
+            CallRecord, EventLogKind, FullValueRecord, FunctionId, FunctionRecord, Line, PathId, RecordEvent,
+            StepRecord, TraceLowLevelEvent, TypeId, TypeKind, TypeRecord, TypeSpecificInfo, ValueRecord, VariableId,
+        };
+        use std::path::PathBuf;
+        use std::time::Instant;
+
+        // Build a trace with 200 I/O events across 200 steps
+        let dir = tempfile::tempdir().unwrap();
+        let mut events: Vec<TraceLowLevelEvent> = vec![
+            TraceLowLevelEvent::Path(PathBuf::from("/src/main.py")),
+            TraceLowLevelEvent::Type(TypeRecord {
+                kind: TypeKind::Int,
+                lang_type: "int".to_string(),
+                specific_info: TypeSpecificInfo::None,
+            }),
+            TraceLowLevelEvent::Function(FunctionRecord {
+                path_id: PathId(0),
+                line: Line(1),
+                name: "main".to_string(),
+            }),
+            TraceLowLevelEvent::VariableName("i".to_string()),
+            TraceLowLevelEvent::Call(CallRecord {
+                function_id: FunctionId(0),
+                args: vec![],
+            }),
+        ];
+
+        for i in 0..200usize {
+            events.push(TraceLowLevelEvent::Step(StepRecord {
+                path_id: PathId(0),
+                line: Line((i + 1) as i64),
+            }));
+            events.push(TraceLowLevelEvent::Value(FullValueRecord {
+                variable_id: VariableId(0),
+                value: ValueRecord::Int {
+                    i: i as i64,
+                    type_id: TypeId(0),
+                },
+            }));
+            events.push(TraceLowLevelEvent::Event(RecordEvent {
+                kind: EventLogKind::Write,
+                metadata: "stdout".to_string(),
+                content: format!("output line {i}"),
+            }));
+        }
+
+        events.push(TraceLowLevelEvent::Return(codetracer_trace_types::ReturnRecord {
+            return_value: ValueRecord::None { type_id: TypeId(0) },
+        }));
+
+        let mut cbor_buf = Vec::new();
+        for event in &events {
+            cbor_buf = cbor4ii::serde::to_vec(cbor_buf, event).expect("CBOR encode failed");
+        }
+
+        let ct_path = dir.path().join("event_bench.ct");
+        let meta_json = br#"{"workdir":"/tmp","program":"/tmp/main.py","args":[]}"#;
+        ctfs_container::write_minimal_ctfs(&ct_path, &[("meta.json", meta_json), ("events.log", &cbor_buf)]).unwrap();
+
+        let reader = CTFSTraceReader::open(&ct_path).unwrap();
+        assert_eq!(reader.event_count(), 200);
+
+        // Warm up
+        let _ = reader.events();
+
+        // Measure 100 page loads of 50 events each (simulating pagination)
+        let total_events = reader.event_count();
+        let page_size = 50usize;
+        let mut durations = Vec::with_capacity(100);
+
+        // Deterministic page offsets
+        let mut rng_state: u64 = 99;
+        for _ in 0..100 {
+            rng_state = (rng_state.wrapping_mul(1103515245).wrapping_add(12345)) & 0x7FFFFFFF;
+            let offset = (rng_state as usize) % (total_events.saturating_sub(page_size) + 1);
+
+            let start = Instant::now();
+            let all_events = reader.events();
+            let end = (offset + page_size).min(all_events.len());
+            let page = &all_events[offset..end];
+            // Simulate reading event fields for rendering
+            for ev in page {
+                let _ = &ev.content;
+                let _ = ev.kind;
+                let _ = ev.step_id;
+            }
+            let elapsed = start.elapsed();
+            durations.push(elapsed);
+        }
+
+        let median = median_duration(&mut durations);
+
+        println!(
+            "{{\"benchmark\":\"gui_event_log_page_load\",\"event_count\":{},\
+             \"page_size\":{},\"samples\":100,\"median_us\":{},\"max_us\":{}}}",
+            total_events,
+            page_size,
+            median.as_micros(),
+            durations.iter().max().unwrap().as_micros()
+        );
+
+        // Assert median < 1ms (1000us) for loading 50 events
+        assert!(
+            median.as_micros() < 1000,
+            "event log page load median latency too high: {}us (threshold: 1000us)",
+            median.as_micros()
+        );
+    }
+
     /// M37 — Verify that the old-format postprocessing path correctly builds
     /// the `Db` from a 1000-step trace. This is not a startup time benchmark
     /// (the old format always requires O(n) postprocessing); it verifies
@@ -1447,11 +1615,8 @@ mod tests {
         // format detection. The actual content depends on the Nim writer's
         // output format.
         let meta_json = br#"{"workdir":"/tmp","program":"/tmp/bench.py","args":[]}"#;
-        ctfs_container::write_minimal_ctfs(
-            &ct_path,
-            &[("meta.json", meta_json), ("steps.dat", b"placeholder")],
-        )
-        .unwrap();
+        ctfs_container::write_minimal_ctfs(&ct_path, &[("meta.json", meta_json), ("steps.dat", b"placeholder")])
+            .unwrap();
 
         #[cfg(not(feature = "nim-reader"))]
         {

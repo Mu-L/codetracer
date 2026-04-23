@@ -845,5 +845,4 @@ pub trait TraceReader: std::fmt::Debug + Send {
 
         None
     }
-
 }

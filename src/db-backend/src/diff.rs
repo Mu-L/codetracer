@@ -149,10 +149,11 @@ pub fn index_diff(diff: Diff, trace_folder: &Path) -> Result<(), Box<dyn Error>>
     let mut flow_preloader = FlowPreloader::new();
     let reader: Arc<dyn crate::trace_reader::TraceReader> = Arc::new(InMemoryTraceReader::new(db.clone()));
     let mut replay = MaterializedReplaySession::new(Arc::clone(&reader));
-    let flow_update = match flow_preloader.load_diff_flow(diff_lines, reader.as_ref(), TraceKind::Materialized, &mut replay) {
-        Ok(flow_update_direct) => flow_update_direct,
-        Err(_e) => FlowUpdate::error("load diff flow error: {e:?}"),
-    };
+    let flow_update =
+        match flow_preloader.load_diff_flow(diff_lines, reader.as_ref(), TraceKind::Materialized, &mut replay) {
+            Ok(flow_update_direct) => flow_update_direct,
+            Err(_e) => FlowUpdate::error("load diff flow error: {e:?}"),
+        };
 
     let raw = serde_json::to_string(&flow_update)?;
     std::fs::write(trace_folder.join("diff_index.json"), raw)?;
