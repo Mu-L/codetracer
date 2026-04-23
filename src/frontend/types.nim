@@ -1601,6 +1601,31 @@ type
     RestartNewTrace,
     RestartSubsystem
 
+  # Multi-replay-window architecture (M0): a distinct integer identifying a
+  # replay session so that callers cannot accidentally mix up plain ints with
+  # session identifiers.
+  ReplaySessionId* = distinct int
+
+  # Multi-replay-window architecture (M0): holds all per-replay state.
+  # During the incremental migration (M1-M6) the corresponding fields in
+  # Data will be forwarded here via templates so that existing code keeps
+  # compiling without changes.
+  ReplaySession* = ref object
+    id*:              ReplaySessionId
+    trace*:           Trace
+    dapApi*:          DapApi
+    services*:        Services
+    viewsApi*:        MediatorWithSubscribers
+    ui*:              Components
+    connection*:      ConnectionState
+    status*:          StatusState
+    startOptions*:    StartOptions
+    network*:         Network
+    asyncSendCache*:  JsAssoc[cstring, JsAssoc[cstring, Future[JsObject]]]
+    pointList*:       PointListData
+    minRRTicks*:      int
+    maxRRTicks*:      int
+
   Data* = ref object
     dapApi*:                DapApi
     viewsApi*:              MediatorWithSubscribers
@@ -1640,6 +1665,13 @@ type
     lspStarted*:            bool
     lastRestartKind*:       RestartKind
     workspaceFolder*:       cstring  # The folder opened in edit mode (persists across mode switches)
+
+    # Multi-replay-window architecture (M0): session management.
+    # During the migration the first (and only) session mirrors the
+    # fields above; later milestones will move the per-replay state
+    # exclusively into ReplaySession.
+    sessions*:              seq[ReplaySession]
+    activeSessionIndex*:    int
 
 
   KeyPluginContext* = ref object
@@ -1755,6 +1787,25 @@ type
     # a wrapper
     # sys*: SysConfig
 
+# --- Multi-replay-window helpers (M0) ---
+
+proc `==`*(a, b: ReplaySessionId): bool {.borrow.}
+proc `$`*(a: ReplaySessionId): string {.borrow.}
+
+proc activeSession*(d: Data): ReplaySession =
+  ## Returns the currently active replay session.
+  ## During M0 there is exactly one session; multi-session support
+  ## will be added in later milestones.
+  d.sessions[d.activeSessionIndex]
+
+proc newReplaySession*(id: ReplaySessionId): ReplaySession =
+  ## Create a new, minimally-initialized ReplaySession.
+  ## The caller is responsible for populating the heavyweight fields
+  ## (dapApi, services, etc.) after construction.
+  ReplaySession(id: id)
+
+# --- end M0 helpers ---
+
 when defined(ctRenderer):
   import
     std / jsconsole,
@@ -1861,8 +1912,31 @@ when defined(ctRenderer):
       lastUsedEditLayout: nil
     ),
     breakpointMenu: JsAssoc[cstring, JsAssoc[int, BreakpointMenu]]{},
-    maxRRTicks: 100_000) # TODO, not based on events which don't update? somehow record/send from record
+    maxRRTicks: 100_000, # TODO, not based on events which don't update? somehow record/send from record
     # TODO max for program, maybe min as well?
+    sessions: @[],
+    activeSessionIndex: 0)
+
+  # Multi-replay-window (M0): create the initial (and currently only) replay
+  # session, mirroring the per-replay fields that live in Data.  Later
+  # milestones (M1-M6) will migrate callers to go through the session object
+  # and stop writing to the Data fields directly.
+  block:
+    var session = newReplaySession(ReplaySessionId(0))
+    session.trace = data.trace
+    session.dapApi = data.dapApi
+    session.services = data.services
+    session.viewsApi = data.viewsApi
+    session.ui = data.ui
+    session.connection = data.connection
+    session.status = data.status
+    session.startOptions = data.startOptions
+    session.network = data.network
+    session.asyncSendCache = data.asyncSendCache
+    session.pointList = data.pointList
+    session.minRRTicks = data.minRRTicks
+    session.maxRRTicks = data.maxRRTicks
+    data.sessions.add(session)
 
   console.log "data.dapApi"
   console.log data.dapApi
