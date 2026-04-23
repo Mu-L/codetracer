@@ -1,6 +1,6 @@
 //! Minimal CTFS binary container reader (and test-only writer).
 //!
-//! Implements just enough of the CTFS v2 binary format spec to:
+//! Implements just enough of the CTFS v2/v3/v4 binary format spec to:
 //! 1. Parse the container header and file directory
 //! 2. Read named internal files by navigating the block mapping hierarchy
 //!
@@ -35,8 +35,22 @@ use std::path::Path;
 /// Magic bytes identifying a CTFS file: "C0DE trACE2" in hex-speak.
 const CTFS_MAGIC: [u8; 5] = [0xC0, 0xDE, 0x72, 0xAC, 0xE2];
 
-/// The format version we support.
-const CTFS_VERSION: u8 = 2;
+/// The minimum CTFS format version we support.
+const CTFS_VERSION_MIN: u8 = 2;
+
+/// The maximum CTFS format version we support.
+///
+/// Version history:
+///   v2 — extended header with BlockSize and MaxRootEntries; reserved bytes 6-7.
+///   v3 — 16-byte header with encryption field at byte 6; binary metadata;
+///         default BlockSize 4096; small file optimization; namespaces.
+///   v4 — max_shards field at byte 7 (Nim writer default).
+///
+/// The on-disk layout of the extended header and file entries is unchanged
+/// across all three versions, so a single reader handles them all. The only
+/// difference is the meaning of header bytes 6 (encryption, ignored) and 7
+/// (max_shards, informational only).
+const CTFS_VERSION_MAX: u8 = 4;
 
 /// Size of the fixed header (magic + version + reserved).
 const HEADER_SIZE: usize = 8;
@@ -127,7 +141,7 @@ impl fmt::Display for CtfsError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             CtfsError::InvalidMagic => write!(f, "not a valid CTFS file (bad magic bytes)"),
-            CtfsError::UnsupportedVersion(v) => write!(f, "unsupported CTFS version {v} (expected {CTFS_VERSION})"),
+            CtfsError::UnsupportedVersion(v) => write!(f, "unsupported CTFS version {v} (expected {CTFS_VERSION_MIN}..={CTFS_VERSION_MAX})"),
             CtfsError::FileNotFound(name) => write!(f, "internal file not found in CTFS container: {name}"),
             CtfsError::Io(e) => write!(f, "CTFS I/O error: {e}"),
             CtfsError::Corrupt(msg) => write!(f, "corrupt CTFS container: {msg}"),
@@ -165,7 +179,7 @@ struct FileEntry {
 
 // ── Reader ──────────────────────────────────────────────────────────────
 
-/// Reader for a CTFS v2 binary container.
+/// Reader for a CTFS v2/v3/v4 binary container.
 ///
 /// Parses the header and file directory on construction, then provides
 /// `read_file(name)` to extract internal files by name.
@@ -205,9 +219,10 @@ impl CtfsReader {
             return Err(CtfsError::InvalidMagic);
         }
 
-        // Check version
+        // Check version — we accept v2, v3, and v4 since the extended header
+        // and file entry layout is identical across these versions.
         let version = data[5];
-        if version != CTFS_VERSION {
+        if !(CTFS_VERSION_MIN..=CTFS_VERSION_MAX).contains(&version) {
             return Err(CtfsError::UnsupportedVersion(version));
         }
 
@@ -501,8 +516,8 @@ pub fn write_minimal_ctfs(path: &Path, files: &[(&str, &[u8])]) -> Result<(), Bo
 
     // Write header
     buf[0..5].copy_from_slice(&CTFS_MAGIC);
-    buf[5] = CTFS_VERSION;
-    // bytes 6-7 are reserved (already zero)
+    buf[5] = CTFS_VERSION_MAX; // Write using the latest supported version
+    // bytes 6-7: encryption=0, max_shards=0 (already zero)
 
     // Write extended header
     buf[8..12].copy_from_slice(&(block_size as u32).to_le_bytes());

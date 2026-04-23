@@ -3326,14 +3326,25 @@ impl TestRecording {
         // Different formats produce different files:
         //   - JSON format: trace.json
         //   - Binary (CBOR+Zstd): trace.bin
-        //   - CTFS: trace.ct
+        //   - CTFS: trace.ct or <program_name>.ct (the shell recorder names
+        //     the .ct file after the recorded script, not as "trace.ct")
         let trace_json = trace_dir.join("trace.json");
         let trace_bin = trace_dir.join("trace.bin");
         let trace_ct = trace_dir.join("trace.ct");
+        let has_any_ct = trace_ct.exists()
+            || fs::read_dir(&trace_dir)
+                .map(|entries| {
+                    entries.filter_map(|e| e.ok()).any(|e| {
+                        e.path()
+                            .extension()
+                            .map_or(false, |ext| ext == "ct")
+                    })
+                })
+                .unwrap_or(false);
         let trace_metadata = trace_dir.join("trace_metadata.json");
-        if !trace_json.exists() && !trace_bin.exists() && !trace_ct.exists() {
+        if !trace_json.exists() && !trace_bin.exists() && !has_any_ct {
             return Err(format!(
-                "no trace file (trace.json, trace.bin, or trace.ct) produced in {}",
+                "no trace file (trace.json, trace.bin, or *.ct) produced in {}",
                 trace_dir.display()
             ));
         }

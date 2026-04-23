@@ -404,8 +404,15 @@ fn setup(
     // not by the DB trace reader. Skip DB metadata loading for them.
     // At this point, if the file was a valid CTFS container it would have been
     // handled above, so any remaining .ct files are MCR native replay traces.
-    let is_mcr_trace = trace_folder.is_file()
+    //
+    // We also check whether trace_file has a .ct extension: if the CTFS reader
+    // rejected the file (e.g. due to a version mismatch), we must not try to
+    // parse it as CBOR+Zstd binary data, which would panic.
+    let is_mcr_trace = (trace_folder.is_file()
         && trace_folder
+            .extension()
+            .is_some_and(|ext| ext == std::ffi::OsStr::new("ct")))
+        || trace_file
             .extension()
             .is_some_and(|ext| ext == std::ffi::OsStr::new("ct"));
     let trace_file_format = if trace_file.extension() == Some(std::ffi::OsStr::new("json")) {
@@ -541,6 +548,24 @@ fn resolve_replay_trace_path(trace_folder: &Path, trace_file: &Path) -> Option<P
 /// or any I/O error.  This is intentionally a quick check (no full parse)
 /// so it can be used as a cheap format-detection gate before attempting
 /// the more expensive `CTFSTraceReader::open`.
+/// Find the first `.ct` file in a directory, if any.
+///
+/// The shell recorder (and potentially other recorders using the Nim CTFS
+/// writer) names the `.ct` file after the recorded program rather than using
+/// a fixed name like `trace.ct`. This helper scans the directory for any file
+/// with a `.ct` extension so the auto-detect logic can find it regardless of
+/// the naming convention used by the recorder.
+fn find_ct_file_in_dir(dir: &Path) -> Option<PathBuf> {
+    let entries = std::fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().is_some_and(|ext| ext == "ct") && path.is_file() {
+            return Some(path);
+        }
+    }
+    None
+}
+
 fn is_ctfs_file(path: &Path) -> bool {
     use std::io::Read;
 
@@ -826,11 +851,20 @@ pub fn handle_message(msg: &DapMessage, sender: Sender<DapMessage>, ctx: &mut Ct
                 if let Some(trace_file) = &args.trace_file {
                     ctx.launch_trace_file = trace_file.clone();
                 } else {
-                    // Auto-detect: prefer trace.bin (binary CBOR+zstd from
-                    // Python/Ruby/WASM recorders) over trace.json.
+                    // Auto-detect trace file format.  Priority:
+                    //   1. trace.bin  — binary CBOR+zstd (Python/Ruby/WASM recorders)
+                    //   2. *.ct      — CTFS container (shell recorders via Nim writer
+                    //                  may name the file after the program, e.g.
+                    //                  `bash_flow_test.ct` instead of `trace.ct`)
+                    //   3. trace.json — legacy JSON format
                     let bin_path = folder.join("trace.bin");
                     if bin_path.is_file() {
                         ctx.launch_trace_file = "trace.bin".into();
+                    } else if let Some(ct_path) = find_ct_file_in_dir(folder) {
+                        // Store just the file name — setup() joins it with the folder.
+                        if let Some(name) = ct_path.file_name() {
+                            ctx.launch_trace_file = name.into();
+                        }
                     } else {
                         ctx.launch_trace_file = "trace.json".into();
                     }
@@ -990,10 +1024,16 @@ fn task_thread(
                 let launch_trace_file = if let Some(trace_file) = &args.trace_file {
                     trace_file.clone()
                 } else {
-                    // Auto-detect: prefer trace.bin (binary CBOR+zstd) over trace.json.
+                    // Auto-detect trace file format (same logic as the
+                    // initial launch handler above).
                     let bin_path = folder.join("trace.bin");
                     if bin_path.is_file() {
                         "trace.bin".into()
+                    } else if let Some(ct_path) = find_ct_file_in_dir(folder) {
+                        ct_path.file_name().map_or_else(
+                            || "trace.json".into(),
+                            |name| name.into(),
+                        )
                     } else {
                         "trace.json".into()
                     }
