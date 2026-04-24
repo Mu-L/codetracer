@@ -179,6 +179,7 @@ proc ready*(): Future[void] {.async.} =
 
   debugPrint "index: creating window"
   mainWindow = createMainWindow()
+  registerMainWindow()
   infoPrint "index: main window created"
   sendLspStatusToRenderer()
 

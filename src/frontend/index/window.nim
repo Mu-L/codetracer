@@ -149,3 +149,64 @@ proc onExitError*(sender: js, response: cstring) {.async.} =
   errorPrint fmt"exit: {response}"
   if true: # workaround for unreachable statement and async
     quit(1)
+
+# ── Multi-window management (M15) ──────────────────────────────────────
+
+proc registerMainWindow*() =
+  ## Register the main window in the window table under session 0.
+  ## Call this right after ``mainWindow = createMainWindow()``.
+  when not defined(server):
+    let windowId = mainWindow.id.to(int)
+    windowTable[windowId] = mainWindow
+    sessionWindows[0] = @[windowId]
+    infoPrint "index: registered main window id=", $windowId, " in session 0"
+
+proc unregisterWindow(windowId: int) =
+  ## Remove a window from both the window table and all session lists.
+  discard jsDelete windowTable[windowId]
+  # Iterate over known session IDs to remove the window from any session.
+  # We collect IDs to delete to avoid mutating during iteration.
+  var emptySessionIds: seq[int] = @[]
+  for sid, wins in sessionWindows:
+    let idx = wins.find(windowId)
+    if idx >= 0:
+      # Copy the list, remove the entry, reassign.
+      var updated = wins
+      updated.delete(idx)
+      sessionWindows[sid] = updated
+      if updated.len == 0 and sid != 0:
+        emptySessionIds.add(sid)
+  for sid in emptySessionIds:
+    discard jsDelete sessionWindows[sid]
+
+proc createSecondaryWindow*(sessionId: int): JsObject =
+  ## Create a new BrowserWindow for an existing session.
+  ## The window reuses the same creation logic as the main window so it
+  ## gets the same dimensions, webPreferences and URL.
+  when not defined(server):
+    let win = createMainWindow()
+    let windowId = win.id.to(int)
+    windowTable[windowId] = win
+
+    if sessionWindows.hasKey(sessionId):
+      var wins = sessionWindows[sessionId]
+      wins.add(windowId)
+      sessionWindows[sessionId] = wins
+    else:
+      sessionWindows[sessionId] = @[windowId]
+
+    # Tell the renderer which session it belongs to once the page loads.
+    win.webContents.once(cstring"did-finish-load", proc() =
+      win.webContents.send(cstring"CODETRACER::init-session",
+                           js{"sessionId": sessionId})
+    )
+
+    # Clean up when the secondary window is closed.
+    win.on(cstring"closed", proc() =
+      infoPrint "index: secondary window closed id=", $windowId
+      unregisterWindow(windowId)
+    )
+
+    infoPrint "index: created secondary window id=", $windowId,
+              " for session ", $sessionId
+    return win
