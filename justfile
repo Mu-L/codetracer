@@ -517,6 +517,13 @@ test-stats-reset:
 test-python-recorder:
   ./ci/test/python-recorder-smoke.sh
 
+# Run CLI record smoke tests for all supported languages.
+# Exercises the full `ct record` code path (language detection → recorder
+# dispatch → trace import) to catch PATH, format, and dispatch regressions.
+# Pass language names to test a subset: just test-record-smoke ruby python
+test-record-smoke *args:
+  ./ci/test/cli-record-smoke.sh {{args}}
+
 # ====
 # Nim flow/omniscience integration tests
 # Tests the db-backend's ability to resolve Nim global variables using mangled names
