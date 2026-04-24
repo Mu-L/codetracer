@@ -232,11 +232,18 @@ proc runInitial*(conf: CodetracerConf) =
       quit(0)
 
     of StartupCommand.replay:
+      # Resolve the effective new-trace policy:
+      # CLI flags override the config setting.
+      let replayPolicy =
+        if conf.replayNewTab: "tab"
+        elif conf.replayNewWindow: "window"
+        else: "" # empty = defer to config/default
       replay(
         conf.lastTraceMatchingPattern,
         conf.replayTraceId,
         conf.replayTraceFolder,
-        replayInteractive
+        replayInteractive,
+        newTracePolicy = replayPolicy
       )
     of StartupCommand.noCommand:
       # When ct is launched with no subcommand, show the welcome screen.
@@ -344,7 +351,14 @@ proc runInitial*(conf: CodetracerConf) =
         conf.recordTestLine, conf.recordTestColumn,
         conf.recordTestWithDiff, conf.recordTestStoreTraceFolderForPid)
     of StartupCommand.run:
-      run(conf.runTracePathOrId, conf.runArgs)
+      # Resolve the effective new-trace policy:
+      # CLI flags override the config setting.
+      let runPolicy =
+        if conf.runNewTab: "tab"
+        elif conf.runNewWindow: "window"
+        else: "" # empty = defer to config/default
+      run(conf.runTracePathOrId, conf.runArgs,
+          newTracePolicy = runPolicy)
     of StartupCommand.remote:
       quit(runCtRemote(conf.remoteArgs))
     of StartupCommand.arb:

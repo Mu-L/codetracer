@@ -628,7 +628,36 @@ type
           "interactively choosing " &
           "a trace"
       .}: Option[bool]
+      replayNewTab* {.
+        name: "new-tab",
+        desc: "Open trace as a new tab " &
+          "in the existing window " &
+          "(overrides config)"
+        defaultValue: false
+      .}: bool
+      replayNewWindow* {.
+        name: "new-window",
+        desc: "Open trace in a new " &
+          "Electron window " &
+          "(overrides config)"
+        defaultValue: false
+      .}: bool
     of StartupCommand.run:
+      runNewTab* {.
+        name: "new-tab",
+        desc: "Open trace as a new tab " &
+          "in the existing window " &
+          "(overrides config)"
+        defaultValue: false
+      .}: bool
+      runNewWindow* {.
+        name: "new-window",
+        desc: "Open trace in a new " &
+          "Electron window " &
+          "(overrides config)"
+        defaultValue: false
+      .}: bool
+
       runTracePathOrId* {.
         argument
         desc: "If not a valid trace ID, " &

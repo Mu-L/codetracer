@@ -351,6 +351,24 @@ proc onLoadRecentTrace*(sender: js, response: jsobject(traceId=int)) {.async.} =
   await prepareForLoadingTrace(response.traceId, nodeProcess.pid.to(int))
   await loadExistingRecord(response.traceId)
 
+proc onOpenTraceInTab*(sender: js, response: jsobject(traceId=int)) {.async.} =
+  ## Open a trace as a new tab in the current window, rather than
+  ## spawning a new Electron window.  This is the handler for the
+  ## "tab" newTracePolicy.  The renderer receives a
+  ## "CODETRACER::open-trace-in-tab-ready" message with the trace
+  ## metadata so it can create a new session tab and load the trace.
+  let traceId = response.traceId
+  infoPrint "index: open-trace-in-tab for traceId ", $traceId
+
+  # Tell the renderer to create a new session tab.
+  mainWindow.webContents.send(
+    "CODETRACER::open-trace-in-tab-ready",
+    js{traceId: traceId})
+
+  # Prepare the replay backend for this trace (starts a DAP session).
+  await prepareForLoadingTrace(traceId, nodeProcess.pid.to(int))
+  await loadExistingRecord(traceId)
+
 proc onLoadRecentTransaction*(sender: js, response: jsobject(txHash=cstring)) {.async.} =
   let (rawOutputOrError, traceId) = await replayTx(response.txHash, nodeProcess.pid.to(int))
   if traceId != NO_INDEX:

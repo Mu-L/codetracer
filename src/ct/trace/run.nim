@@ -14,7 +14,8 @@ proc runRecordedTrace*(
   # TODO: we use those if we restore multitraces
   structuredDiffPath: string = "",
   indexDiffPath: string = "",
-  recordCore: bool = false
+  recordCore: bool = false,
+  newTracePolicy: string = ""
 ) =
   var args = if test: @[$trace.id, "--test"] else: @[$trace.id]
   let traceStructuredDiffPath = trace.outputFolder / "diff.json"
@@ -25,14 +26,16 @@ proc runRecordedTrace*(
     if existsFile(traceIndexDiffPath):
       args.add("--diff-index")
       args.add(traceIndexDiffPath)
-  launchElectron(args, trace, ElectronLaunchMode.Default, recordCore, test)
+  launchElectron(args, trace, ElectronLaunchMode.Default, recordCore, test,
+                 newTracePolicy = newTracePolicy)
 
 
 proc runWithRestart(
   test: bool,
   recordCore: bool = false,
   lang: Lang = LangUnknown,
-  recordArgs: seq[string] = @[]
+  recordArgs: seq[string] = @[],
+  newTracePolicy: string = ""
 ) =
   var afterRestart = false
 
@@ -79,7 +82,12 @@ proc runWithRestart(
     if not recordedTrace.isNil:
       # Always spawn a subprocess for replay so the restart loop can work.
       # (runRecordedTrace uses execv which never returns)
-      let process = startProcess(codetracerExe, args = @["replay", fmt"--id={recordedTrace.id}"], options = {poParentStreams})
+      var replayArgs = @["replay", fmt"--id={recordedTrace.id}"]
+      if newTracePolicy == "tab":
+        replayArgs.add("--new-tab")
+      elif newTracePolicy == "window":
+        replayArgs.add("--new-window")
+      let process = startProcess(codetracerExe, args = replayArgs, options = {poParentStreams})
       let shouldRestart = waitForExit(process) == RESTART_EXIT_CODE
 
       if not shouldRestart:
@@ -90,7 +98,8 @@ proc runWithRestart(
     else:
       break
 
-proc run*(programArg: string, args: seq[string]) =
+proc run*(programArg: string, args: seq[string],
+          newTracePolicy: string = "") =
   # run <program> <args>
   # optionally if env variable CODETRACER_RECORD_CORE=true
   # try to record core (dispatcher run) with codetracer
@@ -107,5 +116,6 @@ proc run*(programArg: string, args: seq[string]) =
     test=false,
     recordCore=recordCore,
     lang=lang,
+    newTracePolicy=newTracePolicy,
     recordArgs=recordArgs
   )

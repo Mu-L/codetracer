@@ -71,6 +71,9 @@ proc configureIpcMain* =
     # Multi-window (M17)
     "open-new-window"
 
+    # Open trace as a new tab in the current window (tab-vs-window policy)
+    "open-trace-in-tab"
+
     # Cross-window panel transfer (M21)
     "panel-detach"
     "list-windows"

@@ -63,6 +63,11 @@ type
     ).}:                                                  RRBackendConfig
     skipInstall:                                          bool
 
+    ## Controls whether a second `ct run` / `ct replay` invocation opens
+    ## the trace in a new tab within the existing window ("tab") or
+    ## spawns a new Electron window ("window").  Default: "tab".
+    newTracePolicy* {.defaultVal: "tab".}:                string
+
   Config* = ref ConfigObject
 
   FlowUI* = enum FlowParallel, FlowInline, FlowMultiline

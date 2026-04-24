@@ -1766,6 +1766,8 @@ type
     traceSharing*:            TraceSharingConfigObj
     skipInstall*:             bool
     rrBackend*:               RRBackendConfig
+    ## "tab" (default) or "window" — see common/config.nim for docs.
+    newTracePolicy*:          cstring
 
   RRBackendConfig* = ref object
     enabled*: bool

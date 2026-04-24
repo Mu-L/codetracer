@@ -116,5 +116,10 @@ rrBackend:
 
 skipInstall: true
 
+# Policy for opening traces when a CodeTracer window already exists.
+# "tab"    — open as a new tab in the existing window (default)
+# "window" — spawn a new Electron window
+newTracePolicy: "tab"
+
 # TODO: Use this somehow
 version: "0.1alpha"

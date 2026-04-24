@@ -1589,6 +1589,17 @@ proc closeAllFiles*(data: Data) {.async.} =
 proc onClose*(data: Data) =
   discard data.exit()
 
+proc onOpenTraceInTabReady*(sender: js, response: jsobject(traceId=int)) =
+  ## Handler for the "tab" newTracePolicy.  When a second `ct` instance
+  ## sends its trace to the existing window, this handler creates a new
+  ## session tab and triggers the trace load.
+  let traceId = response.traceId
+  clog "open-trace-in-tab-ready: creating new session and loading trace ", traceId
+  createNewSession(data)
+  # After creating the session, send the load-recent-trace IPC so the
+  # main process starts the replay backend for the new trace.
+  data.ipc.send cstring"CODETRACER::load-recent-trace", js{traceId: traceId}
+
 macro uiIpcHandlers*(namespace: static[string], messages: untyped): untyped =
   let ipc = ident("ipc")
   let data = ident("data")
@@ -1756,6 +1767,9 @@ proc configureIPC(data: Data) =
     "acp-render-diff"
 
     "reload-file"
+
+    # Tab-vs-window policy: open a trace as a new tab in the current window
+    "open-trace-in-tab-ready"
 
   duration("configureIPCRun")
 

@@ -21,7 +21,8 @@ proc launchElectron*(
     test: bool = false,
     inspect: Option[string] = none(string),
     remoteDebuggingPort: Option[string] = none(string),
-    remoteDebuggingPipe: bool = false) =
+    remoteDebuggingPipe: bool = false,
+    newTracePolicy: string = "") =
   ## Launch Electron, replacing the current process via execv on POSIX.
   ## On non-POSIX platforms, spawns Electron as a child process and waits.
   ## This function does not return on POSIX systems.
@@ -40,6 +41,11 @@ proc launchElectron*(
   putEnv("CODETRACER_PREFIX", codetracerPrefix)
   if mode != ElectronLaunchMode.Default:
     putEnv("CODETRACER_LAUNCH_MODE", $mode)
+
+  # Pass the new-trace-policy to Electron so it knows whether to open
+  # the trace in a new tab (existing window) or a new window.
+  if newTracePolicy.len > 0:
+    putEnv("CODETRACER_NEW_TRACE_POLICY", newTracePolicy)
 
   # https://www.electronjs.org/docs/latest/api/environment-variables#electron_enable_logging
   putEnv("ELECTRON_LOG_FILE", ensureLogPath(
