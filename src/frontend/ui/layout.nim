@@ -2,7 +2,7 @@ import
   asyncjs, strformat, strutils, sequtils, jsffi, algorithm,
   karax, karaxdsl, vstyles,
   state, editor, debug, menu, status, command, search_results, shell, deepreview, session_tabs,
-  session_switch,
+  session_switch, panel_transfer,
   ../[ types, renderer, config ],
   ../lib/[ logging, misc_lib, jslib ]
 
@@ -97,6 +97,30 @@ type
   ContextMenuOption = object
     label: cstring
     action: proc(container: GoldenContainer, state: GoldenItemState)
+
+# ---------------------------------------------------------------------------
+# M21: "Send to Window" context menu on GL tabs
+# ---------------------------------------------------------------------------
+
+proc addPanelTransferContextMenu(tab: GoldenTab, contentItem: GoldenContentItem) =
+  ## Attach a right-click context menu to a GL tab element that offers
+  ## "Send to Window" for cross-window panel transfer (M21/M22).
+  let tabElement = tab.element
+  if tabElement.isNil or tabElement.isUndefined:
+    return
+
+  tabElement.addEventListener(cstring"contextmenu", proc(event: JsObject) =
+    event.preventDefault()
+    let sessionId = if data.sessions.len > 0:
+        int(data.activeSessionIndex)
+      else:
+        0
+
+    discard requestWindowList().then(proc(response: JsObject) =
+      let items = buildSendToWindowMenuItems(contentItem, sessionId, response)
+      let x = event.clientX.to(int)
+      let y = event.clientY.to(int)
+      showContextMenu(items, x, y)))
 
 let commonContextMenuOptions: seq[ContextMenuOption] = @[
   ContextMenuOption(
@@ -355,6 +379,9 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig) =
               # if the user switch to another tab before the limit expires - the tab should not be added to history
               data.services.editor.eventuallyUpdateTabHistory(tab)
 
+      # M21: Attach "Send to Window" context menu to the tab.
+      addPanelTransferContextMenu(tab, cast[GoldenContentItem](tab.contentItem))
+
     var containerId: cstring
     containerId = cstring(fmt"editorComponent-{state.id}")
 
@@ -407,6 +434,9 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig) =
 
       tab.setTitle(cstring(convertTabTitle($state.content)))
 
+      # M21: Attach "Send to Window" context menu to the tab.
+      addPanelTransferContextMenu(tab, cast[GoldenContentItem](tab.contentItem))
+
     var containerId: cstring
     containerId = state.label
 
@@ -430,6 +460,9 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig) =
       discard windowSetTimeout((proc = redrawAll()), 200)), 200)
 
   layout.loadLayout(initialLayout)
+
+  # M21: Register IPC handler for receiving panels from other windows.
+  registerPanelAttachHandler(layout)
 
   layout.on(cstring"stateChanged") do (event: js):
     cdebug "layout event: stateChanged"

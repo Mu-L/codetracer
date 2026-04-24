@@ -219,3 +219,45 @@ proc onOpenNewWindow*(sender: js, response: JsObject) {.async.} =
   else:
     0  # default session
   discard createSecondaryWindow(sessionId)
+
+# ── Cross-window panel transfer (M21/M22) ────────────────────────────────
+
+proc onPanelDetach*(sender: js, response: JsObject) {.async.} =
+  ## M21: Forward a panel config from one renderer window to another.
+  ## The source renderer sends `{ targetWindowId, panelConfig, sessionId }`.
+  ## We forward `{ panelConfig, sessionId }` to the target window.
+  when not defined(server):
+    let targetWindowId = response["targetWindowId"].to(int)
+    if windowTable.hasKey(targetWindowId):
+      let payload = js{
+        "panelConfig": response["panelConfig"],
+        "sessionId": response["sessionId"]
+      }
+      windowTable[targetWindowId].webContents.send(
+        cstring"CODETRACER::panel-attach", payload)
+      infoPrint "index: forwarded panel to window ", $targetWindowId
+    else:
+      errorPrint "index: panel-detach target window not found: ", $targetWindowId
+
+proc newJsArray(): JsObject {.importjs: "(new Array())".}
+proc push(arr: JsObject, item: JsObject) {.importjs: "#.push(#)".}
+
+proc onListWindows*(sender: js, response: JsObject) {.async.} =
+  ## M21: Return the list of open windows to the requesting renderer.
+  ## The sender's own window is excluded from the list.
+  when not defined(server):
+    var jsArray = newJsArray()
+    # The sender parameter is the webContents of the sending window.
+    # We compare window IDs to exclude the sender's own window.
+    let senderWebContentsId = sender.toJs.id
+    for windowId, win in windowTable:
+      # Exclude the sender's own window by comparing webContents id.
+      if win.webContents.id != senderWebContentsId:
+        jsArray.push(js{
+          "id": windowId,
+          "title": win.getTitle()
+        })
+    # Reply to the sender window.
+    sender.toJs.send(cstring"CODETRACER::list-windows-reply", js{
+      "windows": jsArray
+    })

@@ -71,6 +71,10 @@ proc configureIpcMain* =
     # Multi-window (M17)
     "open-new-window"
 
+    # Cross-window panel transfer (M21)
+    "panel-detach"
+    "list-windows"
+
     # Upload/Download
     "upload-trace-file"
     "download-trace-file"
