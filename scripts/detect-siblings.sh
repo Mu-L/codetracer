@@ -135,11 +135,24 @@ if [ -n "$_CT_WORKSPACE_ROOT" ] && [ -d "$_CT_WORKSPACE_ROOT/codetracer-python-r
 fi
 
 # --- codetracer-ruby-recorder ---
-# Exports: CODETRACER_RUBY_RECORDER_PATH, RUBY_RECORDER_ROOT
+# Exports: CODETRACER_RUBY_RECORDER_PATH, RUBY_RECORDER_ROOT, prepends to PATH
+# Prefer the native recorder (supports binary CTFS format); fall back to pure-Ruby.
 if [ -n "$_CT_WORKSPACE_ROOT" ] && [ -d "$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems" ]; then
-	export CODETRACER_RUBY_RECORDER_PATH="$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-pure-ruby-recorder/bin/codetracer-pure-ruby-recorder"
 	export RUBY_RECORDER_ROOT="$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder"
-	_ct_detect_summary "codetracer-ruby-recorder"
+	_ct_rb_native_bin="$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-ruby-recorder/bin/codetracer-ruby-recorder"
+	_ct_rb_pure_bin="$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-pure-ruby-recorder/bin/codetracer-pure-ruby-recorder"
+	if [ -x "$_ct_rb_native_bin" ]; then
+		export CODETRACER_RUBY_RECORDER_PATH="$_ct_rb_native_bin"
+		export PATH="$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-ruby-recorder/bin:$PATH"
+		_ct_detect_summary "codetracer-ruby-recorder (native)"
+	elif [ -x "$_ct_rb_pure_bin" ]; then
+		export CODETRACER_RUBY_RECORDER_PATH="$_ct_rb_pure_bin"
+		export PATH="$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-pure-ruby-recorder/bin:$PATH"
+		_ct_detect_summary "codetracer-ruby-recorder (pure-ruby)"
+	else
+		_ct_detect_summary "codetracer-ruby-recorder (gems present, not built)"
+	fi
+	unset _ct_rb_native_bin _ct_rb_pure_bin
 fi
 
 # --- codetracer-js-recorder ---
