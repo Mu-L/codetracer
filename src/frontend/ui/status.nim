@@ -178,7 +178,12 @@ proc operationView(self: StatusComponent): VNode =
     processStatusView(self, self.state.stableBusy, self.state.currentOperation, "stable")
 
 proc fileInfoView(self: StatusComponent): VNode =
-  let editor = self.data.ui.editors[self.data.services.editor.active]
+  let activeKey = self.data.services.editor.active
+  let editor =
+    if not activeKey.isNil and self.data.ui.editors.hasKey(activeKey):
+      self.data.ui.editors[activeKey]
+    else:
+      nil
   let lang = if not editor.isNil: toName(editor.lang) else: "_"
   let encoding = if not editor.isNil: editor.encoding else: cstring"_"
 

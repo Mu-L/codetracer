@@ -205,10 +205,22 @@ proc ensureSharedRenderers() =
     return
   sharedRenderersInitialised = true
 
-  kxiMap["menu"] = setRenderer(proc: VNode = data.ui.menu.render(), "menu", proc = discard)
-  kxiMap["status"] = setRenderer(proc: VNode = data.ui.status.render(), "status", proc = discard)
+  kxiMap["menu"] = setRenderer(
+    proc: VNode =
+      if not data.ui.menu.isNil: data.ui.menu.render()
+      else: buildHtml(tdiv()),
+    "menu", proc = discard)
+  kxiMap["status"] = setRenderer(
+    proc: VNode =
+      if not data.ui.status.isNil: data.ui.status.render()
+      else: buildHtml(tdiv()),
+    "status", proc = discard)
   kxiMap["fixed-search"] = setRenderer(fixedSearchView, "fixed-search", proc = discard)
-  kxiMap["search-results"] = setRenderer(proc: VNode = data.ui.searchResults.render(), "search-results", proc = discard)
+  kxiMap["search-results"] = setRenderer(
+    proc: VNode =
+      if not data.ui.searchResults.isNil: data.ui.searchResults.render()
+      else: buildHtml(tdiv()),
+    "search-results", proc = discard)
   kxiMap["session-tab-bar"] = setRenderer(
     proc: VNode = renderSessionTabs(data),
     "session-tab-bar",
@@ -279,11 +291,23 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig,
     return
 
   # Determine the GL container element.
+  # On initial load (session 0) there is no session-container-0 in the DOM
+  # yet.  We create it here so that hide/show session switching can toggle
+  # its visibility without special-casing the first session.
   let root = if not containerElement.isNil:
       containerElement
     else:
       let containerId = cstring("session-container-" & $data.activeSessionIndex)
-      document.getElementById(containerId)
+      var el = document.getElementById(containerId)
+      if el.isNil:
+        # Create the container inside #ROOT.
+        el = document.createElement("div")
+        el.id = containerId
+        el.class = cstring"session-container"
+        let rootEl = document.getElementById(cstring"ROOT")
+        if not rootEl.isNil:
+          rootEl.appendChild(el)
+      el
 
   var layout = newGoldenLayout(
     cast[JsObject](root),
@@ -561,9 +585,14 @@ setInitLayoutProc(initLayout)
 # Wire the tab-bar renderer setup so that switchSession can ensure the
 # Karax renderer for ``#session-tab-bar`` exists even when initLayout is
 # not called (e.g. for empty sessions).
+#
+# IMPORTANT: if the renderer already exists (set up by ensureSharedRenderers
+# during initLayout), do NOT overwrite it — that would replace the Karax
+# instance and break event delegation for the tab bar onclick handlers.
 proc ensureTabBarRenderer() =
-  kxiMap["session-tab-bar"] = setRenderer(
-    proc: VNode = renderSessionTabs(data),
-    "session-tab-bar",
-    proc = discard)
+  if not kxiMap.hasKey(cstring"session-tab-bar"):
+    kxiMap["session-tab-bar"] = setRenderer(
+      proc: VNode = renderSessionTabs(data),
+      "session-tab-bar",
+      proc = attachTabClickHandlers(data))
 setEnsureTabBarRendererProc(ensureTabBarRenderer)

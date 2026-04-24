@@ -366,6 +366,12 @@ proc switchSession*(data: Data, targetIndex: int) =
   # Show the target container.
   targetContainer.classList.remove(cstring"hidden")
 
-  # 4. Full redraw so that every Karax component picks up the new
-  #    session's data (tab bar highlights, status bar, etc.).
-  redrawAll()
+  # 4. Redraw.  If the target session has UI components (layout exists),
+  #    do a full redraw so every Karax component picks up the new data.
+  #    If the target is an empty session (no layout/no trace), only
+  #    redraw the tab bar — shared renderers (menu, status) reference
+  #    per-session state that may not be initialised and would crash.
+  if kxiMap.hasKey(cstring"session-tab-bar"):
+    redrawSync(kxiMap[cstring"session-tab-bar"])
+  if not data.activeSession.ui.layout.isNil:
+    redrawAll()

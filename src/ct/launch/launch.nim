@@ -235,8 +235,8 @@ proc runInitial*(conf: CodetracerConf) =
       # Resolve the effective new-trace policy:
       # CLI flags override the config setting.
       let replayPolicy =
-        if conf.replayNewTab: "tab"
-        elif conf.replayNewWindow: "window"
+        if conf.newTab: "tab"
+        elif conf.newWindow: "window"
         else: "" # empty = defer to config/default
       replay(
         conf.lastTraceMatchingPattern,
@@ -354,8 +354,8 @@ proc runInitial*(conf: CodetracerConf) =
       # Resolve the effective new-trace policy:
       # CLI flags override the config setting.
       let runPolicy =
-        if conf.runNewTab: "tab"
-        elif conf.runNewWindow: "window"
+        if conf.newTab: "tab"
+        elif conf.newWindow: "window"
         else: "" # empty = defer to config/default
       run(conf.runTracePathOrId, conf.runArgs,
           newTracePolicy = runPolicy)
