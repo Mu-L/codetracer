@@ -27,8 +27,6 @@ mkShell {
   # ];
 
   packages = [
-    # Print a welcome banner for the shell
-    figlet
     delta
 
     # general dependencies

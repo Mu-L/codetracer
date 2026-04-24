@@ -233,34 +233,13 @@ unset _ct_flow_repo _ct_cadence_helper
 # Backward compatibility: derive _PRESENT=1 from `command -v` on PATH.
 # These are used by tests that conditionally skip when a recorder isn't available.
 # ---------------------------------------------------------------------------
-command -v ct-native-replay  &>/dev/null && export CODETRACER_RR_BACKEND_PRESENT=1
-command -v wazero            &>/dev/null && export CODETRACER_WASM_RECORDER_PRESENT=1
+command -v ct-native-replay &>/dev/null && export CODETRACER_RR_BACKEND_PRESENT=1
+command -v wazero &>/dev/null && export CODETRACER_WASM_RECORDER_PRESENT=1
 
-# ---------------------------------------------------------------------------
-# Python interpreter detection
-#
-# The pure-Python recorder needs Python 3.10+ (PEP 604 syntax); the
-# Rust-backed recorder needs 3.12+. Try versioned brew binaries first,
-# then the generic python3/python.
-# ---------------------------------------------------------------------------
-if [ -z "${CODETRACER_PYTHON_CMD:-}" ] && [ -n "${CODETRACER_PYTHON_RECORDER_SRC:-}" ]; then
-	for _ct_py in python3.13 python3.12 python3.11 python3.10 python3; do
-		if command -v "$_ct_py" &>/dev/null; then
-			_ct_py_ver="$("$_ct_py" -c 'import sys; print(sys.version_info[:2])' 2>/dev/null || true)"
-			if [ -n "$_ct_py_ver" ] && [[ $_ct_py_ver > "(3, 9)" ]]; then
-				export CODETRACER_PYTHON_CMD="$_ct_py"
-				break
-			fi
-		fi
-	done
-	unset _ct_py _ct_py_ver
-
-	if [ -z "${CODETRACER_PYTHON_CMD:-}" ] && [ -z "${DETECT_SIBLINGS_QUIET:-}" ]; then
-		echo "  NOTE: Python 3.10+ not found. Python flow tests will skip." >&2
-		echo "  Install via: brew install python@3.12" >&2
-		echo "  Or use nix:  nix develop ../codetracer-python-recorder#python-recorder" >&2
-	fi
-fi
+# Note: Python interpreter detection was removed. The Python recorder is now
+# invoked as a standalone binary (codetracer-python-recorder) found via PATH,
+# just like every other recorder. The venv setup in the nix shell hook handles
+# installing the module and placing the binary on PATH.
 
 # ---------------------------------------------------------------------------
 # Print summary to stderr (unless DETECT_SIBLINGS_QUIET=1)
