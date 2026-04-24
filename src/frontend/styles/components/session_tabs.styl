@@ -1,0 +1,61 @@
+// Session tab bar (M10) — sits above Golden Layout, one tab per replay session.
+
+.session-tab-bar
+  display flex
+  align-items center
+  background-color SECONDARY_BASE
+  border-bottom 1px solid PRIMARY_BASE
+  height 28px
+  padding 0 4px
+  flex-shrink 0
+  // Ensure the bar does not collapse when the layout resizes.
+  min-height 28px
+  overflow-x auto
+  overflow-y hidden
+
+.session-tab
+  display flex
+  align-items center
+  padding 0 12px
+  height 26px
+  cursor pointer
+  color INACTIVE_BASE
+  font-size 12px
+  border-radius 4px 4px 0 0
+  margin-right 2px
+  white-space nowrap
+  user-select none
+  transition background-color 150ms ease, color 150ms ease
+  &:hover
+    color PRIMARY_TEXT_COLOR
+    background-color ACTIVE_ROW
+  &.active
+    background-color BACKGROUND_COLOR
+    color PRIMARY_TEXT_COLOR
+    // A subtle bottom highlight so the active tab visually "connects"
+    // to the layout area below.
+    border-bottom 1px solid BACKGROUND_COLOR
+
+.session-tab-label
+  overflow hidden
+  text-overflow ellipsis
+  max-width 160px
+
+.session-tab-close
+  margin-left 8px
+  font-size 14px
+  cursor pointer
+  opacity 0.4
+  transition opacity 150ms ease
+  &:hover
+    opacity 1
+
+.session-tab-add
+  padding 0 8px
+  cursor pointer
+  color INACTIVE_BASE
+  font-size 16px
+  user-select none
+  transition color 150ms ease
+  &:hover
+    color PRIMARY_TEXT_COLOR
