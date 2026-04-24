@@ -1022,6 +1022,10 @@ export {
   codetracerPath,
 };
 
+// Export recordTestProgram so multi-trace tests can pre-record additional
+// programs and load them into new sessions via IPC.
+export { recordTestProgram };
+
 // Re-export performance timing utilities for use in tests
 export { timed, timedVoid } from "./performance-limits";
 export {
