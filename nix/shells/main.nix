@@ -403,8 +403,6 @@ mkShell {
       fi
     fi
 
-    figlet "Welcome to CodeTracer"
-
     # Print workspace tools summary
     if [ "''${METACRAFT_WORKSPACE_PRESENT:-}" = "1" ]; then
       echo "  workspace: detected (shared scripts at $METACRAFT_WORKSPACE_SCRIPTS)"
