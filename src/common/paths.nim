@@ -126,8 +126,12 @@ let
 
   rubyExe* = env.get("CODETRACER_RUBY_EXE_PATH",
     when not defined(js): findTool("ruby") else: codetracerPrefix / "bin" / "ruby")
-  rubyRecorderPath* = env.get("CODETRACER_RUBY_RECORDER_PATH",
-    when not defined(js): findTool("codetracer-ruby-recorder") else: codetracerPrefix / "bin" / "codetracer-ruby-recorder")
+  rubyRecorderPath* = block:
+    var path = when not defined(js): findTool("codetracer-ruby-recorder") else: codetracerPrefix / "bin" / "codetracer-ruby-recorder"
+    if path.len == 0:
+      # Fall back to pure-Ruby recorder when native is unavailable.
+      path = when not defined(js): findTool("codetracer-pure-ruby-recorder") else: codetracerPrefix / "bin" / "codetracer-pure-ruby-recorder"
+    path
 
   smallExe* = codetracerPrefix / "bin" / "small-lang"
   noirExe* = env.get(

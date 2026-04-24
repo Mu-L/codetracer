@@ -136,7 +136,8 @@ fi
 if [ -n "$_CT_WORKSPACE_ROOT" ] && [ -d "$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems" ]; then
 	export RUBY_RECORDER_ROOT="$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder"
 	if [ -x "$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-ruby-recorder/bin/codetracer-ruby-recorder" ]; then
-		export PATH="$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-ruby-recorder/bin:$PATH"
+		# Add both native and pure-ruby bin dirs so ct can fall back.
+		export PATH="$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-ruby-recorder/bin:$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-pure-ruby-recorder/bin:$PATH"
 		_ct_detect_summary "codetracer-ruby-recorder (native)"
 	elif [ -x "$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-pure-ruby-recorder/bin/codetracer-pure-ruby-recorder" ]; then
 		export PATH="$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-pure-ruby-recorder/bin:$PATH"
