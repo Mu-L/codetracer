@@ -12,10 +12,12 @@ when not defined(ctInExtension):
       handlers*: array[CtEventKind, seq[proc(kind: CtEventKind, raw: JsObject)]]
       ipc*: Jsobject
       seq*: int
+      sessionId*: int  ## M8: id of the owning ReplaySession, attached to outgoing DAP requests.
 
   proc newDapApi(ipc: JsObject) : DapApi =
     result = DapApi(
-      seq: 0
+      seq: 0,
+      sessionId: 0
     )
 
 else:
@@ -28,6 +30,7 @@ else:
       vscode*: VsCode
       context*: VsCodeContext
       editor*: JsObject
+      sessionId*: int  ## M8: id of the owning ReplaySession (unused in extension mode for now).
       # flowFunction*: proc(editor: JsObject)
       # completeMoveFunction*: proc(editor: JsObject, response: MoveState, dapApi: DapApi)
 
@@ -214,6 +217,10 @@ when not defined(ctInExtension):
     }
 
     dap.seq += 1
+
+    # M8: Attach the session id so the main process can route
+    # the request to the correct backend session in the future.
+    packet["sessionId"] = dap.sessionId
 
     dap.ipc.send("CODETRACER::dap-raw-message", packet)
 

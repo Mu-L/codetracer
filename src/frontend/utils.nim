@@ -4,10 +4,38 @@ import
   types, lang,
   lib / [ logging, monaco_lib, jslib ]
 
+proc jsHasKey(obj: JsObject; key: cstring): bool {.importjs: "#.hasOwnProperty(#)".}
+
 var kxiMap* = JsAssoc[cstring, KaraxInstance]{}
 const
   VALUE_COMPONENT_NAME_WIDTH*: float = 40.0
   VALUE_COMPONENT_VALUE_WIDTH*: float = 55.0
+
+const DEFAULT_SESSION_ID* = 0
+  ## The session id used when there is only one replay session (M8 default).
+
+proc sendWithSession*(data: Data, channel: cstring, msg: JsObject) =
+  ## Send an IPC message with the active session's id attached.
+  ## This is the renderer-side helper introduced in M8 (session-scoped IPC).
+  ## Callers that already build a JsObject payload can use this instead of
+  ## ``data.ipc.send`` to ensure the message is routable once multiple
+  ## sessions exist.
+  msg["sessionId"] = data.activeSessionIndex
+  data.ipc.send(channel, msg)
+
+proc sendWithSession*(data: Data, channel: cstring) =
+  ## Overload for messages that carry no payload beyond the session id.
+  let msg = js{}
+  msg["sessionId"] = data.activeSessionIndex
+  data.ipc.send(channel, msg)
+
+proc getSessionIdFromMessage*(raw: JsObject): int =
+  ## Extract the sessionId from an incoming IPC message.
+  ## Returns ``DEFAULT_SESSION_ID`` when the field is absent, which keeps
+  ## backward compatibility during M8 (single session).
+  if jsHasKey(raw, cstring"sessionId"):
+    return raw["sessionId"].to(int)
+  return DEFAULT_SESSION_ID
 
 proc connectionLossMessage*(reason: ConnectionLossReason): cstring =
   ## Human-readable message describing why the connection is inactive.

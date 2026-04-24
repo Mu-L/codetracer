@@ -35,6 +35,14 @@ proc onDapRawMessage*(sender: js, response: JsObject) {.async.} =
     # if sending from frontend only after dap socket setup here
     errorPrint "backend socket is nil, couldn't send ", response.toJs
 
+proc getSessionId*(body: JsObject): int =
+  ## Extract sessionId from an IPC message body.
+  ## Returns 0 (default session) when the field is absent.
+  ## This is the main-process counterpart used during M8 (session-scoped IPC).
+  if jsHasKey(body, cstring"sessionId"):
+    return body["sessionId"].to(int)
+  return 0
+
 proc handleFrame(frame: string) =
   let body: JsObject = Json.parse(frame)
   let msgtype = body["type"].to(cstring)
@@ -46,8 +54,15 @@ proc handleFrame(frame: string) =
         if not replayStartHandler.isNil:
           replayStartHandler(body)
         return
+    # M8: Attach sessionId so the renderer can route the response to the
+    # correct ReplaySession.  During M8 there is only one session (id 0).
+    if not jsHasKey(body, cstring"sessionId"):
+      body["sessionId"] = 0
     mainWindow.webContents.send("CODETRACER::dap-receive-response", body)
   elif msgtype == "event":
+    # M8: Attach sessionId for event messages as well.
+    if not jsHasKey(body, cstring"sessionId"):
+      body["sessionId"] = 0
     mainWindow.webContents.send("CODETRACER::dap-receive-event", body)
   else:
     echo "unknown DAP message: ", body

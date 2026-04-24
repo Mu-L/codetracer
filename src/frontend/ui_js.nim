@@ -824,6 +824,9 @@ proc tryInitLayout*(data: Data) =
 
 # We receive a DAP "Response" from the index process
 proc onDapReceiveResponse*(sender: JsObject, raw: JsObject) =
+  # M8: Extract sessionId from the message for future multi-session routing.
+  # During M8 there is only one session, so we log but do not route.
+  let sessionId = getSessionIdFromMessage(raw)
   try:
     receiveResponse(data.dapApi, raw["command"].to(cstring), raw["body"])
   except ValueError:
@@ -831,6 +834,8 @@ proc onDapReceiveResponse*(sender: JsObject, raw: JsObject) =
 
 # We receive a DAP "Event" from the index process
 proc onDapReceiveEvent*(sender: JsObject, raw: JsObject) =
+  # M8: Extract sessionId from the message for future multi-session routing.
+  let sessionId = getSessionIdFromMessage(raw)
   try:
     receiveEvent(data.dapApi, raw["event"].to(cstring), raw["body"])
   except ValueError:
