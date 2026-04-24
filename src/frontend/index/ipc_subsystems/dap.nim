@@ -1,5 +1,5 @@
 import
-  std / [ async, jsffi, json, strformat, strutils ],
+  std / [ async, jsffi, json, strformat, strutils, tables ],
   ../../[ types, config ],
   ../../lib/[ jslib ],
   ../../../common/ct_logging,
@@ -11,6 +11,32 @@ type
 
 var backendManagerSocket*: JsObject = nil
 var replayStartHandler*: proc(body: JsObject) = nil
+
+# --- M9: DAP multiplexing state ---
+#
+# The Backend Manager serves one "selected" replay at a time.  When the
+# main process forwards a DAP request from a particular session, it must
+# first tell the BM to select the corresponding replay via
+# `ct/select-replay`.  Responses are then tagged with the originating
+# sessionId so the renderer can route them to the correct ReplaySession.
+
+var currentDapSessionId = 0
+  ## Which session the Backend Manager is currently serving.  Updated
+  ## every time we send a `ct/select-replay` command.
+
+var pendingSessionForSeq: Table[int, int] = initTable[int, int]()
+  ## Maps a DAP request `seq` number to the sessionId that issued the
+  ## request.  Populated when forwarding a request; consumed when the
+  ## matching response arrives (keyed by `request_seq`).
+
+var internalSeqCounter = 100_000
+  ## Sequence counter for internally generated DAP commands
+  ## (`ct/select-replay`).  Starts high to avoid collisions with
+  ## renderer-generated seq numbers which start from 1.
+
+proc nextInternalSeq(): int =
+  inc internalSeqCounter
+  return internalSeqCounter
 
 proc registerStartReplayHandler*(handler: proc(body: JsObject)) =
   replayStartHandler = handler
@@ -26,15 +52,6 @@ proc wrapJsonForSending*(obj: JsObject): cstring =
     # echo cstring"dap: ", res.cstring
     return res.cstring
 
-proc onDapRawMessage*(sender: js, response: JsObject) {.async.} =
-  if not backendManagerSocket.isNil:
-    let txt = wrapJsonForSending(response)
-    backendManagerSocket.write txt
-  else:
-    # TODO: put in a queue, or directly make an error, as it might be made hard to happen,
-    # if sending from frontend only after dap socket setup here
-    errorPrint "backend socket is nil, couldn't send ", response.toJs
-
 proc getSessionId*(body: JsObject): int =
   ## Extract sessionId from an IPC message body.
   ## Returns 0 (default session) when the field is absent.
@@ -43,6 +60,64 @@ proc getSessionId*(body: JsObject): int =
     return body["sessionId"].to(int)
   return 0
 
+proc sendDapForSession*(sessionId: int, message: JsObject) =
+  ## Forward a DAP request to the Backend Manager on behalf of
+  ## `sessionId`.  If the BM is currently serving a different session,
+  ## a `ct/select-replay` command is sent first to switch contexts.
+  if backendManagerSocket.isNil:
+    errorPrint "backend socket is nil, couldn't send DAP for session ",
+      sessionId, ": ", message.toJs
+    return
+
+  # Switch the BM to the requested session when necessary.
+  # sessionId 0 is the default / single-session case — no switch needed.
+  if sessionId != currentDapSessionId and sessionId != 0:
+    let selectMsg = js{
+      "type": cstring"request",
+      "command": cstring"ct/select-replay",
+      "arguments": sessionId,
+      "seq": nextInternalSeq()
+    }
+    backendManagerSocket.write(wrapJsonForSending(selectMsg))
+    currentDapSessionId = sessionId
+
+  # Track which session owns this request so the response can be tagged.
+  if jsHasKey(message, cstring"seq"):
+    let seq = message["seq"].to(int)
+    pendingSessionForSeq[seq] = sessionId
+
+  backendManagerSocket.write(wrapJsonForSending(message))
+
+proc onDapRawMessage*(sender: js, response: JsObject) {.async.} =
+  ## IPC handler for "dap-raw-message" from the renderer.
+  ## Extracts the sessionId attached by the renderer and delegates to
+  ## `sendDapForSession` which handles BM session switching.
+  let sessionId = getSessionId(response)
+  sendDapForSession(sessionId, response)
+
+proc resolveSessionId(body: JsObject): int =
+  ## Determine which session a DAP message from the Backend Manager
+  ## belongs to.
+  ##
+  ## * **Responses** carry a `request_seq` that maps back to the
+  ##   originating session via `pendingSessionForSeq`.
+  ## * **Events** have no such link; they belong to whichever session
+  ##   the BM is currently serving (`currentDapSessionId`).
+  ## * If the message already has a `sessionId` (future-proofing), we
+  ##   honour it as-is.
+  if jsHasKey(body, cstring"sessionId"):
+    return body["sessionId"].to(int)
+
+  if jsHasKey(body, cstring"request_seq"):
+    let reqSeq = body["request_seq"].to(int)
+    if reqSeq in pendingSessionForSeq:
+      result = pendingSessionForSeq[reqSeq]
+      pendingSessionForSeq.del(reqSeq)
+      return result
+
+  # Fallback: attribute to the currently selected session.
+  return currentDapSessionId
+
 proc handleFrame(frame: string) =
   let body: JsObject = Json.parse(frame)
   let msgtype = body["type"].to(cstring)
@@ -50,20 +125,25 @@ proc handleFrame(frame: string) =
   if msgtype == "response":
     if jsHasKey(body, cstring"command"):
       let command = body["command"].to(cstring)
+      # Internal commands that are handled in the main process only.
       if command == cstring("ct/start-replay"):
         if not replayStartHandler.isNil:
           replayStartHandler(body)
         return
-    # M8: Attach sessionId so the renderer can route the response to the
-    # correct ReplaySession.  During M8 there is only one session (id 0).
-    if not jsHasKey(body, cstring"sessionId"):
-      body["sessionId"] = 0
+      # Responses to our own ct/select-replay requests are consumed
+      # silently — the renderer does not need to see them.
+      if command == cstring("ct/select-replay"):
+        return
+
+    # M9: Tag the response with the session that issued the request.
+    body["sessionId"] = resolveSessionId(body)
     mainWindow.webContents.send("CODETRACER::dap-receive-response", body)
+
   elif msgtype == "event":
-    # M8: Attach sessionId for event messages as well.
-    if not jsHasKey(body, cstring"sessionId"):
-      body["sessionId"] = 0
+    # M9: Events belong to the currently active session in the BM.
+    body["sessionId"] = resolveSessionId(body)
     mainWindow.webContents.send("CODETRACER::dap-receive-event", body)
+
   else:
     echo "unknown DAP message: ", body
 
