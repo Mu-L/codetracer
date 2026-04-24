@@ -133,6 +133,12 @@ proc recordDb(
       else:
         recorderArgs.add(program)
       startArgs = recorderArgs
+    of LangBash:
+      startArgs = @["--out-dir", traceFolder, program]
+    of LangZsh:
+      startArgs = @["--out-dir", traceFolder, program]
+    of LangJavascript:
+      startArgs = @["record", "--out-dir", traceFolder, program]
     of LangMasm, LangMove, LangSolana, LangSway, LangCairo, LangCircom,
        LangLeo, LangPolkavm, LangTolk, LangAiken, LangCadence, LangSolidity:
       # All blockchain/VM recorders use the same interface:
@@ -296,6 +302,12 @@ proc record(
       else:
         vmPath = noirExe
       return recordDb(lang, vmPath, executable, args, backend, outputFolder, stylusTrace, traceId)
+    elif lang == LangBash:
+      return recordDb(LangBash, bashRecorderExe, executable, args, backend, outputFolder, "", traceId)
+    elif lang == LangZsh:
+      return recordDb(LangZsh, zshRecorderExe, executable, args, backend, outputFolder, "", traceId)
+    elif lang == LangJavascript:
+      return recordDb(LangJavascript, jsRecorderExe, executable, args, backend, outputFolder, "", traceId)
     elif lang in {LangMasm, LangMove, LangSolana, LangSway, LangCairo, LangCircom,
                    LangLeo, LangPolkavm, LangTolk, LangAiken, LangCadence, LangSolidity}:
       # Blockchain/VM recorders: each has a dedicated external binary

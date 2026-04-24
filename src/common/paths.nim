@@ -164,6 +164,14 @@ let
   evmRecorderExe* = env.get("CODETRACER_EVM_RECORDER_PATH",
     when not defined(js): findTool("codetracer-evm-recorder") else: codetracerPrefix / "bin" / "codetracer-evm-recorder")
 
+  # Shell recorders — the launcher scripts are the entry points.
+  # In the nix package they are installed as codetracer-bash-recorder / codetracer-zsh-recorder.
+  bashRecorderExe* = when not defined(js): findTool("codetracer-bash-recorder") else: codetracerPrefix / "bin" / "codetracer-bash-recorder"
+  zshRecorderExe* = when not defined(js): findTool("codetracer-zsh-recorder") else: codetracerPrefix / "bin" / "codetracer-zsh-recorder"
+
+  # JavaScript/TypeScript recorder — Node.js CLI installed via npm.
+  jsRecorderExe* = when not defined(js): findTool("codetracer-js-recorder") else: codetracerPrefix / "bin" / "codetracer-js-recorder"
+
   dbBackendExe* = codetracerPrefix / "bin" / "replay-server"
   backendManagerExe* = codetracerPrefix / "bin" / "session-manager"
   virtualizationLayersExe* = codetracerPrefix / "bin" / "virtualization-layers"

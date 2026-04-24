@@ -90,6 +90,12 @@ const LANGS = {
   "tolk": LangTolk,
   "ak": LangAiken,
   "cdc": LangCadence,
+  "sh": LangBash,
+  "bash": LangBash,
+  "zsh": LangZsh,
+  "js": LangJavascript,
+  "mjs": LangJavascript,
+  "ts": LangJavascript,
 }.toTable()
 
 const WASM_LANGS = {

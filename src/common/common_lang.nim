@@ -83,6 +83,9 @@ IS_DB_BASED[LangTolk] = true
 IS_DB_BASED[LangAiken] = true
 IS_DB_BASED[LangCadence] = true
 IS_DB_BASED[LangSolana] = true
+IS_DB_BASED[LangBash] = true
+IS_DB_BASED[LangZsh] = true
+IS_DB_BASED[LangJavascript] = true
 
 proc isDbBased*(lang: Lang): bool =
   ## return true if `lang` uses the db backend
