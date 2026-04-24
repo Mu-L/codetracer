@@ -61,6 +61,14 @@ proc destroyCurrentLayout*(data: Data) =
 
   # Clear the GL root DOM element so that ``initLayout`` starts with
   # an empty container.  The element id matches what ``initLayout`` uses.
+  #
+  # IMPORTANT: We clear ``#ROOT`` (the GoldenLayout container), NOT its
+  # parent ``#root-container``.  The ``#session-tab-bar`` element lives
+  # OUTSIDE ``#ROOT`` in ``index.html`` specifically so that this
+  # clearing operation does not destroy the tab bar DOM.  If the tab bar
+  # were inside ``#ROOT``, every session switch would destroy it and
+  # Karax's renderer (attached by ``setRenderer``) would lose its target
+  # element, breaking tab clicks.
   let root = document.getElementById(cstring"ROOT")
   if not root.isNil:
     root.innerHTML = cstring""

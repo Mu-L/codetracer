@@ -10,17 +10,15 @@
  *   5. All panels (editor, event log, call trace) reload correctly
  *      and remain interactive after session-model operations.
  *
- * ## Design note: switchSession and empty tabs
+ * ## Design note: switchSession and the tab bar
  *
  * `switchSession` performs a full GoldenLayout destroy/recreate cycle.
- * When the target session has no loaded trace, the GL rebuild clears the
- * `#ROOT` DOM element (which contains the session tab bar, search, and
- * all GL components).  Because Karax's `setRenderer` attaches to elements
- * by ID and those elements are destroyed, the tab bar and layout cannot
- * be re-rendered.  This is a known limitation of the current
- * destroy/recreate approach (noted in the existing tabbed-replay tests).
+ * The `#session-tab-bar` element lives OUTSIDE `#ROOT` in `index.html`
+ * so that `destroyCurrentLayout` (which clears `#ROOT` innerHTML) does
+ * not destroy the tab bar DOM.  This allows tab clicks to survive
+ * session switches.
  *
- * Therefore this test suite uses two strategies:
+ * The test suite uses two strategies:
  *   - **DOM-level click on "+"**: Creates a new session and switches to
  *     it (triggering the full GL cycle).  Used in test 2 to verify that
  *     the new session starts empty.
@@ -213,9 +211,16 @@ test.describe("Comprehensive tabbed replay", () => {
     const initialCallTraceEntries = await callTrace.getEntries(true);
     expect(initialCallTraceEntries.length).toBeGreaterThan(0);
 
-    // Verify editor is showing the source file.
+    // Verify editor is showing the source file with real content.
     const editorTabs = await layout.editorTabs(true);
     expect(editorTabs.length).toBeGreaterThan(0);
+    // Capture the editor filename for later comparison.
+    const initialEditorFileName = editorTabs[0].fileName;
+    expect(initialEditorFileName).toContain(".py");
+
+    // Capture initial call trace function name for later comparison.
+    const initialCallText = await initialCallTraceEntries[0].callText();
+    expect(initialCallText.length).toBeGreaterThan(0);
 
     // ------------------------------------------------------------------
     // Step 2: Step forward twice to move the debugger to a non-initial
@@ -293,27 +298,48 @@ test.describe("Comprehensive tabbed replay", () => {
     expect(locAfterRoundTrip!.path).toBe(locationAfterStepping!.path);
 
     // ------------------------------------------------------------------
-    // Step 5: Verify all panels are still rendered and intact after
-    //         the data-model round-trip.  Since we did not trigger a
-    //         GL rebuild, the DOM should be unchanged.
+    // Step 5: Verify all panels are still rendered with real content
+    //         after the data-model round-trip.  Since we did not trigger
+    //         a GL rebuild, the DOM should be unchanged.
+    //
+    //         We verify actual DOM text content (not just element counts)
+    //         to ensure the panels display real data, not empty shells.
     // ------------------------------------------------------------------
 
-    // Editor still shows the source file.
+    // Editor still shows the source file with actual code lines.
     const editorTabsAfter = await layout.editorTabs(true);
     expect(editorTabsAfter.length).toBeGreaterThan(0);
+    const editorAfter = editorTabsAfter[0];
+    // Verify the editor tab refers to a Python file.
+    expect(editorAfter.fileName).toContain(".py");
+    // Verify the Monaco editor has rendered source lines with text.
+    const editorLinesAfter = await editorAfter.lines();
+    expect(editorLinesAfter.length).toBeGreaterThan(0);
+    const firstLineText = await editorLinesAfter[0].root.textContent();
+    expect(firstLineText).toBeTruthy();
+    expect(firstLineText!.trim().length).toBeGreaterThan(0);
 
-    // Event log still has rows.
+    // Event log still has rows with real text content.
     const eventLogTabsAfter = await layout.eventLogTabs(true);
     expect(eventLogTabsAfter.length).toBeGreaterThan(0);
     const eventRowCountAfter = await eventLogTabsAfter[0].rowCount();
     expect(eventRowCountAfter).toBeGreaterThan(0);
+    // Verify at least one event row has non-empty text (proving real data).
+    const eventRowsAfter = await eventLogTabsAfter[0].eventElements(true);
+    expect(eventRowsAfter.length).toBeGreaterThan(0);
+    const eventRowText = await eventRowsAfter[0].root.textContent();
+    expect(eventRowText).toBeTruthy();
+    expect(eventRowText!.trim().length).toBeGreaterThan(0);
 
-    // Call trace still has entries.
+    // Call trace still has entries with actual function names.
     const callTraceTabsAfter = await layout.callTraceTabs(true);
     expect(callTraceTabsAfter.length).toBeGreaterThan(0);
     const callTraceAfter = callTraceTabsAfter[0];
     const callTraceEntriesAfter = await callTraceAfter.getEntries(true);
     expect(callTraceEntriesAfter.length).toBeGreaterThan(0);
+    // Verify the call trace entry contains a real function name.
+    const callTextAfter = await callTraceEntriesAfter[0].callText();
+    expect(callTextAfter.length).toBeGreaterThan(0);
 
     // ------------------------------------------------------------------
     // Step 6: Step forward once more to prove the session is still
@@ -351,13 +377,32 @@ test.describe("Comprehensive tabbed replay", () => {
     expect(finalLocation!.line).toBe(locAfterFinalStep!.line);
     expect(finalLocation!.path).toBe(locAfterFinalStep!.path);
 
-    // Panels still intact.
+    // Panels still intact with real content matching the initial state.
     const finalEditorTabs = await layout.editorTabs(true);
     expect(finalEditorTabs.length).toBeGreaterThan(0);
+    // Same Python file is still shown.
+    expect(finalEditorTabs[0].fileName).toBe(initialEditorFileName);
+    // Editor still has rendered source lines.
+    const finalEditorLines = await finalEditorTabs[0].lines();
+    expect(finalEditorLines.length).toBeGreaterThan(0);
+
     const finalEventLogTabs = await layout.eventLogTabs(true);
     expect(finalEventLogTabs.length).toBeGreaterThan(0);
+    const finalEventRowCount = await finalEventLogTabs[0].rowCount();
+    expect(finalEventRowCount).toBeGreaterThan(0);
+    // Event rows still contain real text.
+    const finalEventRows = await finalEventLogTabs[0].eventElements(true);
+    const finalEventText = await finalEventRows[0].root.textContent();
+    expect(finalEventText).toBeTruthy();
+    expect(finalEventText!.trim().length).toBeGreaterThan(0);
+
     const finalCallTraceTabs = await layout.callTraceTabs(true);
     expect(finalCallTraceTabs.length).toBeGreaterThan(0);
+    const finalCallEntries = await finalCallTraceTabs[0].getEntries(true);
+    expect(finalCallEntries.length).toBeGreaterThan(0);
+    // Call trace still shows real function names.
+    const finalCallText = await finalCallEntries[0].callText();
+    expect(finalCallText.length).toBeGreaterThan(0);
   });
 
   // -------------------------------------------------------------------------
