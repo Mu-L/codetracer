@@ -246,6 +246,7 @@ proc record*(lang: string,
              program: string,
              args: seq[string]): Trace =
   let detectedLang = detectLang(program, toLang(lang))
+  # echo "DEBUG record: detectedLang=", detectedLang, " isDbBased=", detectedLang.isDbBased, " program=", program, " outputFolder=", outputFolder
   var outputFolderValue = outputFolder
   var programToRecord = program
   var nimcachePath = ""
@@ -357,7 +358,7 @@ proc record*(lang: string,
   if getEnv("CODETRACER_WRAPPER_PID", "").len == 0:
     putEnv("CODETRACER_WRAPPER_PID", $getCurrentProcessId())
 
-  if detectedLang in @[LangRubyDb, LangNoir, LangRustWasm, LangCppWasm, LangSmall, LangPythonDb]:
+  if detectedLang.isDbBased:
     return recordInternal(
       dbBackendRecordExe,
       pargs.concat(@["--trace-kind", "db"]),
