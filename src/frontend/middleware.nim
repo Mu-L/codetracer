@@ -152,6 +152,7 @@ proc setupMiddlewareApis*(dapApi: DapApi, viewsApi: MediatorWithSubscribers) {.e
   dapApi.on(CtUpdatedFlow, proc(kind: CtEventKind, value: FlowUpdate) = viewsApi.emit(CtUpdatedFlow, value))
   dapApi.on(CtNotification, proc(kind: CtEventKind, value: Notification) = viewsApi.emit(CtNotification, value))
   dapApi.on(CtLoadAsmFunctionResponse, proc(kind: CtEventKind, value: Instructions) = viewsApi.emit(CtLoadAsmFunctionResponse, value.toJs))
+  dapApi.on(CtUpdateExpansionResponse, proc(kind: CtEventKind, value: Location) = viewsApi.emit(CtUpdateExpansionResponse, value))
 
     #when defined(ctInExtension):
     # TODO: For now not using in the extension

@@ -18,6 +18,7 @@ use crate::dap_types;
 
 use crate::dap_handler::Handler;
 use crate::db::Db;
+use crate::macro_sourcemap::UpdateExpansionArgs;
 #[cfg(not(windows))]
 use crate::paths::CODETRACER_PATHS;
 use crate::recreator_session::RecreatorArgs;
@@ -383,6 +384,8 @@ fn setup(
                     false,
                 );
                 handler.raw_diff_index = raw_diff_index;
+                // Load macro sourcemaps for Nim macro expansion support (S6).
+                handler.load_macro_sourcemaps(trace_folder);
                 if for_launch {
                     handler.run_to_entry(dap::Request::default(), restore_location, sender)?;
                 }
@@ -440,6 +443,8 @@ fn setup(
                 Box::new(db),
             );
             handler.raw_diff_index = raw_diff_index;
+            // Load macro sourcemaps for Nim macro expansion support (S6).
+            handler.load_macro_sourcemaps(trace_folder);
             if for_launch {
                 handler.run_to_entry(dap::Request::default(), restore_location, sender)?;
             }
@@ -465,6 +470,8 @@ fn setup(
         info!("ct_rr_args {:?}", ct_rr_args);
         let mut handler = Handler::new(TraceKind::Recreator, ct_rr_args, Box::new(db));
         handler.raw_diff_index = raw_diff_index;
+        // Load macro sourcemaps for Nim macro expansion support (S6).
+        handler.load_macro_sourcemaps(trace_folder);
         if for_launch {
             eprintln!("[db-backend setup] calling run_to_entry");
             handler.run_to_entry(dap::Request::default(), restore_location, sender)?;
@@ -868,6 +875,9 @@ fn handle_request(handler: &mut Handler, req: dap::Request, sender: Sender<DapMe
         }
         "ct/load-asm-function" => {
             handler.load_asm_function(req.clone(), req.load_args::<FunctionLocation>()?, sender.clone())?
+        }
+        "ct/update-expansion" => {
+            handler.update_expansion(req.clone(), req.load_args::<UpdateExpansionArgs>()?, sender.clone())?
         }
         _ => {
             match dap_command_to_step_action(&req.command) {

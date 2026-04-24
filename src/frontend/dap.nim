@@ -108,6 +108,8 @@ const EVENT_KIND_TO_DAP_MAPPING: array[CtEventKind, cstring] = [
   CtSetupTraceSession: "ct/setup-trace-session",
   CtLoadAsmFunction: "ct/load-asm-function",
   CtLoadAsmFunctionResponse: "",
+  CtUpdateExpansion: "ct/update-expansion",
+  CtUpdateExpansionResponse: "",
   InternalLastCompleteMove: "internal/last-complete-move",
   InternalAddToScratchpad: "",
   InternalAddToScratchpadFromExpression: "",
@@ -164,6 +166,7 @@ func commandToCtResponseEventKind(command: cstring): CtEventKind =
   of "ct/reverseStepIn": CtReverseStepInResponse
   of "ct/reverseStepOut": CtReverseStepOutResponse
   of "ct/load-asm-function": CtLoadAsmFunctionResponse
+  of "ct/update-expansion": CtUpdateExpansionResponse
   else: raise newException(
     ValueError,
     "no ct event kind response for command: \"" & $command & "\" defined")

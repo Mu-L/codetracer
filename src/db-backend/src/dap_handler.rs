@@ -21,6 +21,7 @@ use crate::expr_loader::ExprLoader;
 use crate::flow_preloader::FlowPreloader;
 use crate::in_memory_trace_reader::InMemoryTraceReader;
 use crate::lang::{lang_from_context, Lang};
+use crate::macro_sourcemap::{self, MacroSourceMapCollection, UpdateExpansionArgs};
 use crate::program_search_tool::ProgramSearchTool;
 use crate::recreator_session::{RecreatorArgs, RecreatorReplaySession};
 use crate::replay::ReplaySession;
@@ -93,6 +94,10 @@ pub struct Handler {
     /// When `cached_events` is already populated, Write events are extracted
     /// from it instead.
     cached_terminal_events: Option<Vec<ProgramEvent>>,
+
+    /// Macro sourcemaps loaded from the trace directory.
+    /// Used for resolving macro expansion locations (ALT+E shortcut).
+    pub macro_sourcemaps: MacroSourceMapCollection,
 }
 
 // two choices:
@@ -177,6 +182,7 @@ impl Handler {
             initialized: false,
             cached_events: None,
             cached_terminal_events: None,
+            macro_sourcemaps: MacroSourceMapCollection::default(),
         };
         handler.initialize_breakpoint_cache();
         handler
@@ -2061,6 +2067,58 @@ impl Handler {
             }
             Err(e) => Err(Box::new(e)),
         }
+    }
+
+    /// Load macro sourcemaps from the trace directory.
+    ///
+    /// Searches for `macro_sourcemap*.json` files and populates the
+    /// `macro_sourcemaps` field. Should be called during trace setup.
+    pub fn load_macro_sourcemaps(&mut self, trace_dir: &Path) {
+        self.macro_sourcemaps = macro_sourcemap::load_macro_sourcemaps(trace_dir);
+        if !self.macro_sourcemaps.is_empty() {
+            info!(
+                "macro_sourcemap: loaded {} macro sourcemap(s) from {}",
+                self.macro_sourcemaps.maps.len(),
+                trace_dir.display()
+            );
+        }
+    }
+
+    /// Handle the `ct/update-expansion` custom DAP request.
+    ///
+    /// When the user presses ALT+E on a macro call in the editor, the frontend
+    /// sends this request with the path, line, and expansion level update. We
+    /// look up the macro sourcemap, resolve the expansion, and return a
+    /// `Location` with expansion fields populated.
+    pub fn update_expansion(
+        &mut self,
+        request: dap::Request,
+        args: UpdateExpansionArgs,
+        sender: Sender<DapMessage>,
+    ) -> Result<(), Box<dyn Error>> {
+        if self.macro_sourcemaps.is_empty() {
+            warn!("update_expansion: no macro sourcemaps loaded");
+            let empty_loc = Location::default();
+            self.respond_dap(request, empty_loc, sender)?;
+            return Ok(());
+        }
+
+        let location = self
+            .macro_sourcemaps
+            .update_expansion(&args.path, args.line, &args.update);
+
+        info!(
+            "update_expansion: path={} line={} -> high_level={}:{} is_expanded={} depth={}",
+            args.path,
+            args.line,
+            location.high_level_path,
+            location.high_level_line,
+            location.is_expanded,
+            location.expansion_depth,
+        );
+
+        self.respond_dap(request, location, sender)?;
+        Ok(())
     }
 
     /// Loads terminal output (stdout/stderr Write events) from the trace.

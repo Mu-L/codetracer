@@ -40,6 +40,7 @@ pub mod expr_loader;
 pub mod flow_preloader;
 pub mod in_memory_trace_reader;
 pub mod lang;
+pub mod macro_sourcemap;
 pub mod nim_mangling;
 pub mod paths;
 pub mod program_search_tool;

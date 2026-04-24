@@ -64,6 +64,8 @@ type
     CtSetupTraceSession,
     CtLoadAsmFunction,
     CtLoadAsmFunctionResponse,
+    CtUpdateExpansion,
+    CtUpdateExpansionResponse,
     InternalLastCompleteMove,
     InternalAddToScratchpad,
     InternalAddToScratchpadFromExpression,

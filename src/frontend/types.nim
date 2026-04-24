@@ -299,6 +299,7 @@ type
     open*:      JsAssoc[cstring, TabInfo]
     onCompleteMove*: proc(self: EditorService, response: MoveState): Future[void]
     onOpenedTab*: proc(self: EditorService, response: OpenedTab): Future[void]
+    onExpansionResponse*: proc(self: EditorService, location: Location): Future[void]
     # lowLevelTabs*:      JsAssoc[cstring, LowLevelTab]
     # lowLevelActive*:    array[LowLevelView, (cstring, int)]
     # lowLevelPanels*:    array[LowLevelView, GoldenTab] # sorry, easier for now
@@ -1650,6 +1651,10 @@ type
     savedLayoutConfig*: GoldenLayoutResolvedConfig
     # Nim-to-C sourcemap for ViewTargetSource (S3).
     sourcemap*: FrontendSourcemap
+    # S6: Whether a macro sourcemap was found for this trace.
+    # The actual macro expansion resolution happens in the backend;
+    # this flag lets the frontend know that ALT+E expansion is available.
+    hasMacroSourcemap*: bool
 
   Data* = ref object
     redraw*:                proc: void
@@ -1999,6 +2004,13 @@ when defined(ctRenderer):
   data.dapApi.on(CtCompleteMove, proc(kind: CtEventKind, value: MoveState) =
     discard data.services.debugger.onCompleteMove(data.services.debugger, value)
     discard data.services.editor.onCompleteMove(data.services.editor, value))
+
+  data.dapApi.on(CtUpdateExpansionResponse, proc(kind: CtEventKind, value: Location) =
+    ## Handle the macro expansion response from the backend (S6).
+    ## Delegates to the editor service callback which handles both the
+    ## expanded case (open inline) and the non-expanded case (navigate to
+    ## the resolved high-level location).
+    discard data.services.editor.onExpansionResponse(data.services.editor, value))
 
   var domwindow {.importc: "window".}: JsObject
   domwindow.data = data

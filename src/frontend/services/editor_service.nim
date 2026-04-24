@@ -84,6 +84,15 @@ proc openExpanded*(self: EditorService, location: types.Location) {.async.} =
   #kxiMap[state.fullPath] = setRenderer(proc: VNode = editor.render(), editorLabel, proc = discard)
 # TODO init
 
+data.services.editor.onExpansionResponse = proc(self: EditorService, location: types.Location) {.async.} =
+  ## Handle macro expansion DAP response (S6).
+  ## When the location has expansion data, open the expanded code inline.
+  ## Otherwise, navigate to the resolved high-level source location.
+  if location.isExpanded:
+    await self.openExpanded(location)
+  elif location.highLevelPath.len > 0 and location.highLevelLine > 0:
+    self.data.openTab(location.highLevelPath, ViewSource, line = location.highLevelLine)
+
 proc tabInfoForPath*(self: EditorService, path: cstring): TabInfo =
   if not path.isNil and path.len > 0:
     if self.open.hasKey(path):

@@ -362,11 +362,25 @@ pub struct Location {
     #[serde(deserialize_with = "deserialize_null_default")]
     pub global_call_key: String,
 
-    // for now not including most expansion-related fields
-    // including this to make sure we don't pass undefined/null
-    // for strings/seq-s
-    #[serde(deserialize_with = "deserialize_null_default")]
-    pub expansion_parents: Vec<usize>,
+    /// Expansion parent chain: each entry is (path, line, expansion_first_line).
+    /// Empty when the location is not inside a macro expansion.
+    #[serde(default, deserialize_with = "deserialize_null_default")]
+    pub expansion_parents: Vec<(String, i64, i64)>,
+    /// Depth of the expansion chain (number of parent expansions).
+    #[serde(default)]
+    pub expansion_depth: usize,
+    /// Index into the macro sourcemap's `expansions` array, or -1.
+    #[serde(default)]
+    pub expansion_id: i64,
+    /// First line of the expansion range in the expanded file, or -1.
+    #[serde(default)]
+    pub expansion_first_line: i64,
+    /// Last line of the expansion range in the expanded file, or -1.
+    #[serde(default)]
+    pub expansion_last_line: i64,
+    /// Whether this location is inside a macro expansion.
+    #[serde(default)]
+    pub is_expanded: bool,
 
     pub missing_path: bool,
 }
@@ -414,6 +428,11 @@ impl Location {
             error: false,
             originating_instruction_address: -1,
             expansion_parents: vec![],
+            expansion_depth: 0,
+            expansion_id: -1,
+            expansion_first_line: -1,
+            expansion_last_line: -1,
+            is_expanded: false,
             missing_path: false,
         }
     }

@@ -42,6 +42,7 @@ mod expr_loader;
 mod flow_preloader;
 mod in_memory_trace_reader;
 mod lang;
+mod macro_sourcemap;
 mod nim_mangling;
 mod paths;
 mod program_search_tool;

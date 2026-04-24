@@ -458,21 +458,48 @@ proc onCollapseExpansion*(sender: js, response: jsobject(path=cstring, line=int,
   # kout response
 
 proc onCollapseAllExpansion*(sender: js, response: jsobject(path=cstring, line=int, expansionFirstLine=int, update=MacroExpansionLevelUpdate)) =
-  # kout response
-  discard
+  ## Collapse all expanded macro view zones across all editors.
+  ## Iterates over all editors that have expanded macro sections and
+  ## marks each one as not expanded, then triggers a redraw.
+  var collapsedAny = false
+  for editorId, editor in data.ui.editors:
+    if editor.isExpanded:
+      editor.isExpanded = false
+      collapsedAny = true
+    # Also collapse any expanded child editors within this editor
+    for line, expandedEditor in editor.expanded:
+      if expandedEditor.isExpanded:
+        expandedEditor.isExpanded = false
+        collapsedAny = true
+  if collapsedAny:
+    data.redraw()
 
 proc onFollowHistory*(sender: js, response: jsobject(address=cstring)) =
   redrawAll()
 
 proc expand*(path: cstring, line: int) {.exportc, used.} =
-  ipc.send "CODETRACER::update-expansion", js{
-    path: path,
-    line: line,
-    update: MacroExpansionLevelUpdate(kind: MacroUpdateExpand, times: 1)
+  ## Send a macro expansion request to the backend via the DAP protocol.
+  ##
+  ## The backend looks up the macro_sourcemap for this path/line, resolves
+  ## the expansion, and returns a Location with expansion fields populated.
+  ## The response is handled by the `ct/update-expansion` DAP response
+  ## handler which opens the expanded code inline or in a tab.
+  let packet = js{
+    seq:        data.dapApi.seq,
+    `type`:     cstring"request",
+    command:    cstring"ct/update-expansion",
+    arguments:  js{
+      path: path,
+      line: line,
+      update: js{
+        kind: cstring"MacroUpdateExpand",
+        times: 1
+      }
+    }
   }
-
-  # TODO
-  # expandUpdate(path, line, MacroExpansion)
+  data.dapApi.seq += 1
+  packet["sessionId"] = data.dapApi.sessionId
+  ipc.send("CODETRACER::dap-raw-message", packet)
 
 var debugResponse* = DebugOutput(kind: DebugResult, output: cstring"") # per-replay
 

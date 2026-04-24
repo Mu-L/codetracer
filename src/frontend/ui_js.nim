@@ -1062,7 +1062,8 @@ proc onTraceLoaded(
     rawDiffIndex=cstring,
     # traceKind=cstring,
     dontAskAgain=bool,
-    sourcemapPath=cstring)) {.async.} =
+    sourcemapPath=cstring,
+    macroSourcemapPath=cstring)) {.async.} =
 
   clog "trace loaded"
   # console.log response.withDiff, response.diff, response.rawDiffIndex
@@ -1096,6 +1097,14 @@ proc onTraceLoaded(
     data.activeSession.sourcemap = await loadFrontendSourcemap(response.sourcemapPath)
   else:
     data.activeSession.sourcemap = FrontendSourcemap(loaded: false)
+
+  # S6: Track whether a macro sourcemap is available for this trace.
+  # The backend loads the macro_sourcemap files during trace setup and handles
+  # expansion resolution via the ct/update-expansion DAP command.
+  data.activeSession.hasMacroSourcemap =
+    not response.macroSourcemapPath.isNil and response.macroSourcemapPath.len > 0
+  if data.activeSession.hasMacroSourcemap:
+    clog cstring("macro sourcemap available at: " & $response.macroSourcemapPath)
 
   if data.trace.lang in {LangC, LangCpp, LangRust, LangGo}:
     data.startOptions.loading = false
