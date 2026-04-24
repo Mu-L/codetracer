@@ -164,6 +164,9 @@ let
   evmRecorderExe* = env.get("CODETRACER_EVM_RECORDER_PATH",
     when not defined(js): findTool("codetracer-evm-recorder") else: codetracerPrefix / "bin" / "codetracer-evm-recorder")
 
+  # Python recorder — pip-installed console script from the venv.
+  pythonRecorderExe* = when not defined(js): findTool("codetracer-python-recorder") else: codetracerPrefix / "bin" / "codetracer-python-recorder"
+
   # Shell recorders — the launcher scripts are the entry points.
   # In the nix package they are installed as codetracer-bash-recorder / codetracer-zsh-recorder.
   bashRecorderExe* = when not defined(js): findTool("codetracer-bash-recorder") else: codetracerPrefix / "bin" / "codetracer-bash-recorder"

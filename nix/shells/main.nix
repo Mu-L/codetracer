@@ -381,6 +381,7 @@ mkShell {
         fi
       fi
       export CODETRACER_PYTHON_INTERPRETER="$RECORDER_VENV/bin/python"
+      export PATH="$RECORDER_VENV/bin:$PATH"
     elif [ -n "$RECORDER_SRC" ] && [ -d "$RECORDER_SRC" ]; then
       # Fallback: try the Rust-backed recorder (requires maturin).
       if command -v maturin &>/dev/null; then
@@ -395,6 +396,7 @@ mkShell {
           fi
         fi
         export CODETRACER_PYTHON_INTERPRETER="$RECORDER_VENV/bin/python"
+        export PATH="$RECORDER_VENV/bin:$PATH"
       else
         echo "WARNING: maturin not available; skipping Rust-backed Python recorder install."
         echo "  The pure-Python recorder was not found either. Python tracing may not work."

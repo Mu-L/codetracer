@@ -119,10 +119,7 @@ proc recordDb(
 
       startArgs = @["trace", "--out-dir", traceFolder].concat(backendArgs)
     of LangPythonDb:
-      if vmExe.len == 0:
-        echo "error: python interpreter not provided while trying to start recorder"
-        quit(1)
-      var recorderArgs = @["-m", "codetracer_python_recorder", "--out-dir", traceFolder]
+      var recorderArgs = @["--out-dir", traceFolder]
       if pythonActivationPath.len > 0:
         recorderArgs.add("--activation-path")
         recorderArgs.add(pythonActivationPath)
@@ -332,20 +329,6 @@ proc record(
     elif lang == LangSmall:
       return recordDb(LangSmall, smallExe, executable, args, backend, outputFolder, stylusTrace, traceId)
     elif lang == LangPythonDb:
-      var interpreterPath = pythonInterpreter
-      if interpreterPath.len == 0:
-        errorMessage "error: expected a python interpreter path but received an empty value"
-        quit(1)
-      if fileExists(interpreterPath):
-        if not interpreterPath.isAbsolute():
-          interpreterPath = absolutePath(interpreterPath)
-      else:
-        let foundInterpreter = findExe(interpreterPath, followSymlinks=false)
-        if foundInterpreter.len == 0:
-          errorMessage fmt"error: can't locate python interpreter at '{pythonInterpreter}'"
-          quit(1)
-        interpreterPath = foundInterpreter
-
       var activationPathResolved = pythonActivationPath
       if activationPathResolved.len > 0:
         try:
@@ -355,7 +338,7 @@ proc record(
 
       return recordDb(
         LangPythonDb,
-        interpreterPath,
+        pythonRecorderExe,
         executable,
         args,
         backend,
