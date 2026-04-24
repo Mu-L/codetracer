@@ -68,6 +68,9 @@ proc configureIpcMain* =
     "show-in-debug-instance"
     "send-bug-report-and-logs"
 
+    # Multi-window (M17)
+    "open-new-window"
+
     # Upload/Download
     "upload-trace-file"
     "download-trace-file"

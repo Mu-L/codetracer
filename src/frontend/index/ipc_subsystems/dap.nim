@@ -136,13 +136,17 @@ proc handleFrame(frame: string) =
         return
 
     # M9: Tag the response with the session that issued the request.
-    body["sessionId"] = resolveSessionId(body)
-    mainWindow.webContents.send("CODETRACER::dap-receive-response", body)
+    let sessionId = resolveSessionId(body)
+    body["sessionId"] = sessionId
+    # M16: Fan out to all windows displaying this session.
+    broadcastToSession(sessionId, "CODETRACER::dap-receive-response", body)
 
   elif msgtype == "event":
     # M9: Events belong to the currently active session in the BM.
-    body["sessionId"] = resolveSessionId(body)
-    mainWindow.webContents.send("CODETRACER::dap-receive-event", body)
+    let sessionId = resolveSessionId(body)
+    body["sessionId"] = sessionId
+    # M16: Fan out to all windows displaying this session.
+    broadcastToSession(sessionId, "CODETRACER::dap-receive-event", body)
 
   else:
     echo "unknown DAP message: ", body

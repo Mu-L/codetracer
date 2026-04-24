@@ -210,3 +210,12 @@ proc createSecondaryWindow*(sessionId: int): JsObject =
     infoPrint "index: created secondary window id=", $windowId,
               " for session ", $sessionId
     return win
+
+proc onOpenNewWindow*(sender: js, response: JsObject) {.async.} =
+  ## M17: IPC handler for "open-new-window".
+  ## The renderer sends the sessionId of the replay to open in a new window.
+  let sessionId = if response.hasOwnProperty(cstring"sessionId"):
+    response["sessionId"].to(int)
+  else:
+    0  # default session
+  discard createSecondaryWindow(sessionId)
