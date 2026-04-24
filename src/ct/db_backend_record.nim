@@ -253,7 +253,7 @@ proc record(
     if traceKind == "db":
       errorMessage fmt"error: lang unknown: probably an unsupported type of project/extension, or folder/path doesn't exist?"
       quit(1)
-  elif not lang.isDbBased:
+  elif not lang.usesMaterializedTraces:
     # TODO integrate with rr/gdb backend
     if traceKind == "db":
       errorMessage fmt"error: {lang} not supported currently with db: maybe you need a rr trace for it?"
@@ -273,7 +273,7 @@ proc record(
   var sourceFoldersText = ""
   let shellID = if basic: getEnv("CODETRACER_SHELL_ID", "-1").parseInt else: -1
 
-  let defaultRawCalltraceMode = if not lang.isDbBased:
+  let defaultRawCalltraceMode = if not lang.usesMaterializedTraces:
     "RawRecordNoValues"
   else:
     "FullRecord"

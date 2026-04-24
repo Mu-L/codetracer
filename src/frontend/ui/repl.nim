@@ -18,7 +18,7 @@ method run(self: ReplComponent, input: cstring) {.async.} =
 
 method render*(self: ReplComponent): VNode =
   result = buildHtml(tdiv(class = componentContainerClass())):
-    if self.data.trace.lang.isDbBased():
+    if self.data.trace.lang.usesMaterializedTraces():
       tdiv(class = "repl-msg-wrapper"):
           tdiv(class = "repl-disabled-msg"):
             text(fmt"The Repl Component is not supported for Db based traces '{self.data.trace.lang.toName()}'")

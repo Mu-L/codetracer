@@ -532,8 +532,8 @@ type
 
   Component* = ref object of RootObj
     data*: Data
-    isDbBasedTrace*: bool
-    isDbBasedTraceSet*: bool
+    usesMaterializedTracesTrace*: bool
+    usesMaterializedTracesTraceSet*: bool
     config*: Config
     id*: int
     rendered*: bool

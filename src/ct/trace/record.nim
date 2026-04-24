@@ -246,7 +246,7 @@ proc record*(lang: string,
              program: string,
              args: seq[string]): Trace =
   let detectedLang = detectLang(program, toLang(lang))
-  # echo "DEBUG record: detectedLang=", detectedLang, " isDbBased=", detectedLang.isDbBased, " program=", program, " outputFolder=", outputFolder
+  # echo "DEBUG record: detectedLang=", detectedLang, " usesMaterializedTraces=", detectedLang.usesMaterializedTraces, " program=", program, " outputFolder=", outputFolder
   var outputFolderValue = outputFolder
   var programToRecord = program
   var nimcachePath = ""
@@ -328,7 +328,7 @@ proc record*(lang: string,
       echo buildProcess
       quit(1)
     programToRecord = wasmPath
-  elif not detectedLang.isDbBased:
+  elif not detectedLang.usesMaterializedTraces:
     # Match `ct run` behavior for RR-based languages by building first.
     if detectedLang == LangNim and outputFolderValue.len == 0:
       let traceID = trace_index.newID(test=false)
@@ -358,7 +358,7 @@ proc record*(lang: string,
   if getEnv("CODETRACER_WRAPPER_PID", "").len == 0:
     putEnv("CODETRACER_WRAPPER_PID", $getCurrentProcessId())
 
-  if detectedLang.isDbBased:
+  if detectedLang.usesMaterializedTraces:
     return recordInternal(
       dbBackendRecordExe,
       pargs.concat(@["--trace-kind", "db"]),
@@ -386,7 +386,7 @@ proc recordTest*(testName: string, path: string, line: int, column: int, withDif
   # TODO: not sure about wasm, for now not supported for tests
   let fullPath = expandFileName(expandTilde(path))
   let lang = detectLangFromPath(fullPath, isWasm=false)
-  if not lang.isDBBased:
+  if not lang.usesMaterializedTraces:
     let ctConfig = loadConfig(folder=getCurrentDir(), inTest=false)
     if ctConfig.rrBackend.enabled:
       # assume `Lang<Name/Label>'

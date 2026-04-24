@@ -136,7 +136,7 @@ proc makeEventLogComponent*(data: Data, id: int, inExtension: bool = false): Eve
     inExtension: inExtension,
     drawId: 0,
     started: false,
-    isDbBasedTrace: true, #TODO: For now hardcoded needs to be set dynamically to the component
+    usesMaterializedTracesTrace: true, #TODO: For now hardcoded needs to be set dynamically to the component
   )
   data.registerComponent(result, Content.EventLog)
 
@@ -389,7 +389,7 @@ proc makeCalltraceComponent*(data: Data, id: int, inExtension: bool = false): Ca
     callValuePosition: JsAssoc[cstring, float]{},
     inExtension: inExtension,
     config: Config(calltrace: true), #TODO: For now hardcoded
-    isDbBasedTrace: true, #TODO: For now hardcoded needs to be set dynamically to the component
+    usesMaterializedTracesTrace: true, #TODO: For now hardcoded needs to be set dynamically to the component
     asyncFlowMode: afmReal,
     continuationLinks: @[],
     asyncThreads: @[],
@@ -621,7 +621,7 @@ proc makeTerminalOutputComponent*(data: Data, id: int, inExtension: bool = false
     service: data.services.eventLog,
     initialUpdate: true,
     inExtension: inExtension,
-    isDbBasedTrace: true, #TODO: For now hardcoded needs to be set dynamically to the component
+    usesMaterializedTracesTrace: true, #TODO: For now hardcoded needs to be set dynamically to the component
   )
   data.registerComponent(result, Content.TerminalOutput)
 

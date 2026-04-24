@@ -228,7 +228,7 @@ proc recordTrace*(trace: Trace, test: bool): Trace =
 
 proc loadCalltraceMode*(raw: string, lang: Lang): CalltraceMode =
   if raw.len == 0: # default, or missing calltrace mode(e.g. from a trace before altering table/update)
-    if not lang.isDbBased:
+    if not lang.usesMaterializedTraces:
       CalltraceMode.NoInstrumentation # conservative default
     else:
       CalltraceMode.FullRecord

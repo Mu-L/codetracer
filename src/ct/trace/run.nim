@@ -62,7 +62,7 @@ proc runWithRestart(
         createDir(outputFolder)
         nimcachePath = outputFolder / "nimcache"
 
-      let program = if lang.isDbBased:
+      let program = if lang.usesMaterializedTraces:
           recordArgs[0]
         else:
           let binary = build(recordArgs[0], "", nimcachePath)

@@ -136,13 +136,11 @@ fi
 if [ -n "$_CT_WORKSPACE_ROOT" ] && [ -d "$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems" ]; then
 	export RUBY_RECORDER_ROOT="$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder"
 	if [ -x "$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-ruby-recorder/bin/codetracer-ruby-recorder" ]; then
-		# Add both native and pure-ruby bin dirs so ct can fall back.
-		export PATH="$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-ruby-recorder/bin:$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-pure-ruby-recorder/bin:$PATH"
+		export PATH="$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-ruby-recorder/bin:$PATH"
 		_ct_detect_summary "codetracer-ruby-recorder (native)"
-	elif [ -x "$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-pure-ruby-recorder/bin/codetracer-pure-ruby-recorder" ]; then
-		export PATH="$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-pure-ruby-recorder/bin:$PATH"
-		_ct_detect_summary "codetracer-ruby-recorder (pure-ruby)"
 	else
+		echo "  WARNING: codetracer-ruby-recorder native extension not built." >&2
+		echo "    Run: cd $_CT_WORKSPACE_ROOT/codetracer-ruby-recorder && just build-extension" >&2
 		_ct_detect_summary "codetracer-ruby-recorder (gems present, not built)"
 	fi
 fi

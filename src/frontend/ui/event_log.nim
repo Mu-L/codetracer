@@ -405,7 +405,7 @@ proc events(self: EventLogComponent) =
             title: cstring"rr event id"
           },
       ]
-      if self.isDbBasedTrace:
+      if self.usesMaterializedTracesTrace:
         let lower = cstring("FullPath".toLowerAscii())
 
         denseColumns.add(
@@ -482,7 +482,7 @@ proc events(self: EventLogComponent) =
             cstring"low level location"
         ]
 
-      # if self.isDbBasedTrace:
+      # if self.usesMaterializedTracesTrace:
       #   let lower = cstring("FullPath".toLowerAscii())
 
       #   denseColumns.add(
@@ -1205,9 +1205,9 @@ method onCompleteMove*(self: EventLogComponent, response: MoveState) {.async.} =
   self.location = response.location
   let lang = toLangFromFilename(self.location.path)
   # if self.data.ui.activeFocus != self:
-  if not self.isDbBasedTraceSet:
-    self.isDbBasedTrace = lang != LangUnknown and lang.isDbBased
-    self.isDbBasedTraceSet = true
+  if not self.usesMaterializedTracesTraceSet:
+    self.usesMaterializedTracesTrace = lang != LangUnknown and lang.usesMaterializedTraces
+    self.usesMaterializedTracesTraceSet = true
     try:
       self.denseTable.context.column(2).visible(false)
     except:

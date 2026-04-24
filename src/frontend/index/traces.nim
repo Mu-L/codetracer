@@ -638,7 +638,7 @@ proc onNewRecord*(sender: js, response: jsobject(filename=cstring, args=seq[cstr
   infoPrint "index: new record for", response.filename, " originally ", response.args, " projectOnly?: ", response.projectOnly
   # TODO fix replay
   var recordArgs = response.args
-  if not data.trace.lang.isDbBased:
+  if not data.trace.lang.usesMaterializedTraces:
     var buildArg = if response.filename.len > 0:
         response.filename
       else:

@@ -362,7 +362,7 @@ proc resetOperation*(self: DebuggerService, full: bool, resetLastLocation: bool 
   self.data.ipc.send "CODETRACER::reset-operation", js{full: full, taskId: taskId, resetLastLocation: resetLastLocation}
 
 proc lineStepJump*(self: DebuggerService, lineStep: LineStep) =
-  if not self.data.trace.lang.isDbBased:
+  if not self.data.trace.lang.usesMaterializedTraces:
     self.step(
       "step-in",
       StepIn,

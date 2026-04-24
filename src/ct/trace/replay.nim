@@ -36,7 +36,7 @@ import std / [options, os, osproc, strutils, strformat ],
 #   var diffIndexPath = ""
 
 #   if indexDiff:
-#     let backend = if trace.lang.isDbBased:
+#     let backend = if trace.lang.usesMaterializedTraces:
 #         dbBackendExe
 #       else:
 #         let ctConfig = loadConfig(folder=getCurrentDir(), inTest=false)

@@ -483,7 +483,7 @@ proc returnValueView(
 
 proc searchResultView(self: CalltraceComponent, call: Call): VNode =
   let location = call.location
-  let ticksText = if self.isDbBasedTrace: "stepId" else: "rrTicks"
+  let ticksText = if self.usesMaterializedTracesTrace: "stepId" else: "rrTicks"
 
   buildHtml(
     tdiv(
@@ -643,7 +643,7 @@ proc callView*(
         childlessCallView(self, call, active)
       elif not hiddenChildren or call.children.len > 0:
         isExpanded = true
-        if self.isDbBasedTrace:
+        if self.usesMaterializedTracesTrace:
           collapseCallView(self, call, CalltraceNonExpandedKind.Children, count, active)
       elif not isExpanded:
         expandCallView(self, call, count, active)
@@ -758,7 +758,7 @@ proc callLineContentView*(
       content.kind != CallLineContentKind.StartCallstackCount:
     callView(self, content, index, depth)
   else:
-    if self.isDbBasedTrace:
+    if self.usesMaterializedTracesTrace:
       hiddenCallstackView(self, content, index, depth)
     else:
       buildHtml(tdiv())
@@ -778,7 +778,7 @@ proc callLineView*(self: CalltraceComponent, callLine: CallLine, index: int): VN
   result = buildHtml(
     tdiv(class = fmt"calltrace-call-line calltrace-row {selected}")
   ):
-    if self.isDbBasedTrace:
+    if self.usesMaterializedTracesTrace:
       span(style = callOffset(callLine.depth - self.depthStart))
     callLineContentView(self, callLine.content, index, callLine.depth)
 
@@ -807,7 +807,7 @@ proc calltraceLines*(self: CalltraceComponent): VNode =
     tdiv(class="calltrace-lines", style=calltraceLinesStyle(self))
   ):
     ensureSvgContainer(self)
-    if self.isDbBasedTrace:
+    if self.usesMaterializedTracesTrace:
       for i, callLine in self.callLines:
         callLineView(self, callLine, i)
     else:
@@ -892,7 +892,7 @@ method onUpdatedCalltrace*(self: CalltraceComponent, results: CtUpdatedCalltrace
 #   self.redraw()
 
 func supportCallstackOnly(self: CalltraceComponent): bool =
-  not self.config.calltrace or self.locationLang() == LangRust or not self.isDbBasedTrace
+  not self.config.calltrace or self.locationLang() == LangRust or not self.usesMaterializedTracesTrace
 
 
 method register*(self: CalltraceComponent, api: MediatorWithSubscribers) =
@@ -912,7 +912,7 @@ proc registerCalltraceComponent*(component: CalltraceComponent, api: MediatorWit
   component.register(api)
 
 proc loadLines(self: CalltraceComponent, fromScroll: bool) =
-  if not self.isDbBasedTrace or not (not self.isDbBasedTrace and fromScroll) or not self.loadedCallKeys.hasKey(self.lastSelectedCallKey):
+  if not self.usesMaterializedTracesTrace or not (not self.usesMaterializedTracesTrace and fromScroll) or not self.loadedCallKeys.hasKey(self.lastSelectedCallKey):
     let depth = self.panelDepth()
     let height = self.panelHeight()
     let startBuffer = self.getStartBufferLen()
@@ -1050,7 +1050,7 @@ proc redrawCallLines(self: CalltraceComponent) =
     localCalltraceElement.replaceChild(
       calltraceLinesDom,
       calltraceLinesElement)
-    if self.isDbBasedTrace:
+    if self.usesMaterializedTracesTrace:
       self.redrawTraceLine()
 
   if not self.inExtension and self.resizeObserver.isNil:
@@ -1184,21 +1184,21 @@ method onCompleteMove*(self: CalltraceComponent, response: MoveState) {.async.} 
 
   #TODO: pass explicitly in trace as trace kind/in init/other way?
   let lang = toLangFromFilename(self.location.path)
-  if not self.isDbBasedTraceSet:
-    self.isDbBasedTrace = lang != LangUnknown and lang.isDbBased
-    self.isDbBasedTraceSet = true
+  if not self.usesMaterializedTracesTraceSet:
+    self.usesMaterializedTracesTrace = lang != LangUnknown and lang.usesMaterializedTraces
+    self.usesMaterializedTracesTraceSet = true
 
   # for rr traces: try to always load lines again!
   #   eventually when we have a reliable key, maybe check again
-  echo "ON COMPLETE MOVE; is db?: ", self.isDbBasedTrace
-  if self.isDbBasedTrace and self.loadedCallKeys.hasKey(response.location.key):
+  echo "ON COMPLETE MOVE; is db?: ", self.usesMaterializedTracesTrace
+  if self.usesMaterializedTracesTrace and self.loadedCallKeys.hasKey(response.location.key):
     let buffer = self.getStartBufferLen()
 
     self.activeCallIndex = self.startCallLineIndex + self.loadedCallKeys[response.location.key] - buffer
 
     if self.loadedCallKeys[response.location.key] >= self.panelHeight() - 1 + buffer:
       self.calltraceScroll((self.activeCallIndex - (self.panelHeight() / 2).floor) * CALL_HEIGHT_PX)
-  elif not self.isDbBasedTrace or not self.loadedCallKeys.hasKey(response.location.key):
+  elif not self.usesMaterializedTracesTrace or not self.loadedCallKeys.hasKey(response.location.key):
     self.lastSelectedCallKey = response.location.key
     self.forceCollapse = true
     echo "LOAD LINES"
@@ -1275,7 +1275,7 @@ method render*(self: CalltraceComponent): VNode =
       searchCalltraceView(self)
       asyncFlowToggleView(self)
       # TODO: not ready for rr traces too: for now just comment out!
-      # if not self.inExtension and not self.isDbBasedTrace:
+      # if not self.inExtension and not self.usesMaterializedTracesTrace:
       #  filterCalltraceView(self)
     if self.service.isCalltrace:
       if self.asyncFlowMode == afmVirtual:

@@ -59,7 +59,7 @@ mod value;
 
 use crate::paths::{run_dir_for, CODETRACER_PATHS};
 
-/// The replay server: a DAP-based replay backend for trace-based languages
+/// The replay server: a DAP-based replay backend for materialized-trace languages
 /// (Ruby, Python, JS, shell, Wasm, etc.) as opposed to rr/gdb-based replay
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]

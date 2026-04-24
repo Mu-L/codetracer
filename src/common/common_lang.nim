@@ -55,7 +55,7 @@ proc isVMLang*(lang: Lang): bool =
   ## return true if programming language implementation runs in a virtual machine
   false # lang in {LangRuby, LangPython, LangPythonDb, LangLua, LangJavascript, LangUnknown}
 
-var IS_DB_BASED*: array[Lang, bool] = [
+var USES_MATERIALIZED_TRACES*: array[Lang, bool] = [
   #C     Cpp    Rust   Nim    Go     Pascal Fortrn D      Crystl Lean   Julia  Ada
   false, false, false, false, false, false, false, false, false, false, false, false,
   #Py    Ruby   RubyDb JS     Lua    Asm    Noir   RsWasm CppWsm Small  PyDb   Unknwn
@@ -64,32 +64,33 @@ var IS_DB_BASED*: array[Lang, bool] = [
   false, false, false, false, false, false, false, false, false, false, false, false, false, false
 ]
 
-IS_DB_BASED[LangRubyDb] = true
-IS_DB_BASED[LangNoir] = true
-IS_DB_BASED[LangSmall] = true
-IS_DB_BASED[LangRustWasm] = true
-IS_DB_BASED[LangCppWasm] = true
-IS_DB_BASED[LangPythonDb] = true
-IS_DB_BASED[LangPascal] = false
-IS_DB_BASED[LangSolidity] = true
-IS_DB_BASED[LangMasm] = true
-IS_DB_BASED[LangSway] = true
-IS_DB_BASED[LangMove] = true
-IS_DB_BASED[LangPolkavm] = true
-IS_DB_BASED[LangCairo] = true
-IS_DB_BASED[LangCircom] = true
-IS_DB_BASED[LangLeo] = true
-IS_DB_BASED[LangTolk] = true
-IS_DB_BASED[LangAiken] = true
-IS_DB_BASED[LangCadence] = true
-IS_DB_BASED[LangSolana] = true
-IS_DB_BASED[LangBash] = true
-IS_DB_BASED[LangZsh] = true
-IS_DB_BASED[LangJavascript] = true
+USES_MATERIALIZED_TRACES[LangRubyDb] = true
+USES_MATERIALIZED_TRACES[LangNoir] = true
+USES_MATERIALIZED_TRACES[LangSmall] = true
+USES_MATERIALIZED_TRACES[LangRustWasm] = true
+USES_MATERIALIZED_TRACES[LangCppWasm] = true
+USES_MATERIALIZED_TRACES[LangPythonDb] = true
+USES_MATERIALIZED_TRACES[LangPascal] = false
+USES_MATERIALIZED_TRACES[LangSolidity] = true
+USES_MATERIALIZED_TRACES[LangMasm] = true
+USES_MATERIALIZED_TRACES[LangSway] = true
+USES_MATERIALIZED_TRACES[LangMove] = true
+USES_MATERIALIZED_TRACES[LangPolkavm] = true
+USES_MATERIALIZED_TRACES[LangCairo] = true
+USES_MATERIALIZED_TRACES[LangCircom] = true
+USES_MATERIALIZED_TRACES[LangLeo] = true
+USES_MATERIALIZED_TRACES[LangTolk] = true
+USES_MATERIALIZED_TRACES[LangAiken] = true
+USES_MATERIALIZED_TRACES[LangCadence] = true
+USES_MATERIALIZED_TRACES[LangSolana] = true
+USES_MATERIALIZED_TRACES[LangBash] = true
+USES_MATERIALIZED_TRACES[LangZsh] = true
+USES_MATERIALIZED_TRACES[LangJavascript] = true
 
-proc isDbBased*(lang: Lang): bool =
-  ## return true if `lang` uses the db backend
-  IS_DB_BASED[lang]
+proc usesMaterializedTraces*(lang: Lang): bool =
+  ## Return true if ``lang`` produces materialized (self-contained) traces
+  ## via a dedicated recorder, as opposed to rr/gdb-based replay traces.
+  USES_MATERIALIZED_TRACES[lang]
 
 proc toCLang*(lang: Lang): string =
   ## convert Lang_ to string
@@ -121,7 +122,8 @@ proc toName*(lang: Lang): string =
 proc toLang*(lang: string): Lang
 proc toLang*(lang: cstring): Lang
 
-proc isDbBasedForExtension*(extension: string): bool =
-  ## return true if extention is for a language that uses the db backend
+proc usesMaterializedTracesForExtension*(extension: string): bool =
+  ## Return true if the file extension belongs to a language that produces
+  ## materialized traces.
   let lang = toLang(extension)
-  isDbBased(lang)
+  usesMaterializedTraces(lang)
