@@ -217,6 +217,7 @@ mkShell {
     playwright
     xvfb-run
     xorg.xorgserver # provides Xephyr for visible virtual X11
+    xdotool # cross-window mouse/keyboard automation for multi-window e2e tests
 
     # runtime_tracing build dependency
     capnproto
