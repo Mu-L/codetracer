@@ -192,8 +192,39 @@ proc closeLayoutTab*(data: Data, content: Content, id: int) =
   if data.ui.openComponentIds[content].find(id) != -1:
     data.ui.openComponentIds[content].delete(id)
 
+# Track whether the shared (non-GL) Karax renderers have been initialised.
+# These renderers (menu, status, fixed-search, search-results, session-tab-bar)
+# live outside the per-session GL container and only need to be set up once.
+var sharedRenderersInitialised = false
+
+proc ensureSharedRenderers() =
+  ## Set up the Karax renderers for global chrome elements that live outside
+  ## individual session GL containers.  Safe to call multiple times — it only
+  ## acts on the first invocation.
+  if sharedRenderersInitialised:
+    return
+  sharedRenderersInitialised = true
+
+  kxiMap["menu"] = setRenderer(proc: VNode = data.ui.menu.render(), "menu", proc = discard)
+  kxiMap["status"] = setRenderer(proc: VNode = data.ui.status.render(), "status", proc = discard)
+  kxiMap["fixed-search"] = setRenderer(fixedSearchView, "fixed-search", proc = discard)
+  kxiMap["search-results"] = setRenderer(proc: VNode = data.ui.searchResults.render(), "search-results", proc = discard)
+  kxiMap["session-tab-bar"] = setRenderer(proc: VNode = renderSessionTabs(data), "session-tab-bar", proc = discard)
+
+  data.ui.menu.kxi = kxiMap["menu"]
+  data.ui.status.kxi = kxiMap["status"]
+  data.ui.searchResults.kxi = kxiMap["search-results"]
+
 # Triage: rename to initGoldenLayout
-proc initLayout*(initialLayout: GoldenLayoutResolvedConfig) =
+proc initLayout*(initialLayout: GoldenLayoutResolvedConfig,
+                 containerElement: kdom.Element = nil) =
+  ## Initialise GoldenLayout for the active session.
+  ##
+  ## ``containerElement`` is the DOM element GL will bind to.  When nil
+  ## (the default, used during initial page load) we look up
+  ## ``session-container-<activeSessionIndex>`` inside ``#ROOT``.
+  ## For new sessions created at runtime the caller passes the freshly
+  ## created container element directly.
   echo "initLayout"
   echo data.ui.layout.isNil
 
@@ -244,10 +275,15 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig) =
     redrawSync(kxiMap["welcome-screen"])
     return
 
-  let root = document.getElementById(cstring"ROOT")
+  # Determine the GL container element.
+  let root = if not containerElement.isNil:
+      containerElement
+    else:
+      let containerId = cstring("session-container-" & $data.activeSessionIndex)
+      document.getElementById(containerId)
 
   var layout = newGoldenLayout(
-    root,
+    cast[JsObject](root),
     proc() = (cdebug "layout: component binded"),
     proc() = (cdebug "layout: component unbinded")
   )
@@ -289,15 +325,9 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig) =
   data.ui.layoutConfig = cast[GoldenLayoutConfigClass](window.toJs.LayoutConfig)
   data.ui.contentItemConfig = cast[GoldenLayoutItemConfigClass](window.toJs.ItemConfig)
 
-  kxiMap["menu"] = setRenderer(proc: VNode = data.ui.menu.render(), "menu", proc = discard)
-  kxiMap["status"] = setRenderer(proc: VNode = data.ui.status.render(), "status", proc = discard)
-  kxiMap["fixed-search"] = setRenderer(fixedSearchView, "fixed-search", proc = discard)
-  kxiMap["search-results"] = setRenderer(proc: VNode = data.ui.searchResults.render(), "search-results", proc = discard)
-  kxiMap["session-tab-bar"] = setRenderer(proc: VNode = renderSessionTabs(data), "session-tab-bar", proc = discard)
-
-  data.ui.menu.kxi = kxiMap["menu"]
-  data.ui.status.kxi = kxiMap["status"]
-  data.ui.searchResults.kxi = kxiMap["search-results"]
+  # Set up shared (non-GL) Karax renderers once.  These live outside the
+  # per-session GL container and survive session switches.
+  ensureSharedRenderers()
 
   layout.registerComponent(cstring"editorComponent") do (container: GoldenContainer, state: GoldenItemState):
     if state.label.len == 0:
@@ -521,8 +551,8 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig) =
 
     data.ui.saveLayout = true
 
-# M11: Wire the initLayout proc into session_switch to break the
-# circular import dependency (layout -> session_tabs -> session_switch).
+# Wire the initLayout proc into session_switch to break the circular
+# import dependency (layout -> session_tabs -> session_switch -> layout).
 setInitLayoutProc(initLayout)
 
 # Wire the tab-bar renderer setup so that switchSession can ensure the

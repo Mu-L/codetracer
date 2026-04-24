@@ -1,12 +1,10 @@
 ## Session switching for multi-replay sessions (M11).
 ##
-## Implements the destroy/recreate approach: saves the current GL layout
-## config onto the active ``ReplaySession``, tears down the GL instance
-## and all Karax component renderers, switches ``activeSessionIndex``,
-## then rebuilds the GL from the target session's saved layout config.
-##
-## This is approach (a) from the design doc — full destroy/recreate.
-## Monaco editors and all GL-managed components are recreated from scratch.
+## Implements the hide/show approach: each session keeps its own GL
+## container alive in the DOM.  Switching sessions toggles CSS visibility
+## on the per-session container divs instead of destroying and recreating
+## the GoldenLayout instance.  This preserves Monaco editors and all
+## GL-managed component state across tab switches.
 ##
 ## To avoid circular imports (layout -> session_tabs -> session_switch ->
 ## layout), the actual ``initLayout`` call is wired in at runtime via
@@ -28,7 +26,8 @@ import kdom except Location
 # ---------------------------------------------------------------------------
 
 type
-  InitLayoutProc = proc(config: GoldenLayoutResolvedConfig) {.nimcall.}
+  InitLayoutProc = proc(config: GoldenLayoutResolvedConfig,
+                        containerElement: kdom.Element = nil) {.nimcall.}
   EnsureTabBarRendererProc = proc() {.nimcall.}
 
 var initLayoutImpl: InitLayoutProc = nil
@@ -40,86 +39,56 @@ proc setInitLayoutProc*(p: InitLayoutProc) =
 
 proc setEnsureTabBarRendererProc*(p: EnsureTabBarRendererProc) =
   ## Called once from layout.nim to wire in the tab-bar renderer setup.
-  ## This allows ``restoreSessionLayout`` to ensure the session-tab-bar
+  ## This allows session creation to ensure the session-tab-bar
   ## Karax renderer exists even when ``initLayout`` is not called.
   ensureTabBarRendererImpl = p
 
 # ---------------------------------------------------------------------------
-# Internal helpers
+# Session container helpers
 # ---------------------------------------------------------------------------
 
-proc saveSessionLayout*(session: ReplaySession, ui: Components) =
-  ## Snapshot the current GL layout config onto the session so it can
-  ## be restored later.  No-op when there is no active layout.
-  ##
-  ## IMPORTANT: We save the UNRESOLVED config (via ``fromResolved``), not
-  ## the resolved config from ``saveLayout()``.  GoldenLayout's
-  ## ``loadLayout()`` expects unresolved configs with string-typed size
-  ## values (e.g. "50%").  The resolved config from ``saveLayout()`` has
-  ## numeric sizes that cause ``loadLayout`` to crash with
-  ## "value.trimStart is not a function".
-  if not ui.layout.isNil and not ui.layoutConfig.isNil:
-    try:
-      let resolved = ui.layout.saveLayout()
-      session.savedLayoutConfig = cast[GoldenLayoutResolvedConfig](
-        ui.layoutConfig.fromResolved(resolved))
-    except:
-      cwarn "session_switch: saveLayout failed: " & getCurrentExceptionMsg()
+proc sessionContainerId(index: int): cstring =
+  ## DOM id for the session's GL container element.
+  cstring("session-container-" & $index)
 
-proc resetRootDom() =
-  ## Clear ``#ROOT`` and restore the inner structure that ``initLayout``
-  ## expects.  GoldenLayout takes over ``#ROOT`` as its container, but
-  ## ``initLayout`` also sets up Karax renderers for ``#fixed-search``
-  ## (and the ``#context-menu-container`` / ``#main`` are referenced
-  ## elsewhere).  After clearing we must recreate these child elements
-  ## so the next ``initLayout`` call finds them.
+proc getSessionContainer(index: int): kdom.Element =
+  ## Look up an existing session container by index.  May return nil.
+  document.getElementById(sessionContainerId(index))
+
+proc createSessionContainer(index: int): kdom.Element =
+  ## Create a new session container div inside ``#ROOT`` and return it.
+  ## The container starts hidden (CSS class ``hidden``) — the caller is
+  ## responsible for showing it when it becomes the active session.
+  ## GoldenLayout will create its own DOM structure inside the container
+  ## when ``loadLayout`` is called, so no inner elements are needed.
+  let container = document.createElement("div")
+  container.id = sessionContainerId(index)
+  container.class = cstring"session-container hidden"
+
   let root = document.getElementById(cstring"ROOT")
-  if root.isNil:
+  if not root.isNil:
+    root.appendChild(container)
+
+  return container
+
+proc destroySessionContainer(index: int) =
+  ## Remove a session's GL container from the DOM and destroy its GL
+  ## instance.  Used when closing a session tab.
+  let container = getSessionContainer(index)
+  if container.isNil:
     return
-  root.innerHTML = cstring(
-    "<div id=\"context-menu-container\" style=\"display: none;\"></div>" &
-    "<div id=\"fixed-search\"></div>" &
-    "<section id=\"main\"></section>")
+  container.parentNode.removeChild(container)
 
-proc destroyCurrentLayout*(data: Data) =
-  ## Tear down the current GoldenLayout instance, reset all component
-  ## state, and clear the GL container DOM.  After this call the UI is
-  ## a blank slate ready for ``restoreSessionLayout``.
-  ##
-  ## When the current session has no layout (e.g. a freshly created empty
-  ## session), we skip the full ``resetLayoutState`` — there is no GL
-  ## instance to destroy and no component state to reset.  We still clear
-  ## the DOM container so the next ``initLayout`` starts with a clean slate.
-  if data.ui.layout.isNil:
-    # No layout to destroy — just reset the DOM container.
-    resetRootDom()
-    return
-
-  ## Delegates to ``renderer.resetLayoutState`` which already handles
-  ## destroying the GL instance, resetting ``Components``, and clearing
-  ## component mappings.
-  resetLayoutState(data)
-
-  # Clear and restore the GL root DOM element so that ``initLayout``
-  # starts with the expected inner structure.
-  #
-  # IMPORTANT: We clear ``#ROOT`` (the GoldenLayout container), NOT its
-  # parent ``#root-container``.  The ``#session-tab-bar`` element lives
-  # OUTSIDE ``#ROOT`` in ``index.html`` specifically so that this
-  # clearing operation does not destroy the tab bar DOM.  If the tab bar
-  # were inside ``#ROOT``, every session switch would destroy it and
-  # Karax's renderer (attached by ``setRenderer``) would lose its target
-  # element, breaking tab clicks.
-  resetRootDom()
-
-proc callInitLayoutUnchecked(config: GoldenLayoutResolvedConfig) =
+proc callInitLayoutUnchecked(config: GoldenLayoutResolvedConfig,
+                              container: kdom.Element) =
   ## Thin wrapper that calls ``initLayoutImpl`` as a normal Nim call.
   ## Exists so that ``callInitLayoutSafe`` can reference the call site
   ## inside a JS-level try/catch without emit-level variable resolution
   ## issues.
-  initLayoutImpl(config)
+  initLayoutImpl(config, container)
 
-proc callInitLayoutSafe(config: GoldenLayoutResolvedConfig): bool =
+proc callInitLayoutSafe(config: GoldenLayoutResolvedConfig,
+                        container: kdom.Element): bool =
   ## Call initLayoutImpl wrapped in a JS-level try/catch to handle both
   ## Nim exceptions and native JS errors (e.g. from GoldenLayout).
   ## Returns true on success, false if an error was caught.
@@ -131,66 +100,13 @@ proc callInitLayoutSafe(config: GoldenLayoutResolvedConfig): bool =
   # from GoldenLayout's ``loadLayout`` call.
   {.emit: """
     try {
-      `callInitLayoutUnchecked`(`config`);
+      `callInitLayoutUnchecked`(`config`, `container`);
       `result` = true;
     } catch (e) {
       console.warn("session_switch: initLayout failed:", e?.message || String(e));
       `result` = false;
     }
   """.}
-
-proc restoreSessionLayout*(data: Data) =
-  ## Rebuild the GL from the active session's saved layout config (or
-  ## its current ``resolvedConfig`` if no snapshot was saved yet).
-  ##
-  ## This follows the same pattern as the restart flow in ``ui_js.nim``:
-  ## set ``resolvedConfig``, call ``createUIComponents``, then init layout.
-  let session = data.activeSession
-  if not session.savedLayoutConfig.isNil:
-    data.ui.resolvedConfig = session.savedLayoutConfig
-  # If savedLayoutConfig is nil the session was never switched away from,
-  # so resolvedConfig already holds the right layout.
-
-  data.createUIComponents()
-
-  # Replicate the logic of tryInitLayout (defined in ui_js.nim which we
-  # cannot import here):  when pageLoaded and initEventReceived are set
-  # and there is no current layout, create one from the resolved config.
-  #
-  # We only call initLayout for sessions that have an actual trace loaded.
-  # Empty sessions (no trace, created by the "+" button) don't need a GL
-  # layout.  Calling initLayout with a saved config from another session
-  # can fail because GoldenLayout's loadLayout expects string-typed size
-  # values but saveLayout may emit numeric ones.  More importantly,
-  # calling initLayout replaces Karax's event-delegation renderers (via
-  # ``setRenderer``), and if ``loadLayout`` then crashes, the new renderer
-  # is in a corrupt state and tab clicks stop working.
-  if data.ui.pageLoaded and data.ui.initEventReceived:
-    if data.ui.layout.isNil and not session.trace.isNil:
-      let ok = callInitLayoutSafe(data.ui.resolvedConfig)
-      if not ok:
-        cwarn "restoreSessionLayout: initLayout failed — layout not created"
-    elif data.ui.layout.isNil:
-      # Re-create the session-tab-bar Karax renderer so that tab clicks
-      # continue to work.  Without this, the old renderer from the
-      # destroyed layout's ``initLayout`` call may have stale event
-      # delegation state.  We use ``redrawSync`` to ensure the new DOM
-      # (with fresh event handlers) is written immediately — the normal
-      # ``redraw`` uses ``requestAnimationFrame`` which defers rendering,
-      # but we need the handlers active before any click can occur.
-      if not ensureTabBarRendererImpl.isNil:
-        ensureTabBarRendererImpl()
-        if kxiMap.hasKey(cstring"session-tab-bar"):
-          redrawSync(kxiMap[cstring"session-tab-bar"])
-    else:
-      discard  # Layout already exists
-  else:
-    discard  # Conditions not met (page not loaded or init event not received)
-
-  # Always trigger a full redraw — even when initLayout was skipped (e.g.
-  # for empty sessions), the session tab bar and other components outside
-  # GL still need to reflect the new session state.
-  redrawAll()
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -278,10 +194,7 @@ proc createNewSession*(data: Data) =
     session.ui.openComponentIds[content] = @[]
 
   # Inherit page-readiness flags from the current session so that
-  # restoreSessionLayout's condition for calling initLayout is met.
-  # Without these, initLayoutImpl is never called for the new session
-  # because the condition ``data.ui.pageLoaded and data.ui.initEventReceived``
-  # evaluates to false.
+  # initLayout's condition check is met.
   session.ui.pageLoaded = data.ui.pageLoaded
   session.ui.initEventReceived = data.ui.initEventReceived
   session.connection = ConnectionState(
@@ -318,14 +231,16 @@ proc createNewSession*(data: Data) =
   session.maxRRTicks = 100_000
 
   # Inherit the current session's layout config so the new tab has the
-  # same panel arrangement.  saveSessionLayout snapshots the live GL
-  # state onto the session so it can be restored later.
-  let currentSession = data.activeSession
-  saveSessionLayout(currentSession, data.ui)
-  if not currentSession.savedLayoutConfig.isNil:
-    session.savedLayoutConfig = currentSession.savedLayoutConfig
-  else:
-    # No saved layout yet — snapshot the live resolvedConfig.
+  # same panel arrangement.
+  if not data.ui.layout.isNil and not data.ui.layoutConfig.isNil:
+    try:
+      let resolved = data.ui.layout.saveLayout()
+      session.savedLayoutConfig = cast[GoldenLayoutResolvedConfig](
+        data.ui.layoutConfig.fromResolved(resolved))
+    except:
+      cwarn "session_switch: saveLayout for new session failed: " &
+        getCurrentExceptionMsg()
+  if session.savedLayoutConfig.isNil:
     session.savedLayoutConfig = data.ui.resolvedConfig
 
   data.sessions.add(session)
@@ -337,9 +252,10 @@ proc createNewSession*(data: Data) =
   switchSession(data, sessionId)
 
 proc closeSession*(data: Data, targetIndex: int) =
-  ## Close the session at ``targetIndex`` and remove it from the sessions
-  ## list.  When the closed session is the active one, we switch to an
-  ## adjacent session first.  Refuses to close the last remaining session.
+  ## Close the session at ``targetIndex``.  Destroys its GL container and
+  ## removes it from the sessions list.  When the closed session is the
+  ## active one, we switch to an adjacent session first.  Refuses to close
+  ## the last remaining session.
   if data.sessions.len <= 1:
     # Last tab — nothing to close.
     return
@@ -350,6 +266,17 @@ proc closeSession*(data: Data, targetIndex: int) =
 
   clog "session_switch: closing session " & $targetIndex &
     " (total before: " & $data.sessions.len & ")"
+
+  # Destroy the GL instance for the session being closed.
+  let closingSession = data.sessions[targetIndex]
+  if not closingSession.ui.layout.isNil:
+    try:
+      {.emit: [closingSession.ui.layout, ".destroy();"].}
+    except:
+      cwarn "session_switch: GL destroy failed for session " & $targetIndex
+
+  # Remove the DOM container for the closed session.
+  destroySessionContainer(targetIndex)
 
   # If closing the active session, switch to an adjacent one first.
   if targetIndex == data.activeSessionIndex:
@@ -365,21 +292,29 @@ proc closeSession*(data: Data, targetIndex: int) =
   elif data.activeSessionIndex > targetIndex:
     data.activeSessionIndex -= 1
 
+  # Renumber remaining session container IDs to match their new indices.
+  # After a deletion, containers at indices > targetIndex have stale IDs.
+  let root = document.getElementById(cstring"ROOT")
+  if not root.isNil:
+    for i in 0 ..< data.sessions.len:
+      let container = getSessionContainer(i)
+      if container.isNil:
+        # Try the old index (shifted by 1 for containers after the deleted one).
+        let oldIdx = if i >= targetIndex: i + 1 else: i
+        let oldContainer = document.getElementById(
+          cstring("session-container-" & $oldIdx))
+        if not oldContainer.isNil:
+          oldContainer.id = sessionContainerId(i)
+
   kxi.redraw()
 
 proc switchSession*(data: Data, targetIndex: int) =
   ## Switch from the currently active replay session to ``targetIndex``.
   ##
   ## Does nothing when the target is already active or the index is out
-  ## of bounds.  The sequence of operations:
-  ##
-  ## 1. Save the current session's GL layout snapshot (if layout exists).
-  ## 2. Update ``activeSessionIndex`` first so forwarding templates
-  ##    point to the new session during the rebuild.
-  ## 3. Destroy the OLD session's GL instance and all component state.
-  ## 4. Restore the target session's GL layout (may fail for empty
-  ##    sessions that have no trace loaded).
-  ## 5. Trigger a full Karax redraw.
+  ## of bounds.  Instead of destroying and recreating the GL layout, this
+  ## hides the current session's container and shows the target's.
+  ## Each session's GL instance stays alive in the DOM.
   if targetIndex == data.activeSessionIndex:
     return
   if targetIndex < 0 or targetIndex >= data.sessions.len:
@@ -390,22 +325,41 @@ proc switchSession*(data: Data, targetIndex: int) =
   clog "session_switch: switching from session " &
     $data.activeSessionIndex & " to " & $targetIndex
 
-  # 1. Save current layout (only if layout exists — nil for empty sessions)
-  if not data.ui.layout.isNil:
-    saveSessionLayout(data.activeSession, data.ui)
+  # 1. Hide the current session's container.
+  let currentContainer = getSessionContainer(data.activeSessionIndex)
+  if not currentContainer.isNil:
+    currentContainer.classList.add(cstring"hidden")
 
-  # 2. Destroy current GL (safe even if layout is nil — the guard in
-  #    destroyCurrentLayout handles that case by just clearing the DOM).
-  destroyCurrentLayout(data)
-
-  # 3. Switch active session — all Data forwarding templates now resolve
-  #    to the target session's fields.
+  # 2. Switch active session index — all Data forwarding templates now
+  #    resolve to the target session's fields.
   data.activeSessionIndex = targetIndex
 
-  # 4. Restore target session's layout.  May silently fail for empty
-  #    sessions — callInitLayoutSafe catches both Nim and JS errors.
-  restoreSessionLayout(data)
+  # 3. Show (or create) the target session's container.
+  var targetContainer = getSessionContainer(targetIndex)
+  if targetContainer.isNil:
+    # First activation — create the container and initialise GL.
+    targetContainer = createSessionContainer(targetIndex)
 
-  # 5. Full redraw so that every Karax component picks up the new
-  #    session's data.
+    let session = data.activeSession
+    if session.ui.pageLoaded and session.ui.initEventReceived:
+      if session.ui.layout.isNil and not session.trace.isNil:
+        # Session has a trace: create UI components and initialise GL.
+        if not session.savedLayoutConfig.isNil:
+          session.ui.resolvedConfig = session.savedLayoutConfig
+        data.createUIComponents()
+        let ok = callInitLayoutSafe(data.ui.resolvedConfig, targetContainer)
+        if not ok:
+          cwarn "switchSession: initLayout failed for session " & $targetIndex
+      elif session.ui.layout.isNil:
+        # Empty session (no trace) — ensure the tab bar renderer is alive.
+        if not ensureTabBarRendererImpl.isNil:
+          ensureTabBarRendererImpl()
+          if kxiMap.hasKey(cstring"session-tab-bar"):
+            redrawSync(kxiMap[cstring"session-tab-bar"])
+
+  # Show the target container.
+  targetContainer.classList.remove(cstring"hidden")
+
+  # 4. Full redraw so that every Karax component picks up the new
+  #    session's data (tab bar highlights, status bar, etc.).
   redrawAll()

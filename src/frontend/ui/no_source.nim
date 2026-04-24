@@ -29,7 +29,12 @@ proc historyJump*(self: NoSourceComponent, location: types.Location) =
   self.api.historyJump(location)
 
 method render*(self: NoSourceComponent): VNode =
-  let height = document.getElementById("ROOT").clientHeight - 20
+  # Use the session container height if available, fall back to #ROOT.
+  var rootEl = document.getElementById(
+    cstring("session-container-" & $data.activeSessionIndex))
+  if rootEl.isNil:
+    rootEl = document.getElementById("ROOT")
+  let height = rootEl.clientHeight - 20
   let metaInfo = data.services.debugger.location
   let history = self.data.services.debugger.jumpHistory
   let hasHistory = self.data.services.debugger.jumpHistory.len >= 2
