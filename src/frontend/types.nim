@@ -1625,6 +1625,10 @@ type
     pointList*:       PointListData
     minRRTicks*:      int
     maxRRTicks*:      int
+    # Backend Manager replay ID for this session.  Set when the main
+    # process sends ``dap-replay-selected`` with the assigned replayId.
+    # Used to stop the correct replay when the session is closed.
+    replayId*:          int
     # M11: saved GL layout config for tab switching (destroy/recreate approach).
     savedLayoutConfig*: GoldenLayoutResolvedConfig
 
@@ -1840,7 +1844,7 @@ proc newReplaySession*(id: ReplaySessionId): ReplaySession =
   ## Create a new, minimally-initialized ReplaySession.
   ## The caller is responsible for populating the heavyweight fields
   ## (dapApi, services, etc.) after construction.
-  ReplaySession(id: id)
+  ReplaySession(id: id, replayId: -1)
 
 # --- end M0 helpers ---
 

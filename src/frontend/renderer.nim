@@ -1426,6 +1426,14 @@ proc openTraceDialog*(data: Data) =
   ## Show file dialog to select trace folder
   data.ipc.send("CODETRACER::open-trace-dialog", js{})
 
+proc openTraceInNewTab*(data: Data) =
+  ## Create a new session tab and show the trace dialog so the user can
+  ## load a trace into the new tab (Issue 2: "Open in New Tab" menu item).
+  ## Importing createNewSession would create a circular dependency, so
+  ## instead we rely on the caller having access to it via ui_js imports.
+  ## This proc is a thin wrapper called from the action handler in ui_js.
+  data.ipc.send("CODETRACER::open-trace-dialog", js{})
+
 proc showRecordNewTraceDialog*(data: Data) =
   ## Show the new-record-screen from welcome_screen
   if not data.ui.welcomeScreen.isNil:

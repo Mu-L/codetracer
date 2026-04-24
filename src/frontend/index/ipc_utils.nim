@@ -75,6 +75,9 @@ proc configureIpcMain* =
     "panel-detach"
     "list-windows"
 
+    # Session lifecycle
+    "close-replay-session"
+
     # Upload/Download
     "upload-trace-file"
     "download-trace-file"

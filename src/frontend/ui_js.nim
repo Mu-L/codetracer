@@ -6,7 +6,8 @@ import
       debug, flow, filesystem, value, repl,
       build, welcome_screen, point_list, scratchpad,
       trace_log, calltrace_editor, terminal_output, shell,
-      no_source, ui_imports, shortcuts, step_list, low_level_code],
+      no_source, ui_imports, shortcuts, step_list, low_level_code,
+      session_switch],
   lib/[ jslib ],
   types, lang, utils, renderer, config, dap,
   ../common/ct_logging,
@@ -251,6 +252,7 @@ proc webTechMenu(data: Data, program: cstring): MenuNode =
           # element "Open Folder", openFolder, false
           # element "Open Recent", openRecent, false
           element "Open Trace...", aOpenTrace
+          element "Open Trace in New Tab...", aOpenTraceInNewTab
           element "Record New Trace...", aRecordNewTrace
           # --sub
           # element "Save", aSave
@@ -1011,6 +1013,8 @@ proc onTraceLoaded(
     if not dapReplayHandlerRegistered:
       data.ipc.on(cstring"CODETRACER::dap-replay-selected") do (sender: js, response: JsObject):
         let trace = response["trace"].to(Trace)
+        # Store the Backend Manager's replayId so we can stop it on close.
+        data.activeSession.replayId = response["replayId"].to(int)
         infoPrint "ui: reinitializing dap for trace ", $trace.id
         data.dapApi.sendCtRequest(DapConfigurationDone, js{})
         data.dapApi.sendCtRequest(DapLaunch, js{
@@ -1028,6 +1032,8 @@ proc onTraceLoaded(
     if not dapReplayHandlerRegistered:
       data.ipc.on(cstring"CODETRACER::dap-replay-selected") do (sender: js, response: JsObject):
         let trace = response["trace"].to(Trace)
+        # Store the Backend Manager's replayId so we can stop it on close.
+        data.activeSession.replayId = response["replayId"].to(int)
         infoPrint "ui: reinitializing dap for trace ", $trace.id
         data.dapApi.sendCtRequest(DapInitialize, toJs(DapInitializeRequestArgs(
           clientName: "codetracer"
@@ -2268,6 +2274,11 @@ var actions*: array[ClientAction, ClientActionHandler] = [
   proc(actionData: JsObject) = data.restartSubsystem(name="replay-server"),
   proc(actionData: JsObject) = data.restartSubsystem(name="session-manager"),
   proc(actionData: JsObject) = data.openTraceDialog(),
+  proc(actionData: JsObject) =
+    # aOpenTraceInNewTab: create a new session then open the trace dialog
+    # so the selected trace loads into the fresh session tab.
+    createNewSession(data)
+    data.openTraceInNewTab(),
   proc(actionData: JsObject) = data.showRecordNewTraceDialog(),
   proc(actionData: JsObject) = data.recordFromLaunchConfig(actionData),
 ]

@@ -269,6 +269,12 @@ proc closeSession*(data: Data, targetIndex: int) =
 
   # Destroy the GL instance for the session being closed.
   let closingSession = data.sessions[targetIndex]
+
+  # Tell the main process to stop the replay for this session so the
+  # Backend Manager can reclaim the child process.
+  if not data.ipc.isNil and not data.ipc.isUndefined:
+    data.ipc.send(cstring"CODETRACER::close-replay-session",
+                  js{"replayId": closingSession.replayId})
   if not closingSession.ui.layout.isNil:
     try:
       {.emit: [closingSession.ui.layout, ".destroy();"].}

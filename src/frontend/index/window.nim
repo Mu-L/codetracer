@@ -222,29 +222,67 @@ proc onOpenNewWindow*(sender: js, response: JsObject) {.async.} =
 
 # ── Cross-window panel transfer (M21/M22) ────────────────────────────────
 
+proc windowBelongsToSession(windowId: int, sessionId: int): bool =
+  ## Check whether a window is registered under the given session.
+  if sessionWindows.hasKey(sessionId):
+    return sessionWindows[sessionId].find(windowId) >= 0
+  return false
+
 proc onPanelDetach*(sender: js, response: JsObject) {.async.} =
-  ## M21: Forward a panel config from one renderer window to another.
+  ## M21/M22: Forward a panel config from one renderer window to another.
   ## The source renderer sends `{ targetWindowId, panelConfig, sessionId }`.
-  ## We forward `{ panelConfig, sessionId }` to the target window.
+  ## We forward `{ panelConfig, sessionId }` to the target window only if
+  ## the target window belongs to the same session.  If the target window
+  ## belongs to a different session, the transfer is rejected (a panel
+  ## from trace A cannot be dropped into a window showing trace B).
+  ## When targetWindowId is -1 (sentinel), a new secondary window is
+  ## created for the panel's session automatically.
   when not defined(server):
-    let targetWindowId = response["targetWindowId"].to(int)
-    if windowTable.hasKey(targetWindowId):
-      let payload = js{
-        "panelConfig": response["panelConfig"],
-        "sessionId": response["sessionId"]
-      }
-      windowTable[targetWindowId].webContents.send(
-        cstring"CODETRACER::panel-attach", payload)
-      infoPrint "index: forwarded panel to window ", $targetWindowId
-    else:
+    let panelSessionId = response["sessionId"].to(int)
+    var targetWindowId = response["targetWindowId"].to(int)
+
+    # Sentinel -1: auto-create a new window for this session.
+    if targetWindowId == -1:
+      let newWin = createSecondaryWindow(panelSessionId)
+      targetWindowId = newWin.id.to(int)
+      infoPrint "index: panel-detach auto-created window ", $targetWindowId,
+        " for session ", $panelSessionId
+
+    if not windowTable.hasKey(targetWindowId):
       errorPrint "index: panel-detach target window not found: ", $targetWindowId
+      return
+
+    # Validate session binding: reject transfer to a window showing a
+    # different trace/session.
+    if not windowBelongsToSession(targetWindowId, panelSessionId):
+      errorPrint "index: panel-detach rejected — window ", $targetWindowId,
+        " does not belong to session ", $panelSessionId
+      return
+
+    let payload = js{
+      "panelConfig": response["panelConfig"],
+      "sessionId": response["sessionId"]
+    }
+    windowTable[targetWindowId].webContents.send(
+      cstring"CODETRACER::panel-attach", payload)
+    infoPrint "index: forwarded panel to window ", $targetWindowId,
+      " (session ", $panelSessionId, ")"
 
 proc newJsArray(): JsObject {.importjs: "(new Array())".}
 proc push(arr: JsObject, item: JsObject) {.importjs: "#.push(#)".}
 
+proc sessionIdForWindow(windowId: int): int =
+  ## Look up which session a window belongs to.  Returns -1 if unknown.
+  for sid, wins in sessionWindows:
+    if wins.find(windowId) >= 0:
+      return sid
+  return -1
+
 proc onListWindows*(sender: js, response: JsObject) {.async.} =
-  ## M21: Return the list of open windows to the requesting renderer.
-  ## The sender's own window is excluded from the list.
+  ## M21/M22: Return the list of open windows to the requesting renderer.
+  ## The sender's own window is excluded from the list.  Each entry
+  ## includes the window's session ID so the renderer can indicate which
+  ## windows are compatible for panel transfer.
   when not defined(server):
     var jsArray = newJsArray()
     # The sender parameter is the webContents of the sending window.
@@ -255,7 +293,8 @@ proc onListWindows*(sender: js, response: JsObject) {.async.} =
       if win.webContents.id != senderWebContentsId:
         jsArray.push(js{
           "id": windowId,
-          "title": win.getTitle()
+          "title": win.getTitle(),
+          "sessionId": sessionIdForWindow(windowId)
         })
     # Reply to the sender window.
     sender.toJs.send(cstring"CODETRACER::list-windows-reply", js{

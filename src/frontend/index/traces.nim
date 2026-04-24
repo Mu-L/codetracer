@@ -12,6 +12,9 @@ import
   ../lang
 
 var
+  # The currently selected (foreground) replay in the Backend Manager.
+  # Multiple replays can run simultaneously; this tracks which one is
+  # the BM's "active" selection for DAP event routing.
   selectedReplayId = -1
   pendingReplayStart: Future[int] = nil
   replayStartResolver: proc(replayId: int) = nil
@@ -266,15 +269,12 @@ proc prepareForLoadingTrace*(traceId: int, pid: int) {.async.} =
   let replayStartFuture = newReplayStartFuture()
   infoPrint "index: requesting new replay for trace ", $traceId
   if not data.trace.isNil:
-    infoPrint "index: ct/stop-replay and then ct/start-replay for trace folder ", $data.trace.outputFolder
+    infoPrint "index: ct/start-replay for trace folder ", $data.trace.outputFolder
 
-  if selectedReplayId >= 0:
-    let stopPacket = wrapJsonForSending js{
-      "type": cstring"request",
-      "command": cstring"ct/stop-replay",
-      "arguments": selectedReplayId
-    }
-    backendManagerSocket.write(stopPacket)
+  # Do NOT stop the previous replay — multiple sessions need simultaneous
+  # DAP connections.  Each session's replay is tracked in sessionReplayIds
+  # and stopped only when its session is explicitly closed (see
+  # stopReplayForSession).
 
   let packet = wrapJsonForSending js{
     "type": cstring"request",
@@ -288,6 +288,11 @@ proc prepareForLoadingTrace*(traceId: int, pid: int) {.async.} =
     errorPrint "Unable to start replay for new trace"
     return
 
+  # Track the replay so it can be stopped when its session is closed.
+  # Also update the legacy selectedReplayId for backwards compatibility
+  # with single-session code paths.  The renderer will tell us which
+  # session index to associate this replay with via the
+  # "dap-replay-selected" event's response.
   selectedReplayId = replayId
   infoPrint "index: selecting replayId ", $replayId
 
@@ -299,7 +304,27 @@ proc prepareForLoadingTrace*(traceId: int, pid: int) {.async.} =
   backendManagerSocket.write(selectPacket)
   mainWindow.webContents.send(
     "CODETRACER::dap-replay-selected",
-    js{trace: data.trace})
+    js{trace: data.trace, replayId: replayId})
+
+proc onCloseReplaySession*(sender: js, response: JsObject) {.async.} =
+  ## IPC handler: renderer requests that a session's replay be stopped.
+  ## Payload: { replayId: int }
+  let replayId = response["replayId"].to(int)
+  if replayId < 0:
+    return
+
+  infoPrint "index: ct/stop-replay for replayId ", $replayId
+
+  let stopPacket = wrapJsonForSending js{
+    "type": cstring"request",
+    "command": cstring"ct/stop-replay",
+    "arguments": replayId
+  }
+  backendManagerSocket.write(stopPacket)
+
+  # Clear the legacy alias if it matches.
+  if selectedReplayId == replayId:
+    selectedReplayId = -1
 
 proc replayTx(txHash: cstring, pid: int): Future[(cstring, int)] {.async.} =
   callerProcessPid = pid

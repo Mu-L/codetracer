@@ -20,6 +20,11 @@ import
 
 var electron* {.importc.}: JsObject
 
+# The session ID that this renderer window is bound to.  Defaults to 0
+# (main window).  For secondary windows, this is set by
+# registerInitSessionHandler / CODETRACER::init-session IPC.
+var currentSessionId*: int = 0
+
 proc ipcRenderer(): JsObject =
   ## Lazily obtain the ipcRenderer; returns nil/undefined when not in Electron.
   if not electron.isNil and not electron.isUndefined:
@@ -112,6 +117,9 @@ proc buildSendToWindowMenuItems*(
   windows: JsObject
 ): seq[ContextMenuItem] =
   ## Build context menu items for each available target window.
+  ## Only windows that belong to the same session are shown as active
+  ## transfer targets — cross-session transfer is blocked because the
+  ## target window's GL instance is bound to a different trace.
   var items: seq[ContextMenuItem] = @[]
   let winArray = windows["windows"]
   let winLen = cast[int](winArray.length)
@@ -120,24 +128,34 @@ proc buildSendToWindowMenuItems*(
     let win = winArray[i]
     let windowId = win["id"].to(int)
     let windowTitle = win["title"].to(cstring)
-    let label = cstring(fmt"Send to: {windowTitle}")
-    # Capture windowId for closure.
+    let winSessionId = win["sessionId"].to(int)
+    # Capture for closure.
     let capturedWindowId = windowId
     let capturedSessionId = sessionId
     let capturedItem = contentItem
-    items.add(ContextMenuItem(
-      name: label,
-      hint: cstring"",
-      handler: proc(ev: kdom.Event) =
-        detachAndSendPanel(capturedItem, capturedWindowId, capturedSessionId)
-    ))
 
-  if items.len == 0:
-    items.add(ContextMenuItem(
-      name: cstring"No other windows",
-      hint: cstring"",
-      handler: proc(ev: kdom.Event) = discard
-    ))
+    if winSessionId == sessionId:
+      # Compatible window — same session/trace.
+      let label = cstring(fmt"Send to: {windowTitle}")
+      items.add(ContextMenuItem(
+        name: label,
+        hint: cstring"",
+        handler: proc(ev: kdom.Event) =
+          detachAndSendPanel(capturedItem, capturedWindowId, capturedSessionId)
+      ))
+    # Incompatible windows (different session) are silently omitted.
+
+  # Always offer "Send to New Window" which creates a secondary window
+  # bound to this panel's session.
+  let capturedNewSessionId = sessionId
+  let capturedNewItem = contentItem
+  items.add(ContextMenuItem(
+    name: cstring"Send to New Window",
+    hint: cstring"",
+    handler: proc(ev: kdom.Event) =
+      # targetWindowId -1 signals the main process to auto-create a window.
+      detachAndSendPanel(capturedNewItem, -1, capturedNewSessionId)
+  ))
 
   return items
 
@@ -154,10 +172,28 @@ proc registerPanelAttachHandler*(layout: GoldenLayout) =
 
   ipc.on(cstring"CODETRACER::panel-attach", proc(event: JsObject, payload: JsObject) =
     let config = payload["panelConfig"]
-    # M22: the payload carries sessionId so the panel can be associated
-    # with the correct ReplaySession in the target window.  For now we
-    # log it; full routing will be wired when mixed-session panels are
-    # rendered with per-session event subscriptions.
-    let sid = payload["sessionId"]
+    let sid = payload["sessionId"].to(int)
+    # M22: Validate that the incoming panel belongs to the session this
+    # window is displaying.  The main process already enforces this, but
+    # we double-check on the renderer side for defence in depth.
+    # ``currentSessionId`` is set by the ``CODETRACER::init-session`` IPC
+    # handler when a secondary window is created, or defaults to 0 for
+    # the main window.
+    if sid != currentSessionId:
+      console.error cstring"panel_transfer: rejecting panel from session ",
+        sid, cstring" — this window serves session ", currentSessionId
+      return
     console.log cstring"panel_transfer: attaching panel from session ", sid
     handlePanelAttach(layout, config))
+
+proc registerInitSessionHandler*() =
+  ## Listen for the ``CODETRACER::init-session`` message sent by the main
+  ## process when a secondary window is created.  Sets ``currentSessionId``
+  ## so that panel attach validation works correctly.
+  let ipc = ipcRenderer()
+  if ipc.isNil or ipc.isUndefined:
+    return
+
+  ipc.on(cstring"CODETRACER::init-session", proc(event: JsObject, payload: JsObject) =
+    currentSessionId = payload["sessionId"].to(int)
+    console.log cstring"panel_transfer: bound to session ", currentSessionId)
