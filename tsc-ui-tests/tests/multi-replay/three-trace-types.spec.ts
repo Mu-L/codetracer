@@ -169,34 +169,22 @@ async function waitForEditorFile(
 }
 
 /**
- * Switch to a session by index using the tab bar or the Nim switchSession
- * function as fallback.
+ * Switch to a session by index using ONLY the tab bar click.
+ * No fallback — if the click does not switch tabs, the test fails.
  */
 async function switchToSession(
   page: import("@playwright/test").Page,
   targetIdx: number,
 ): Promise<void> {
-  // Try clicking the tab first.
   const tabs = page.locator(".session-tab");
   const tabCount = await tabs.count();
-  if (tabCount > targetIdx) {
-    await tabs.nth(targetIdx).click();
-    await page.waitForTimeout(500);
-    const activeAfterClick = await getActiveIndex(page);
-    if (activeAfterClick === targetIdx) return;
-  }
+  expect(tabCount).toBeGreaterThan(targetIdx);
 
-  // Fall back to calling switchSession via JS.
-  await page.evaluate((idx) => {
-    const d = (window as any).data;
-    const fns = Object.getOwnPropertyNames(window).filter(
-      (n) => n.startsWith("switchSession__"),
-    );
-    if (fns.length > 0) {
-      (window as any)[fns[0]](d, idx);
-    }
-  }, targetIdx);
-  await page.waitForTimeout(2000);
+  await tabs.nth(targetIdx).click();
+  await page.waitForTimeout(500);
+
+  const activeAfterClick = await getActiveIndex(page);
+  expect(activeAfterClick).toBe(targetIdx);
 }
 
 /**

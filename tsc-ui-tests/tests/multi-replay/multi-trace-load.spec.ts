@@ -312,26 +312,13 @@ test.describe("Multi-trace loading into sessions", () => {
     // Phase 5: Switch back to session 0 — verify editor + line preserved
     // ==================================================================
 
-    // Click the first tab to switch back to session 0.
-    await ctPage.locator(".session-tab").first().click();
+    // Click the first tab to switch back to session 0 (no JS fallback).
+    const tabsPhase5 = ctPage.locator(".session-tab");
+    expect(await tabsPhase5.count()).toBeGreaterThan(0);
+    await tabsPhase5.first().click();
     await ctPage.waitForTimeout(500);
 
-    // Verify active index switched.  Fall back to JS call if Karax click
-    // didn't fire (known issue after GL destroy/recreate).
-    let activeAfterClick = await getActiveIndex(ctPage);
-    if (activeAfterClick !== 0) {
-      await ctPage.evaluate(() => {
-        const d = (window as any).data;
-        const fns = Object.getOwnPropertyNames(window).filter(
-          (n) => n.startsWith("switchSession__"),
-        );
-        if (fns.length > 0) {
-          (window as any)[fns[0]](d, 0);
-        }
-      });
-      await ctPage.waitForTimeout(2000);
-      activeAfterClick = await getActiveIndex(ctPage);
-    }
+    const activeAfterClick = await getActiveIndex(ctPage);
     expect(activeAfterClick).toBe(0);
 
     // Session 0's trace metadata should still be correct.
@@ -375,24 +362,13 @@ test.describe("Multi-trace loading into sessions", () => {
     // Phase 6: Switch to session 1 — verify editor shows session 1 file
     // ==================================================================
 
-    // Switch to session 1.
-    await ctPage.locator(".session-tab").nth(1).click();
+    // Switch to session 1 (tab click only, no JS fallback).
+    const tabsPhase6 = ctPage.locator(".session-tab");
+    expect(await tabsPhase6.count()).toBeGreaterThan(1);
+    await tabsPhase6.nth(1).click();
     await ctPage.waitForTimeout(500);
 
-    let activeSession1 = await getActiveIndex(ctPage);
-    if (activeSession1 !== 1) {
-      await ctPage.evaluate(() => {
-        const d = (window as any).data;
-        const fns = Object.getOwnPropertyNames(window).filter(
-          (n) => n.startsWith("switchSession__"),
-        );
-        if (fns.length > 0) {
-          (window as any)[fns[0]](d, 1);
-        }
-      });
-      await ctPage.waitForTimeout(2000);
-      activeSession1 = await getActiveIndex(ctPage);
-    }
+    const activeSession1 = await getActiveIndex(ctPage);
     expect(activeSession1).toBe(1);
 
     // Verify editor shows basics.py again in session 1.
@@ -697,18 +673,15 @@ test.describe("Multi-trace loading into sessions", () => {
     await verifySession(1, noirTraceId);
     await verifySession(2, cTraceId);
 
-    // Switch to session 1.
+    // Switch sessions using tab clicks only (no JS fallback).
     const switchToSession = async (targetIdx: number) => {
-      await ctPage.evaluate((idx) => {
-        const d = (window as any).data;
-        const fns = Object.getOwnPropertyNames(window).filter(
-          (n) => n.startsWith("switchSession__"),
-        );
-        if (fns.length > 0) {
-          (window as any)[fns[0]](d, idx);
-        }
-      }, targetIdx);
-      await ctPage.waitForTimeout(1000);
+      const tabs = ctPage.locator(".session-tab");
+      const tabCount = await tabs.count();
+      expect(tabCount).toBeGreaterThan(targetIdx);
+      await tabs.nth(targetIdx).click();
+      await ctPage.waitForTimeout(500);
+      const activeAfter = await getActiveIndex(ctPage);
+      expect(activeAfter).toBe(targetIdx);
     };
 
     await switchToSession(1);

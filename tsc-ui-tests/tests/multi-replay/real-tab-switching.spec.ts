@@ -262,27 +262,12 @@ test.describe("Real tab switching with GL rebuild", () => {
     });
     console.log("  Tab bar state before click:", JSON.stringify(tabBarDiag, null, 2));
 
-    // Click the first tab. If Karax event delegation doesn't fire
-    // (known issue after GL destroy/recreate), fall back to invoking
-    // switchSession directly via the data model.
-    await ctPage.locator(".session-tab").first().click();
+    // Click the first tab — no JS fallback. If the click does not
+    // switch sessions, the test fails (proving a real tab bar bug).
+    const tabsForSwitch = ctPage.locator(".session-tab");
+    expect(await tabsForSwitch.count()).toBeGreaterThan(0);
+    await tabsForSwitch.first().click();
     await ctPage.waitForTimeout(500);
-    const activeAfterClick = await getActiveIndex(ctPage);
-    if (activeAfterClick !== 0) {
-      // Karax click didn't fire — call switchSession via JS.
-      // This is a workaround for the Karax event delegation issue
-      // that occurs after replaceById creates a new DOM tree.
-      await ctPage.evaluate(() => {
-        const d = (window as any).data;
-        // Find switchSession in the global scope (Nim exports it)
-        const fns = Object.getOwnPropertyNames(window).filter(
-          (n) => n.startsWith("switchSession__"),
-        );
-        if (fns.length > 0) {
-          (window as any)[fns[0]](d, 0);
-        }
-      });
-    }
 
     // ==================================================================
     // 7. Wait for GL to rebuild and session 0 to become active

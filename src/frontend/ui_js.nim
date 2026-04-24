@@ -1594,7 +1594,7 @@ proc onOpenTraceInTabReady*(sender: js, response: jsobject(traceId=int)) =
   ## sends its trace to the existing window, this handler creates a new
   ## session tab and triggers the trace load.
   let traceId = response.traceId
-  clog "open-trace-in-tab-ready: creating new session and loading trace ", traceId
+  clog "open-trace-in-tab-ready: creating new session and loading trace " & $traceId
   createNewSession(data)
   # After creating the session, send the load-recent-trace IPC so the
   # main process starts the replay backend for the new trace.

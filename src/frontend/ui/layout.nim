@@ -209,7 +209,10 @@ proc ensureSharedRenderers() =
   kxiMap["status"] = setRenderer(proc: VNode = data.ui.status.render(), "status", proc = discard)
   kxiMap["fixed-search"] = setRenderer(fixedSearchView, "fixed-search", proc = discard)
   kxiMap["search-results"] = setRenderer(proc: VNode = data.ui.searchResults.render(), "search-results", proc = discard)
-  kxiMap["session-tab-bar"] = setRenderer(proc: VNode = renderSessionTabs(data), "session-tab-bar", proc = discard)
+  kxiMap["session-tab-bar"] = setRenderer(
+    proc: VNode = renderSessionTabs(data),
+    "session-tab-bar",
+    proc = attachTabClickHandlers(data))
 
   data.ui.menu.kxi = kxiMap["menu"]
   data.ui.status.kxi = kxiMap["status"]
