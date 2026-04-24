@@ -90,6 +90,122 @@ proc restoreSessionLayout*(data: Data) =
 # Public API
 # ---------------------------------------------------------------------------
 
+proc createNewSession*(data: Data) =
+  ## Create a new, empty ReplaySession and switch to it.
+  ##
+  ## The new session is a blank slate: it has default services, an empty
+  ## editor, and inherits the current session's GL layout config so that
+  ## the panel arrangement is preserved.  The actual trace loading into
+  ## this session is handled separately (e.g. via the trace selector or
+  ## IPC).
+  ##
+  ## This implements the core of M12: clicking "+" in the tab bar creates
+  ## a new tab backed by its own ReplaySession.
+  let sessionId = data.sessions.len
+  var session = newReplaySession(ReplaySessionId(sessionId))
+  session.dapApi = DapApi()
+  session.viewsApi = setupSinglePageViewsApi(
+    cstring("single-page-frontend-to-views-" & $sessionId))
+  session.services = Services(
+    eventLog: EventLogService(),
+    debugger: DebuggerService(
+      locals: @[],
+      registerState: JsAssoc[cstring, cstring]{},
+      breakpointTable: JsAssoc[cstring, JsAssoc[int, UIBreakpoint]]{},
+      valueHistory: JsAssoc[cstring, ValueHistory()]{},
+      paths: @[],
+      skipInternal: true,
+      skipNoSource: false,
+      historyIndex: 1,
+      showInlineValues: true),
+    editor: EditorService(
+      open: JsAssoc[cstring, TabInfo]{},
+      loading: @[],
+      completeMoveResponses: JsAssoc[cstring, MoveState]{},
+      closedTabs: @[],
+      saveHistoryTimeoutId: -1,
+      switchTabHistoryLimit: 2000,
+      expandedOpen: JsAssoc[cstring, TabInfo]{},
+      cachedFiles: JsAssoc[cstring, TabInfo]{},
+      addedDiffId: @[],
+      changedDiffId: @[],
+      deletedDiffId: @[],
+      index: 1),
+    calltrace: CalltraceService(
+      callstackCollapse: (name: cstring"", level: -1),
+      callstackLimit: CALLSTACK_DEFAULT_LIMIT,
+      calltraceJumps: @[cstring""],
+      nonLocalJump: true,
+      isCalltrace: true,
+      loadingArgs: initJsSet[cstring]()),
+    history: HistoryService(),
+    flow: FlowService(),
+    trace: TraceService(),
+    search: SearchService(
+      paths: JsAssoc[cstring, bool]{},
+      pluginCommands: JsAssoc[cstring, SearchSource]{},
+      activeCommandName: cstring"",
+      selected: 0),
+    shell: ShellService())
+  session.ui = Components(
+    focusHistory: @[],
+    editModeHiddenPanels: @[],
+    savedLayoutBeforeEdit: nil,
+    editModeLayout: nil,
+    lastUsedEditLayout: nil
+  )
+  session.connection = ConnectionState(
+    connected: true,
+    reason: ConnectionLossNone,
+    detail: cstring""
+  )
+  session.network = Network(
+    futures: JsAssoc[cstring, JsAssoc[cstring, Future[JsObject]]]{})
+  session.pointList = PointListData(
+    tracepoints: JsAssoc[int, Tracepoint]{})
+  session.status = StatusState(
+    lastDirection: DebForward,
+    currentOperation: cstring"",
+    currentHistoryOperation: cstring"",
+    finished: false,
+    stableBusy: false,
+    historyBusy: false,
+    traceBusy: false,
+    hasStarted: false,
+    lastAction: cstring"",
+    operationCount: 0,
+  )
+  session.startOptions = StartOptions(
+    loading: false,
+    screen: true,
+    inTest: false,
+    record: false,
+    edit: false,
+    name: cstring"",
+    frontendSocket: SocketAddressInfo(),
+    backendSocket: SocketAddressInfo(),
+    idleTimeoutMs: 10 * 60 * 1_000)
+  session.maxRRTicks = 100_000
+
+  # Inherit the current session's layout config so the new tab has the
+  # same panel arrangement.  saveSessionLayout snapshots the live GL
+  # state onto the session so it can be restored later.
+  let currentSession = data.activeSession
+  saveSessionLayout(currentSession, data.ui)
+  if not currentSession.savedLayoutConfig.isNil:
+    session.savedLayoutConfig = currentSession.savedLayoutConfig
+  else:
+    # No saved layout yet — snapshot the live resolvedConfig.
+    session.savedLayoutConfig = data.ui.resolvedConfig
+
+  data.sessions.add(session)
+
+  clog "session_switch: created new session " & $sessionId &
+    " (total: " & $data.sessions.len & ")"
+
+  # Switch to the newly created session.
+  switchSession(data, sessionId)
+
 proc switchSession*(data: Data, targetIndex: int) =
   ## Switch from the currently active replay session to ``targetIndex``.
   ##

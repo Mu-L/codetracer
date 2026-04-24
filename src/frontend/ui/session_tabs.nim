@@ -1,10 +1,14 @@
-## Session tab bar for multi-replay sessions (M10).
+## Session tab bar for multi-replay sessions (M10, M12).
 ##
 ## Renders a horizontal tab bar above Golden Layout, one tab per
 ## ``ReplaySession``.  The active session is visually highlighted.
 ## With a single session (the current default) the bar shows one tab
 ## so that the user has a discoverable surface for future multi-trace
 ## workflows.
+##
+## M12: The "+" button creates a new empty ReplaySession and switches
+## to it.  The new session inherits the current layout config so the
+## panel arrangement is preserved.
 
 import
   std/[strformat, jsffi],
@@ -50,6 +54,8 @@ proc renderSessionTabs*(data: Data): VNode =
         if data.sessions.len > 1:
           span(class = "session-tab-close"):
             text "\u00D7"  # multiplication sign (×)
-    # Placeholder for future "open new trace" action.
+    # M12: clicking "+" creates a new empty ReplaySession tab.
     tdiv(class = "session-tab-add"):
+      proc onclick(ev: Event, n: VNode) =
+        createNewSession(data)
       text "+"
