@@ -2,6 +2,7 @@ import
   asyncjs, strformat, strutils, sequtils, jsffi, algorithm,
   karax, karaxdsl, vstyles,
   state, editor, debug, menu, status, command, search_results, shell, deepreview, session_tabs,
+  session_switch,
   ../[ types, renderer, config ],
   ../lib/[ logging, misc_lib, jslib ]
 
@@ -486,3 +487,7 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig) =
       data.closeLayoutTab(componentState.content, componentState.id)
 
     data.ui.saveLayout = true
+
+# M11: Wire the initLayout proc into session_switch to break the
+# circular import dependency (layout -> session_tabs -> session_switch).
+setInitLayoutProc(initLayout)

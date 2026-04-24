@@ -1625,6 +1625,8 @@ type
     pointList*:       PointListData
     minRRTicks*:      int
     maxRRTicks*:      int
+    # M11: saved GL layout config for tab switching (destroy/recreate approach).
+    savedLayoutConfig*: GoldenLayoutResolvedConfig
 
   Data* = ref object
     redraw*:                proc: void

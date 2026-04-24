@@ -1,4 +1,3 @@
-{.push raises: [].}
 ## Session tab bar for multi-replay sessions (M10).
 ##
 ## Renders a horizontal tab bar above Golden Layout, one tab per
@@ -10,6 +9,7 @@
 import
   std/[strformat, jsffi],
   karax, karaxdsl, vdom,
+  session_switch,
   ../types
 
 from kdom import document, getElementById
@@ -40,7 +40,10 @@ proc renderSessionTabs*(data: Data): VNode =
       let tabClass: cstring =
         if isActive: cstring"session-tab active"
         else:        cstring"session-tab"
+      let idx = i  # capture loop variable for the closure
       tdiv(class = tabClass):
+        proc onclick(ev: Event, n: VNode) =
+          switchSession(data, idx)
         span(class = "session-tab-label"):
           text sessionLabel(session, i)
         # Show the close button only when there are multiple sessions.
