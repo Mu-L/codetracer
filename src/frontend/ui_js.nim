@@ -1600,6 +1600,13 @@ proc onOpenTraceInTabReady*(sender: js, response: jsobject(traceId=int)) =
   # main process starts the replay backend for the new trace.
   data.ipc.send cstring"CODETRACER::load-recent-trace", js{traceId: traceId}
 
+proc onTraceLoadError*(sender: js, response: jsobject(error=cstring)) =
+  ## Handler for trace loading errors (e.g. from the Trace Macro action).
+  ## Displays the error message to the user via the views API.
+  let errorMsg = response.error
+  cwarn "trace-load-error: " & errorMsg
+  data.viewsApi.errorMessage(errorMsg)
+
 macro uiIpcHandlers*(namespace: static[string], messages: untyped): untyped =
   let ipc = ident("ipc")
   let data = ident("data")
@@ -1770,6 +1777,9 @@ proc configureIPC(data: Data) =
 
     # Tab-vs-window policy: open a trace as a new tab in the current window
     "open-trace-in-tab-ready"
+
+    # Trace macro (M11): error loading a .ct file from the langserver
+    "trace-load-error"
 
   duration("configureIPCRun")
 

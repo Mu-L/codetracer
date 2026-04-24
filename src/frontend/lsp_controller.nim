@@ -32,6 +32,12 @@ let controllerConfigs = @[
     clientId: "codetracer-ruby-lsp",
     clientName: "CodeTracer Ruby Language Client",
     languages: @["ruby"],
+    includeLinkedProjects: false),
+  ControllerConfig(
+    kind: "nim",
+    clientId: "codetracer-nim-lsp",
+    clientName: "CodeTracer Nim Language Client",
+    languages: @["nim"],
     includeLinkedProjects: false)
 ]
 

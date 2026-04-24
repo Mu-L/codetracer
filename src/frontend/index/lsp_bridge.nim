@@ -8,6 +8,7 @@ import
 const
   rustLspKind* = "rust"
   rubyLspKind* = "ruby"
+  nimLspKind* = "nim"
   notificationHistoryLimit = 50
 
 type
@@ -49,7 +50,17 @@ let configuredBridges = [
     envPath: "CODETRACER_RUBY_LSP_PATH",
     envUrl: "CODETRACER_RUBY_LSP_URL",
     envCommand: "CODETRACER_RUBY_LS_COMMAND",
-    envCwd: "CODETRACER_RUBY_LS_CWD")
+    envCwd: "CODETRACER_RUBY_LS_CWD"),
+  BridgeConfig(
+    kind: nimLspKind,
+    defaultPort: 3120,
+    defaultPath: "/nim-lsp",
+    defaultCommand: "nimlangserver",
+    envPort: "CODETRACER_NIM_LSP_PORT",
+    envPath: "CODETRACER_NIM_LSP_PATH",
+    envUrl: "CODETRACER_NIM_LSP_URL",
+    envCommand: "CODETRACER_NIM_LS_COMMAND",
+    envCwd: "CODETRACER_NIM_LS_CWD")
 ]
 
 var
@@ -316,7 +327,7 @@ proc onStartLsp*(sender: JsObject, response: JsObject) {.async.} =
   #   find a way to catch `.listen` callback error?
   when not defined(server):
     # for now not supported on server
-    for kind in [rustLspKind, rubyLspKind]:
+    for kind in [rustLspKind, rubyLspKind, nimLspKind]:
       try:
         await startLspBridge(kind)
       except: # CatchableError:

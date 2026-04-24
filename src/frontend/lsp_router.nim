@@ -1,5 +1,5 @@
 import
-  std/[jsffi, strutils, tables],
+  std/[asyncjs, jsffi, strutils, tables],
   types,
   lang,
   lib/[monaco_lib, jslib],
@@ -185,6 +185,8 @@ proc lspKindForLang(lang: Lang): string =
     "ruby"
   of LangRust, LangRustWasm:
     "rust"
+  of LangNim:
+    "nim"
   else:
     ""
 
@@ -617,3 +619,23 @@ proc hasRegisteredDocuments*(kind: string): bool =
       continue
     return true
   false
+
+proc getActiveClient*(kind: string): JsObject =
+  ## Return the active LSP client for the given language kind, or nil
+  ## if the client is not connected.
+  getClient(normalizeKind(kind))
+
+proc sendLspRequestRaw(client: JsObject; methodName: cstring;
+                       params: JsObject): Future[JsObject]
+    {.importjs: "(function(c,m,p){ var promise = c.sendRequest(m, p); return promise; })(#, #, #)".}
+
+proc sendLspRequest*(kind: string; methodName: cstring;
+                     params: JsObject): Future[JsObject] {.async.} =
+  ## Send an arbitrary LSP request to the language server for ``kind``
+  ## and return the response.  Raises if the client is not connected or
+  ## the server returns an error.
+  let client = getClient(normalizeKind(kind))
+  if client.isNil:
+    raise newException(CatchableError,
+      "LSP client not connected for " & kind)
+  return await sendLspRequestRaw(client, methodName, params)

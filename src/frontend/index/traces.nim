@@ -424,6 +424,42 @@ proc onOpenLocalTrace*(sender: js, response: js) {.async.} =
     else:
       errorPrint "There is no record at given path."
 
+proc onLoadTraceFile*(sender: js, response: jsobject(tracePath=cstring)) {.async.} =
+  ## Load a .ct trace file by path.  Used by the "Trace Macro Execution"
+  ## action (M11) to open a trace produced by the Nim langserver's
+  ## ``nim/traceExpandMacro`` command.
+  ##
+  ## The handler looks up the trace in the CodeTracer metadata store by
+  ## its output path.  If the trace is not yet registered (e.g. a freshly
+  ## generated macro trace), it registers it first, then loads it into
+  ## the current session.
+  let tracePath = response.tracePath
+  if tracePath.len == 0:
+    errorPrint "onLoadTraceFile: empty trace path"
+    return
+
+  infoPrint "index: loading trace file at ", tracePath
+
+  # The trace path from nimsuggest points to a .ct file.  The CodeTracer
+  # trace metadata lookup expects the containing folder (output folder).
+  let pathModule = require("path")
+  let traceDir = cast[cstring](pathModule.dirname(tracePath))
+
+  let trace = await electron_vars.app.findByPath(traceDir)
+  if not trace.isNil:
+    mainWindow.webContents.send "CODETRACER::loading-trace",
+      js{trace: trace}
+    prefetchedTrace = trace
+    data.trace = trace
+    data.pluginClient.trace = trace
+    await prepareForLoadingTrace(trace.id, nodeProcess.pid.to(int))
+    await loadExistingRecord(trace.id)
+  else:
+    errorPrint "onLoadTraceFile: no trace found at path: ", traceDir
+    mainWindow.webContents.send "CODETRACER::trace-load-error",
+      js{error: cstring("No trace found at " & $traceDir &
+         ". The .ct file may need to be imported first.")}
+
 proc onOpenFolderDialog*(sender: js, response: js) {.async.} =
   let selection = await selectDir(cstring"Select Folder to Open")
   if selection.len == 0:

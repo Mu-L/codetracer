@@ -1,6 +1,7 @@
 import
   std/[ cstrutils, jsre ],
   ui_imports, trace, debug, menu, flow, no_source, shortcuts, kdom,
+  trace_macro,
   ../[ renderer, communication, event_helpers, lsp_router ],
   ../../common/ct_event
 
@@ -1037,6 +1038,25 @@ proc createContextMenuItems(self: EditorViewComponent, ev: js): seq[ContextMenuI
 
       except:
         discard
+
+  # "Trace Macro Execution" action for Nim files (M11).
+  # Available when the current file is a Nim source file and the cursor
+  # is on a line that could contain a macro call.  Sends the LSP request
+  # and opens the resulting .ct trace in a new session tab.
+  if tabInfo.lang == LangNim:
+    let traceLine = line
+    let traceCol = cast[int](ev.target.position.column)
+    let tracePath = self.path
+    let traceData = self.data
+    let traceMacroItem = ContextMenuItem(
+      name: "Trace Macro Execution",
+      hint: "",
+      handler: proc(e: Event) =
+        # Monaco positions are 1-based; LSP uses 0-based coordinates.
+        discard traceExpandMacro(traceData, tracePath,
+                                 traceLine - 1, traceCol - 1)
+    )
+    contextMenu &= traceMacroItem
 
   return contextMenu
 
