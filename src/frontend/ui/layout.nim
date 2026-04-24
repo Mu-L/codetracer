@@ -524,3 +524,13 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig) =
 # M11: Wire the initLayout proc into session_switch to break the
 # circular import dependency (layout -> session_tabs -> session_switch).
 setInitLayoutProc(initLayout)
+
+# Wire the tab-bar renderer setup so that switchSession can ensure the
+# Karax renderer for ``#session-tab-bar`` exists even when initLayout is
+# not called (e.g. for empty sessions).
+proc ensureTabBarRenderer() =
+  kxiMap["session-tab-bar"] = setRenderer(
+    proc: VNode = renderSessionTabs(data),
+    "session-tab-bar",
+    proc = discard)
+setEnsureTabBarRendererProc(ensureTabBarRenderer)
