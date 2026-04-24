@@ -16,7 +16,7 @@ import
   session_switch,
   ../types
 
-from kdom import document, getElementById
+from kdom import document, getElementById, Event, stopPropagation
 
 # ---------------------------------------------------------------------------
 # Rendering
@@ -53,6 +53,9 @@ proc renderSessionTabs*(data: Data): VNode =
         # Show the close button only when there are multiple sessions.
         if data.sessions.len > 1:
           span(class = "session-tab-close"):
+            proc onclick(ev: Event, n: VNode) =
+              ev.stopPropagation()  # Don't trigger tab switch
+              closeSession(data, idx)
             text "\u00D7"  # multiplication sign (×)
     # M12: clicking "+" creates a new empty ReplaySession tab.
     tdiv(class = "session-tab-add"):

@@ -1858,7 +1858,7 @@ when defined(ctRenderer):
   proc newLocalToViewsTransport(data: Data): LocalToViewsTransport =
     LocalToViewsTransport(data: data)
 
-  proc setupSinglePageViewsApi(name: cstring): MediatorWithSubscribers =
+  proc setupSinglePageViewsApi*(name: cstring): MediatorWithSubscribers =
     # let transport = newLocalToViewsTransport(data)
     let x = Transport()
     newMediatorWithSubscribers(name, isRemote=true, singleSubscriber=false, transport=x)

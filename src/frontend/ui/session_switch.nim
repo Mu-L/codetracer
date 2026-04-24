@@ -13,12 +13,13 @@
 ## ``setInitLayoutProc``.
 
 import
-  std/[strformat, jsffi],
+  std/[strformat, jsffi, asyncjs],
   karax,
   ../types,
+  ../dap,
   ../renderer,
   ../utils,
-  ../lib/logging
+  ../lib/[logging, jslib]
 
 import kdom except Location
 
@@ -90,6 +91,9 @@ proc restoreSessionLayout*(data: Data) =
 # Public API
 # ---------------------------------------------------------------------------
 
+proc switchSession*(data: Data, targetIndex: int)
+  ## Forward declaration — defined below, called by createNewSession.
+
 proc createNewSession*(data: Data) =
   ## Create a new, empty ReplaySession and switch to it.
   ##
@@ -160,7 +164,7 @@ proc createNewSession*(data: Data) =
     detail: cstring""
   )
   session.network = Network(
-    futures: JsAssoc[cstring, JsAssoc[cstring, Future[JsObject]]]{})
+    futures: JsAssoc[cstring, JsAssoc[cstring, JsObject]]{})
   session.pointList = PointListData(
     tracepoints: JsAssoc[int, Tracepoint]{})
   session.status = StatusState(
@@ -205,6 +209,37 @@ proc createNewSession*(data: Data) =
 
   # Switch to the newly created session.
   switchSession(data, sessionId)
+
+proc closeSession*(data: Data, targetIndex: int) =
+  ## Close the session at ``targetIndex`` and remove it from the sessions
+  ## list.  When the closed session is the active one, we switch to an
+  ## adjacent session first.  Refuses to close the last remaining session.
+  if data.sessions.len <= 1:
+    # Last tab — nothing to close.
+    return
+  if targetIndex < 0 or targetIndex >= data.sessions.len:
+    cwarn "session_switch: closeSession index out of bounds: " &
+      $targetIndex & " (have " & $data.sessions.len & " sessions)"
+    return
+
+  clog "session_switch: closing session " & $targetIndex &
+    " (total before: " & $data.sessions.len & ")"
+
+  # If closing the active session, switch to an adjacent one first.
+  if targetIndex == data.activeSessionIndex:
+    let newActive = if targetIndex > 0: targetIndex - 1 else: targetIndex + 1
+    switchSession(data, newActive)
+
+  # Remove the session from the list.
+  data.sessions.delete(targetIndex)
+
+  # Adjust activeSessionIndex after the deletion.
+  if data.activeSessionIndex >= data.sessions.len:
+    data.activeSessionIndex = data.sessions.len - 1
+  elif data.activeSessionIndex > targetIndex:
+    data.activeSessionIndex -= 1
+
+  kxi.redraw()
 
 proc switchSession*(data: Data, targetIndex: int) =
   ## Switch from the currently active replay session to ``targetIndex``.
