@@ -14,10 +14,22 @@ proc locationView(self: StatusComponent): VNode =
       span(class = "finished"):
         text "FINISHED"
     else:
-      if not self.location.path.isNil:
-        let path = self.location.path
-        let line = self.location.line
-        let rrTicks = self.location.rrTicks
+      # When ViewTargetSource is active for Nim traces, show the C location
+      # so the status bar reflects the displayed C file, not the Nim source.
+      var displayLocation = self.location
+      if not self.data.trace.isNil and self.data.trace.lang == LangNim and
+         not self.data.services.editor.active.isNil and
+         self.data.ui.editors.hasKey(self.data.services.editor.active) and
+         not self.data.ui.editors[self.data.services.editor.active].isNil and
+         self.data.ui.editors[self.data.services.editor.active].editorView == ViewTargetSource:
+        let cLoc = self.data.services.debugger.cLocation
+        if not cLoc.path.isNil and cLoc.path.len > 0:
+          displayLocation = cLoc
+
+      if not displayLocation.path.isNil:
+        let path = displayLocation.path
+        let line = displayLocation.line
+        let rrTicks = displayLocation.rrTicks
         let fullPathWithRRTicks = fmt"{path}:{line}#{rrTicks}"
         let activeClass = if self.copyMessageActive: "active" else: ""
 

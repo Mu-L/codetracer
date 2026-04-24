@@ -161,6 +161,21 @@ proc sendSymbols(main: js, traceFolder: cstring) {.async.} =
   except:
     errorPrint "loading symbols: ", getCurrentExceptionMsg()
 
+proc findSourcemapPath(outputFolder: cstring): cstring =
+  ## Find the ct_sourcemap_* file in the trace's nimcache directory.
+  ## Returns the path if found, or an empty cstring if not.
+  let nimcacheDir = cstring($outputFolder / "nimcache")
+  if not fs.existsSync(nimcacheDir):
+    return cstring""
+  try:
+    let entries = fs.readdirSync(nimcacheDir)
+    for entry in entries:
+      if ($entry).startsWith("ct_sourcemap_"):
+        return cstring($nimcacheDir / $entry)
+  except:
+    warnPrint "failed to scan nimcache for sourcemap: ", getCurrentExceptionMsg()
+  return cstring""
+
 proc loadTrace*(dataArg: var ServerData, main: js, trace: Trace, config: Config, helpers: Helpers): Future[void] {.async.} =
   # Copy into a local var to work around Nim 2.2's capture check.
   # On the JS backend, this is a reference copy, so mutations propagate.
@@ -204,6 +219,14 @@ proc loadTrace*(dataArg: var ServerData, main: js, trace: Trace, config: Config,
   let dontAskAgain = fs.existsSync(configFile)
   let startOptions = data.startOptions
 
+  # For Nim traces, locate the sourcemap file so the renderer can load it
+  # for ViewTargetSource line synchronization between Nim and C code.
+  var sourcemapPath = cstring""
+  if trace.lang == LangNim:
+    sourcemapPath = findSourcemapPath(trace.outputFolder)
+    if sourcemapPath.len > 0:
+      infoPrint "index: found sourcemap at ", $sourcemapPath
+
   main.webContents.send "CODETRACER::trace-loaded", js{
     trace: trace,
     functions: functions,
@@ -212,6 +235,7 @@ proc loadTrace*(dataArg: var ServerData, main: js, trace: Trace, config: Config,
     withDiff: startOptions.withDiff,
     rawDiffIndex: startOptions.rawDiffIndex,
     dontAskAgain: dontAskAgain,
+    sourcemapPath: sourcemapPath,
   }
 
 proc loadExistingRecord*(traceId: int) {.async.} =

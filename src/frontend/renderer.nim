@@ -39,7 +39,7 @@ var monaco* {.importc.}: Monaco # app-global
 var fuzzysort* {.importc.}: Fuzzysort # app-global
 var noUiSlider* {.importc.}: js # app-global
 proc wNumb*(options: js): js {.importc.}
-proc readFileUtf8(path: cstring): Future[cstring] {.importjs: "require('fs').promises.readFile(#, 'utf8')".}
+proc readFileUtf8*(path: cstring): Future[cstring] {.importjs: "require('fs').promises.readFile(#, 'utf8')".}
 
 proc duration*(name: string) =
   echo &"TIME {name} {now() - start}"

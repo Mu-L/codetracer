@@ -61,6 +61,7 @@ type
       path: cstring,
       options: js): NodeWriteStream
     mkdirSync*: proc(path: cstring, options: js)
+    readdirSync*: proc(path: cstring): seq[cstring]
     promises*: NodeFilesystemPromises
     constants*: JsObject
 

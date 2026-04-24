@@ -625,7 +625,24 @@ proc sourceCallJump(self: EditorViewComponent, path: cstring, line: int, targetT
   )
 
 proc editorLineJump(self: EditorViewComponent, line: int, behaviour: JumpBehaviour) =
-  if self.tabInfo.lang != LangAsm:
+  if self.editorView == ViewTargetSource and self.data.trace.lang == LangNim:
+    # For ViewTargetSource (C code view), use the sourcemap to find the
+    # corresponding Nim line and highlight it in the Nim source editor.
+    let sm = self.data.sourcemap
+    if not sm.isNil and sm.loaded and sm.cToNim.hasKey(self.name):
+      let cLineMap = sm.cToNim[self.name]
+      if cLineMap.hasKey(line):
+        let nimMapping = cLineMap[line]
+        let nimPathID = nimMapping[0]
+        let nimLine = nimMapping[1]
+        if sm.nimSources.hasKey(nimPathID):
+          let nimPath = sm.nimSources[nimPathID]
+          # Highlight the corresponding Nim line in the source view
+          highlightLine(nimPath, nimLine)
+          return
+    # Fall through to normal line jump if no mapping found
+    self.sourceLineJump(self.name, line, behaviour)
+  elif self.tabInfo.lang != LangAsm:
     self.sourceLineJump(self.name, line, behaviour)
   elif 0 <= line - 1 and line - 1 <= self.tabInfo.instructions.instructions.len():
     self.sourceLineJump(self.name, self.tabInfo.instructions.instructions[line-1].highLevelLine, behaviour)

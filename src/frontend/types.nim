@@ -140,6 +140,23 @@ type
     path*:                  cstring
     line*:                  int
 
+  # Nim-to-C sourcemap for ViewTargetSource line synchronization.
+  # PathIDLine is [pathID, line] — an index into the cSources/nimSources tables.
+  SourcemapPathIDLine* = array[2, int]
+
+  # Frontend-friendly sourcemap representation.
+  # Loaded from ct_sourcemap_* files in the trace nimcache directory.
+  FrontendSourcemap* = ref object
+    # Maps: nim file path -> nim line -> seq of C line groups
+    # Each group is a seq of [cSourceID, cLine] pairs
+    nimToC*:   JsAssoc[cstring, JsAssoc[int, seq[seq[SourcemapPathIDLine]]]]
+    # Maps: c file path -> c line -> [nimSourceID, nimLine]
+    cToNim*:   JsAssoc[cstring, JsAssoc[int, SourcemapPathIDLine]]
+    # ID -> path lookups
+    cSources*:   JsAssoc[int, cstring]
+    nimSources*: JsAssoc[int, cstring]
+    loaded*: bool
+
   Overlay* {.pure.} = enum None, LowLevel, Hit
 
   MessageLevel* = enum MsgInfo, MsgWarn, MsgError
@@ -1631,6 +1648,8 @@ type
     replayId*:          int
     # M11: saved GL layout config for tab switching (destroy/recreate approach).
     savedLayoutConfig*: GoldenLayoutResolvedConfig
+    # Nim-to-C sourcemap for ViewTargetSource (S3).
+    sourcemap*: FrontendSourcemap
 
   Data* = ref object
     redraw*:                proc: void
@@ -1841,6 +1860,10 @@ proc `network=`*(d: Data, v: Network) = d.sessions[d.activeSessionIndex].network
 
 template pointList*(d: Data): untyped = d.sessions[d.activeSessionIndex].pointList
 proc `pointList=`*(d: Data, v: PointListData) = d.sessions[d.activeSessionIndex].pointList = v
+
+# S3: sourcemap accessor for ViewTargetSource.
+template sourcemap*(d: Data): untyped = d.sessions[d.activeSessionIndex].sourcemap
+proc `sourcemap=`*(d: Data, v: FrontendSourcemap) = d.sessions[d.activeSessionIndex].sourcemap = v
 
 proc newReplaySession*(id: ReplaySessionId): ReplaySession =
   ## Create a new, minimally-initialized ReplaySession.
