@@ -104,14 +104,11 @@ _ct_detect_summary() {
 # ---------------------------------------------------------------------------
 
 # --- codetracer-native-backend (formerly codetracer-rr-backend) ---
-# Exports: CODETRACER_RR_BACKEND_PATH, prepends to PATH
+# Prepends to PATH so `ct` finds ct-native-replay via the same PATH search as end users.
 if [ -n "$_CT_WORKSPACE_ROOT" ] && [ -x "$_CT_WORKSPACE_ROOT/codetracer-native-backend/target/debug/ct-native-replay" ]; then
-	export CODETRACER_RR_BACKEND_PATH="$_CT_WORKSPACE_ROOT/codetracer-native-backend"
 	export PATH="$_CT_WORKSPACE_ROOT/codetracer-native-backend/target/debug:$PATH"
 	_ct_detect_summary "codetracer-native-backend (ct-native-replay available)"
 elif [ -n "$_CT_WORKSPACE_ROOT" ] && [ -x "$_CT_WORKSPACE_ROOT/codetracer-rr-backend/target/debug/ct-rr-support" ]; then
-	# Legacy fallback
-	export CODETRACER_RR_BACKEND_PATH="$_CT_WORKSPACE_ROOT/codetracer-rr-backend"
 	export PATH="$_CT_WORKSPACE_ROOT/codetracer-rr-backend/target/debug:$PATH"
 	_ct_detect_summary "codetracer-rr-backend (ct-rr-support available, legacy)"
 fi
@@ -124,62 +121,55 @@ if [ -n "$_CT_WORKSPACE_ROOT" ] && [ -d "$_CT_WORKSPACE_ROOT/codetracer-native-t
 fi
 
 # --- codetracer-python-recorder ---
-# Exports: CODETRACER_PYTHON_RECORDER_PATH
+# The Python recorder is a pip-installable module. The nix shell hook uses
+# the _SRC vars to set up a venv with the recorder installed; the resulting
+# `codetracer-python-recorder` console script ends up on PATH via the venv.
 if [ -n "$_CT_WORKSPACE_ROOT" ] && [ -d "$_CT_WORKSPACE_ROOT/codetracer-python-recorder/codetracer-python-recorder" ]; then
-	export CODETRACER_PYTHON_RECORDER_PATH="$_CT_WORKSPACE_ROOT/codetracer-python-recorder/codetracer-pure-python-recorder/src/trace.py"
-	# Also export the source directory for venv setup (used by nix shell hook).
 	export CODETRACER_PYTHON_RECORDER_SRC="$_CT_WORKSPACE_ROOT/codetracer-python-recorder/codetracer-python-recorder"
-	# Export the pure-Python recorder source for venv setup (no maturin needed).
 	export CODETRACER_PYTHON_PURE_RECORDER_SRC="$_CT_WORKSPACE_ROOT/codetracer-python-recorder/codetracer-pure-python-recorder"
 	_ct_detect_summary "codetracer-python-recorder"
 fi
 
 # --- codetracer-ruby-recorder ---
-# Exports: CODETRACER_RUBY_RECORDER_PATH, RUBY_RECORDER_ROOT, prepends to PATH
+# Prepends to PATH so `ct` finds recorders via findTool (same as end users).
 # Prefer the native recorder (supports binary CTFS format); fall back to pure-Ruby.
 if [ -n "$_CT_WORKSPACE_ROOT" ] && [ -d "$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems" ]; then
 	export RUBY_RECORDER_ROOT="$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder"
-	_ct_rb_native_bin="$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-ruby-recorder/bin/codetracer-ruby-recorder"
-	_ct_rb_pure_bin="$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-pure-ruby-recorder/bin/codetracer-pure-ruby-recorder"
-	if [ -x "$_ct_rb_native_bin" ]; then
-		export CODETRACER_RUBY_RECORDER_PATH="$_ct_rb_native_bin"
+	if [ -x "$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-ruby-recorder/bin/codetracer-ruby-recorder" ]; then
 		export PATH="$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-ruby-recorder/bin:$PATH"
 		_ct_detect_summary "codetracer-ruby-recorder (native)"
-	elif [ -x "$_ct_rb_pure_bin" ]; then
-		export CODETRACER_RUBY_RECORDER_PATH="$_ct_rb_pure_bin"
+	elif [ -x "$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-pure-ruby-recorder/bin/codetracer-pure-ruby-recorder" ]; then
 		export PATH="$_CT_WORKSPACE_ROOT/codetracer-ruby-recorder/gems/codetracer-pure-ruby-recorder/bin:$PATH"
 		_ct_detect_summary "codetracer-ruby-recorder (pure-ruby)"
 	else
 		_ct_detect_summary "codetracer-ruby-recorder (gems present, not built)"
 	fi
-	unset _ct_rb_native_bin _ct_rb_pure_bin
 fi
 
 # --- codetracer-js-recorder ---
-# Exports: CODETRACER_JS_RECORDER_PATH
+# The JS recorder is a Node CLI (packages/cli/dist/index.js). After `npm install`
+# it creates a bin symlink. We add the workspace node_modules/.bin to PATH so that
+# `codetracer-js-recorder` is available as a command.
 if [ -n "$_CT_WORKSPACE_ROOT" ] && [ -d "$_CT_WORKSPACE_ROOT/codetracer-js-recorder/packages/cli" ]; then
-	export CODETRACER_JS_RECORDER_PATH="$_CT_WORKSPACE_ROOT/codetracer-js-recorder/packages/cli/dist/index.js"
+	if [ -x "$_CT_WORKSPACE_ROOT/codetracer-js-recorder/node_modules/.bin/codetracer-js-recorder" ]; then
+		export PATH="$_CT_WORKSPACE_ROOT/codetracer-js-recorder/node_modules/.bin:$PATH"
+	fi
 	_ct_detect_summary "codetracer-js-recorder"
 fi
 
 # --- codetracer-shell-recorders ---
-# Exports: CODETRACER_BASH_RECORDER_PATH, CODETRACER_ZSH_RECORDER_PATH
 if [ -n "$_CT_WORKSPACE_ROOT" ] && [ -d "$_CT_WORKSPACE_ROOT/codetracer-shell-recorders/bash-recorder" ]; then
-	export CODETRACER_BASH_RECORDER_PATH="$_CT_WORKSPACE_ROOT/codetracer-shell-recorders/bash-recorder/launcher.sh"
-	export CODETRACER_ZSH_RECORDER_PATH="$_CT_WORKSPACE_ROOT/codetracer-shell-recorders/zsh-recorder/launcher.zsh"
+	export PATH="$_CT_WORKSPACE_ROOT/codetracer-shell-recorders/bash-recorder:$_CT_WORKSPACE_ROOT/codetracer-shell-recorders/zsh-recorder:$PATH"
 	_ct_detect_summary "codetracer-shell-recorders"
 fi
 
 # --- noir (metacraft-labs fork, provides nargo) ---
-# Exports: CODETRACER_NARGO_PATH, prepends to PATH
+# Prepends to PATH so `ct` finds nargo via the same PATH search as end users.
 if [ -n "$_CT_WORKSPACE_ROOT" ] && [ -d "$_CT_WORKSPACE_ROOT/noir" ]; then
-	# Prefer a pre-built nargo binary (release or debug).
 	if [ -x "$_CT_WORKSPACE_ROOT/noir/target/release/nargo" ]; then
-		export CODETRACER_NARGO_PATH="$_CT_WORKSPACE_ROOT/noir/target/release/nargo"
 		export PATH="$_CT_WORKSPACE_ROOT/noir/target/release:$PATH"
 		_ct_detect_summary "noir (nargo release build)"
 	elif [ -x "$_CT_WORKSPACE_ROOT/noir/target/debug/nargo" ]; then
-		export CODETRACER_NARGO_PATH="$_CT_WORKSPACE_ROOT/noir/target/debug/nargo"
 		export PATH="$_CT_WORKSPACE_ROOT/noir/target/debug:$PATH"
 		_ct_detect_summary "noir (nargo debug build)"
 	else
@@ -188,11 +178,10 @@ if [ -n "$_CT_WORKSPACE_ROOT" ] && [ -d "$_CT_WORKSPACE_ROOT/noir" ]; then
 fi
 
 # --- codetracer-wasm-recorder ---
-# Exports: CODETRACER_WASM_RECORDER_PRESENT, CODETRACER_WASM_VM_PATH, prepends to PATH
+# The wazero binary lives in the repo root (not target/release/).
 if [ -n "$_CT_WORKSPACE_ROOT" ] && [ -d "$_CT_WORKSPACE_ROOT/codetracer-wasm-recorder" ]; then
-	export CODETRACER_WASM_RECORDER_PRESENT=1
 	if [ -x "$_CT_WORKSPACE_ROOT/codetracer-wasm-recorder/wazero" ]; then
-		export CODETRACER_WASM_VM_PATH="$_CT_WORKSPACE_ROOT/codetracer-wasm-recorder/wazero"
+		export PATH="$_CT_WORKSPACE_ROOT/codetracer-wasm-recorder:$PATH"
 		_ct_detect_summary "codetracer-wasm-recorder (wazero binary available)"
 	else
 		_ct_detect_summary "codetracer-wasm-recorder (repo present, wazero not built)"
@@ -208,18 +197,17 @@ fi
 
 # --- Blockchain / VM recorder siblings ---
 # Each blockchain recorder builds a binary at target/release/codetracer-<name>-recorder.
-# When present, we export CODETRACER_<NAME>_RECORDER_PATH and prepend to PATH.
+# We only prepend to PATH — no env var overrides — so `ct` uses the same findTool
+# PATH search in development as it does on end-user machines.
 for _ct_bc_name in cairo cardano circom evm flow fuel leo miden move polkavm solana ton native wasmi; do
 	_ct_bc_repo="codetracer-${_ct_bc_name}-recorder"
 	_ct_bc_bin="target/release/codetracer-${_ct_bc_name}-recorder"
 	if [ -n "$_CT_WORKSPACE_ROOT" ] && [ -x "$_CT_WORKSPACE_ROOT/$_ct_bc_repo/$_ct_bc_bin" ]; then
-		_ct_bc_var="CODETRACER_$(echo "$_ct_bc_name" | tr '[:lower:]' '[:upper:]')_RECORDER_PATH"
-		export "$_ct_bc_var"="$_CT_WORKSPACE_ROOT/$_ct_bc_repo/$_ct_bc_bin"
 		export PATH="$_CT_WORKSPACE_ROOT/$_ct_bc_repo/target/release:$PATH"
 		_ct_detect_summary "$_ct_bc_repo (release build)"
 	fi
 done
-unset _ct_bc_name _ct_bc_repo _ct_bc_bin _ct_bc_var
+unset _ct_bc_name _ct_bc_repo _ct_bc_bin
 
 # --- Cadence Go helper ---
 # The Cadence/Flow recorder needs the cadence-trace-helper Go binary.
@@ -241,41 +229,12 @@ if [ -d "$_ct_flow_repo/go-helper" ] && [ -n "${CODETRACER_FLOW_RECORDER_PATH:-}
 fi
 unset _ct_flow_repo _ct_cadence_helper
 
-# Language-name aliases for recorders where the language name differs from the
-# recorder repo name. The GUI tests (Playwright) use language-based env vars.
-if [ -n "${CODETRACER_CARDANO_RECORDER_PATH:-}" ]; then
-	export CODETRACER_AIKEN_RECORDER_PATH="$CODETRACER_CARDANO_RECORDER_PATH"
-fi
-if [ -n "${CODETRACER_FLOW_RECORDER_PATH:-}" ]; then
-	export CODETRACER_CADENCE_RECORDER_PATH="$CODETRACER_FLOW_RECORDER_PATH"
-fi
-if [ -n "${CODETRACER_TON_RECORDER_PATH:-}" ]; then
-	export CODETRACER_TOLK_RECORDER_PATH="$CODETRACER_TON_RECORDER_PATH"
-fi
-
 # ---------------------------------------------------------------------------
-# Backward compatibility: derive _PRESENT=1 from non-empty _PATH vars.
-# Consumers should migrate to checking _PATH directly.
+# Backward compatibility: derive _PRESENT=1 from `command -v` on PATH.
+# These are used by tests that conditionally skip when a recorder isn't available.
 # ---------------------------------------------------------------------------
-if [ -n "${CODETRACER_RR_BACKEND_PATH:-}" ]; then
-	export CODETRACER_RR_BACKEND_PRESENT=1
-fi
-if [ -n "${CODETRACER_NATIVE_TEST_PROGRAMS_PATH:-}" ]; then
-	export CODETRACER_NATIVE_TEST_PROGRAMS_PRESENT=1
-fi
-if [ -n "${CODETRACER_PYTHON_RECORDER_PATH:-}" ]; then
-	export CODETRACER_PYTHON_RECORDER_PRESENT=1
-fi
-if [ -n "${CODETRACER_RUBY_RECORDER_PATH:-}" ]; then
-	export CODETRACER_RUBY_RECORDER_PRESENT=1
-fi
-if [ -n "${CODETRACER_JS_RECORDER_PATH:-}" ]; then
-	export CODETRACER_JS_RECORDER_PRESENT=1
-fi
-if [ -n "${CODETRACER_BASH_RECORDER_PATH:-}" ]; then
-	export CODETRACER_SHELL_RECORDERS_PRESENT=1
-fi
-# CODETRACER_WASM_RECORDER_PRESENT is set directly above (no _PATH var).
+command -v ct-native-replay  &>/dev/null && export CODETRACER_RR_BACKEND_PRESENT=1
+command -v wazero            &>/dev/null && export CODETRACER_WASM_RECORDER_PRESENT=1
 
 # ---------------------------------------------------------------------------
 # Python interpreter detection
@@ -284,7 +243,7 @@ fi
 # Rust-backed recorder needs 3.12+. Try versioned brew binaries first,
 # then the generic python3/python.
 # ---------------------------------------------------------------------------
-if [ -z "${CODETRACER_PYTHON_CMD:-}" ] && [ -n "${CODETRACER_PYTHON_RECORDER_PATH:-}" ]; then
+if [ -z "${CODETRACER_PYTHON_CMD:-}" ] && [ -n "${CODETRACER_PYTHON_RECORDER_SRC:-}" ]; then
 	for _ct_py in python3.13 python3.12 python3.11 python3.10 python3; do
 		if command -v "$_ct_py" &>/dev/null; then
 			_ct_py_ver="$("$_ct_py" -c 'import sys; print(sys.version_info[:2])' 2>/dev/null || true)"
