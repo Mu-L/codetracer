@@ -1198,10 +1198,7 @@ pub fn handle_message_browser(
                     };
                     if crate::vfs::vfs_exists(&vfs_path) {
                         ctx.launch_trace_file = PathBuf::from(*name);
-                        info!(
-                            "handle_message_browser: VFS auto-detect found trace file: {}",
-                            vfs_path
-                        );
+                        info!("handle_message_browser: VFS auto-detect found trace file: {}", vfs_path);
                         break;
                     }
                 }
@@ -1273,10 +1270,7 @@ pub fn handle_message_browser(
                     );
                 }
             } else {
-                warn!(
-                    "handle_message_browser: no handler yet, dropping {:?}",
-                    req.command
-                );
+                warn!("handle_message_browser: no handler yet, dropping {:?}", req.command);
             }
         }
         _ => {}

@@ -12,6 +12,15 @@ use crate::value::ValueRecordWithType;
 
 pub trait ReplaySession: std::fmt::Debug {
     fn load_location(&mut self, expr_loader: &mut ExprLoader) -> Result<Location, Box<dyn Error>>;
+
+    /// Returns the C-level location from the last `load_location` call, if available.
+    ///
+    /// For sourcemapped languages (e.g. Nim compiled to C), this returns the
+    /// generated C location that was extracted alongside the high-level location.
+    /// For non-sourcemapped languages, returns `None`.
+    fn last_c_location(&self) -> Option<Location> {
+        None
+    }
     fn run_to_entry(&mut self) -> Result<(), Box<dyn Error>>;
     fn load_events(&mut self) -> Result<Events, Box<dyn Error>>;
     fn step(&mut self, action: Action, forward: bool) -> Result<bool, Box<dyn Error>>;

@@ -371,6 +371,17 @@ pub struct Location {
     pub missing_path: bool,
 }
 
+/// Response for `LoadLocationWithSourcemap` query from the native replay backend.
+///
+/// Contains the location with sourcemap translation applied (high_level = Nim source,
+/// low_level = generated C) and a separate `c_location` for the C-level view.
+#[derive(Debug, Default, Clone, Deserialize)]
+#[serde(default, rename_all(serialize = "camelCase", deserialize = "camelCase"))]
+pub struct LocationWithSourcemap {
+    pub location: Location,
+    pub c_location: Location,
+}
+
 impl Location {
     pub fn new(
         path: &str,

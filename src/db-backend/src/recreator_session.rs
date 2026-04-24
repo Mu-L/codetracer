@@ -29,7 +29,7 @@ use crate::query::{
 use crate::replay::ReplaySession;
 use crate::task::{
     Action, Breakpoint, CallLine, CtLoadLocalsArguments, Events, HistoryResultWithRecord, LoadHistoryArg, Location,
-    ProgramEvent, VariableWithRecord, NO_STEP_ID,
+    LocationWithSourcemap, ProgramEvent, VariableWithRecord, NO_STEP_ID,
 };
 use crate::value::ValueRecordWithType;
 use codetracer_trace_types::{TypeKind, TypeRecord, TypeSpecificInfo};
@@ -50,6 +50,9 @@ pub struct RecreatorReplaySession {
     pub rr_trace_folder: PathBuf,
     pub name: String,
     pub index: usize,
+    /// The C-level location from the last `load_location` call, populated when
+    /// the native backend applies Nim sourcemaps via `LoadLocationWithSourcemap`.
+    last_c_location: Option<Location>,
 }
 
 #[derive(Debug)]
@@ -477,6 +480,7 @@ impl RecreatorReplaySession {
             stable: ReplayWorker::new(name, index, &ct_rr_args.worker_exe, &ct_rr_args.rr_trace_folder),
             recreator_exe: ct_rr_args.worker_exe.clone(),
             rr_trace_folder: ct_rr_args.rr_trace_folder.clone(),
+            last_c_location: None,
         }
     }
 
@@ -505,12 +509,43 @@ impl RecreatorReplaySession {
             &self.stable.dispatch_replay_query(ReplayQuery::LoadLocation)?,
         )?)
     }
+
+    /// Try to load location with sourcemap translation (for Nim).
+    /// Falls back to plain LoadLocation if the worker does not support it.
+    fn load_location_with_sourcemap(&mut self) -> Result<Location, Box<dyn Error>> {
+        match self
+            .stable
+            .dispatch_replay_query(ReplayQuery::LoadLocationWithSourcemap)
+        {
+            Ok(response) => {
+                let lws = serde_json::from_str::<LocationWithSourcemap>(&response)?;
+                // Store the c_location for the frontend's assembly and C views.
+                if !lws.c_location.path.is_empty() {
+                    self.last_c_location = Some(lws.c_location);
+                } else {
+                    self.last_c_location = None;
+                }
+                Ok(lws.location)
+            }
+            Err(e) => {
+                // Fall back to plain LoadLocation if the worker doesn't support
+                // the sourcemap query (e.g. older replay workers).
+                warn!("LoadLocationWithSourcemap failed ({e}), falling back to LoadLocation");
+                self.last_c_location = None;
+                self.load_location_directly()
+            }
+        }
+    }
 }
 
 impl ReplaySession for RecreatorReplaySession {
     fn load_location(&mut self, _expr_loader: &mut ExprLoader) -> Result<Location, Box<dyn Error>> {
         self.ensure_active_stable()?;
-        self.load_location_directly()
+        self.load_location_with_sourcemap()
+    }
+
+    fn last_c_location(&self) -> Option<Location> {
+        self.last_c_location.clone()
     }
 
     fn run_to_entry(&mut self) -> Result<(), Box<dyn Error>> {

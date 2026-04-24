@@ -15,8 +15,7 @@ use std::sync::Mutex;
 ///
 /// The WASM module is single-threaded, so the Mutex is never contended.
 /// We use it to satisfy `Sync` requirements for `static` storage.
-static VFS_STORE: Lazy<Mutex<HashMap<String, Vec<u8>>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+static VFS_STORE: Lazy<Mutex<HashMap<String, Vec<u8>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
 /// Write a file into the in-memory VFS store.
 pub fn vfs_write(path: &str, data: Vec<u8>) {
@@ -44,8 +43,7 @@ pub fn load_trace_data_vfs(
     virtual_path: &str,
     file_format: codetracer_trace_reader::TraceEventsFileFormat,
 ) -> Result<Vec<TraceLowLevelEvent>, Box<dyn Error>> {
-    let bytes = vfs_read(virtual_path)
-        .ok_or_else(|| format!("VFS file not found: {virtual_path}"))?;
+    let bytes = vfs_read(virtual_path).ok_or_else(|| format!("VFS file not found: {virtual_path}"))?;
 
     match file_format {
         codetracer_trace_reader::TraceEventsFileFormat::Json => {
@@ -71,8 +69,7 @@ pub fn load_trace_data_vfs(
 
 /// Load and deserialize trace metadata JSON from the in-memory VFS.
 pub fn load_trace_metadata_vfs(virtual_path: &str) -> Result<TraceMetadata, Box<dyn Error>> {
-    let bytes = vfs_read(virtual_path)
-        .ok_or_else(|| format!("VFS file not found: {virtual_path}"))?;
+    let bytes = vfs_read(virtual_path).ok_or_else(|| format!("VFS file not found: {virtual_path}"))?;
     let s = std::str::from_utf8(&bytes)?;
     Ok(serde_json::from_str(s)?)
 }

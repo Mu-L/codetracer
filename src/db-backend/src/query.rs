@@ -9,6 +9,12 @@ use crate::value::ValueRecordWithType;
 pub enum ReplayQuery {
     RunToEntry,
     LoadLocation,
+    /// Load the current location with Nim sourcemap translation applied.
+    ///
+    /// Returns a `LocationWithSourcemap` where the location has `high_level_*`
+    /// fields set to the Nim source and `low_level_*` fields set to the
+    /// generated C location, plus a separate `c_location` for the C-level view.
+    LoadLocationWithSourcemap,
     Step {
         action: Action,
         forward: bool,

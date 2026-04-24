@@ -122,8 +122,10 @@ impl Db {
         // Allow NO_KEY (-1): some traces (e.g. MCR portable traces) have
         // steps that are not inside any call.  The branch below already
         // handles NO_KEY by returning "<unknown>" function name.
-        assert!(call_key_int >= 0 || call_key == NO_KEY,
-                "load_location: unexpected negative call_key {call_key_int} (not NO_KEY)");
+        assert!(
+            call_key_int >= 0 || call_key == NO_KEY,
+            "load_location: unexpected negative call_key {call_key_int} (not NO_KEY)"
+        );
 
         // info!("load_location {step_id:?} {call_key:?}");
 

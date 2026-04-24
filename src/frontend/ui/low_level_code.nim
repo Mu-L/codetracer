@@ -123,7 +123,15 @@ proc onLoadAsmFunctionResponse(self: LowLevelCodeComponent, instructions: Instru
     50
   )
 
-  self.editor.tabInfo.highlightLine = self.findHighlight(self.location.highLevelLine)
+  # For Nim, the instructions' highLevelLine values point to C lines (from
+  # gdb.find_pc_line), and self.location is cLocation whose .line is the C line.
+  # For other languages, highLevelLine == the source line == location.highLevelLine.
+  let highlightSourceLine =
+    if data.trace.lang == LangNim:
+      self.location.line
+    else:
+      self.location.highLevelLine
+  self.editor.tabInfo.highlightLine = self.findHighlight(highlightSourceLine)
   self.data.redraw()
 
 proc clear(self: LowLevelCodeComponent, location: types.Location) =
@@ -160,12 +168,23 @@ proc clear(self: LowLevelCodeComponent, location: types.Location) =
 
 proc reloadLowLevel*(self: LowLevelCodeComponent) =
   self.clear()
-  self.getAsmCode(data.services.debugger.location)
+  # For Nim, use the C-level location to load the correct assembly function.
+  if data.trace.lang == LangNim and data.services.debugger.cLocation.path != "":
+    self.getAsmCode(data.services.debugger.cLocation)
+  else:
+    self.getAsmCode(data.services.debugger.location)
 
 method onCompleteMove*(self: LowLevelCodeComponent, response: MoveState) {.async.} =
-  if response.location.path != "":
-    self.clear(response.location)
-    self.getAsmCode(response.location)
+  # For Nim, the assembly corresponds to the generated C code, so use cLocation
+  # which has the C-level path and function name needed to load the right function.
+  let asmLocation =
+    if data.trace.lang == LangNim and response.cLocation.path != "":
+      response.cLocation
+    else:
+      response.location
+  if asmLocation.path != "":
+    self.clear(asmLocation)
+    self.getAsmCode(asmLocation)
 
 method register*(self: LowLevelCodeComponent, api: MediatorWithSubscribers) =
   self.api = api
@@ -177,7 +196,11 @@ method render*(self: LowLevelCodeComponent): VNode =
     self.editor.renderer = kxiMap[fmt"lowLevelCodeComponent-{self.id}"]
 
   if self.editor.tabInfo.isNil: #  or self.editor.tabInfo.instructions.instructions.len() == 0
-    self.getAsmCode(data.services.debugger.location)
+    # For Nim, use the C-level location to load the correct assembly function.
+    if data.trace.lang == LangNim and data.services.debugger.cLocation.path != "":
+      self.getAsmCode(data.services.debugger.cLocation)
+    else:
+      self.getAsmCode(data.services.debugger.location)
 
   result = buildHtml(
     tdiv(class = componentContainerClass("low-level-code"))

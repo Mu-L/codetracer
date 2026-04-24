@@ -488,9 +488,7 @@ pub fn setup_onmessage_callback() -> Result<(), DapError> {
         let (sender, receiver) = std::sync::mpsc::channel::<DapMessage>();
 
         if let Err(e) = handle_message_browser(&dap_message, sender, &mut ctx, &mut handler) {
-            web_sys::console::error_1(
-                &JsValue::from_str(&format!("handle_message_browser error: {e}")),
-            );
+            web_sys::console::error_1(&JsValue::from_str(&format!("handle_message_browser error: {e}")));
             panic!("handle_message_browser failed: {e}");
         }
 

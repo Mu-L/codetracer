@@ -389,10 +389,38 @@ impl Handler {
         let reset_flow = self.should_reset_flow(is_main, &location);
         info!("  location: {location:?}");
 
+        // Build c_location for sourcemapped languages (e.g. Nim compiled to C).
+        // The frontend uses c_location to open the generated-C view (View 1) and
+        // the assembly view (View 2) via c_location.asmName (= path:functionName).
+        //
+        // First, try to use the c_location from the replay session (populated by
+        // LoadLocationWithSourcemap for rr-based Nim traces). If not available,
+        // derive it from the location's low_level fields (populated when the
+        // sourcemap has been applied: low_level_path = generated C, path = Nim).
+        let c_location = if let Some(replay_c_loc) = self.replay.last_c_location() {
+            replay_c_loc
+        } else if !location.low_level_path.is_empty() && location.low_level_path != location.path {
+            Location {
+                path: location.low_level_path.clone(),
+                line: location.low_level_line,
+                high_level_path: location.high_level_path.clone(),
+                high_level_line: location.high_level_line,
+                low_level_path: location.low_level_path.clone(),
+                low_level_line: location.low_level_line,
+                function_name: location.function_name.clone(),
+                function_first: location.function_first,
+                function_last: location.function_last,
+                rr_ticks: location.rr_ticks.clone(),
+                ..Location::default()
+            }
+        } else {
+            Location::default()
+        };
+
         let move_state = MoveState {
             status: "".to_string(),
             location,
-            c_location: Location::default(),
+            c_location,
             main: is_main,
             reset_flow,
             stop_signal: RRGDBStopSignal::OtherStopSignal,

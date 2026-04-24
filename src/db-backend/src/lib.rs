@@ -124,10 +124,10 @@ pub fn load_trace_from_vfs(trace_folder: &str) -> bool {
     match dap_server::setup_from_vfs(
         trace_folder,
         trace_file,
-        None,   // raw_diff_index
-        None,   // restore_location
+        None, // raw_diff_index
+        None, // restore_location
         sender,
-        false,  // for_launch — skip run_to_entry for validation
+        false, // for_launch — skip run_to_entry for validation
         "vfs-validation",
     ) {
         Ok(_handler) => {
