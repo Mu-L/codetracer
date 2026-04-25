@@ -1,4 +1,25 @@
 
+.build-panel
+  height: 100%
+  display: flex
+  flex-direction: column
+  background-color: BACKGROUND_COLOR
+
+  .build-header
+    padding: 4px 8px
+    font-size: 13px
+    flex-shrink: 0
+
+    &.build-failed
+      color: #f85149
+
+    &.build-succeeded
+      color: #3fb950
+
+  .build-output-container
+    flex: 1
+    overflow: auto
+
 #build, #build-errors
   background-color: BACKGROUND_COLOR
 
@@ -15,9 +36,9 @@
   .build-error
     border: COLOR solid 1px
 
-  overflow: scroll
+  overflow: auto
 
-  height: 500px //100vh
+  height: 100%
 
 #errors
   background-color: BACKGROUND_COLOR

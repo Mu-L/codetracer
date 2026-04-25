@@ -102,8 +102,20 @@ proc buildErrorView(self: BuildComponent, location: types.Location, rawLocation:
         text other
 
 method render*(self: BuildComponent): VNode =
-  result = buildHtml(tdiv):
-    tdiv(id="build"):
+  result = buildHtml(tdiv(class="build-panel")):
+    if self.build.running:
+      tdiv(class="build-header"):
+        tdiv(class="build-command-label"):
+          text "running " & self.build.command
+    elif self.build.code != 0 and self.build.output.len > 0:
+      tdiv(class="build-header build-failed"):
+        tdiv(class="build-command-label"):
+          text "build failed (exit code " & $self.build.code & ")"
+    elif self.build.output.len > 0:
+      tdiv(class="build-header build-succeeded"):
+        tdiv(class="build-command-label"):
+          text "build succeeded"
+    tdiv(id="build", class="build-output-container"):
       for (raw, stdout) in self.build.output:
         let klass = if stdout: "build-stdout" else: "build-stderr"
 

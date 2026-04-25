@@ -2,7 +2,7 @@ import
   std/sequtils,
   ../communication,
   ../../common/ct_event,
-  ui_imports, flow, shell
+  ui_imports, flow, shell, build
 
 from editor import clearViewZones
 
@@ -281,28 +281,16 @@ proc notificationsButtonStatusView(self: StatusComponent): VNode =
     text "Notifications"
 
 proc buildOutputButtonStatusView(self: StatusComponent): VNode =
-  if not self.build.expanded:
-    buildHtml(
-      tdiv(
-        id = "build-output-status-button",
-        class = "status-button",
-        onclick = proc =
-          self.build.expanded = true
-          self.redraw()
-      )
-    ):
-      text "Build Output"
-  else:
-    buildHtml(
-      tdiv(
-        id = "build-output-status-minimize",
-        class = "status-button status-minimize-button",
-        onclick = proc =
-          self.build.expanded = false
-          self.redraw()
-      )
-    ):
-      text "Build Output"
+  ## Open the Build GL panel when clicked instead of expanding inline.
+  buildHtml(
+    tdiv(
+      id = "build-output-status-button",
+      class = "status-button",
+      onclick = proc =
+        self.build.focusBuild()
+    )
+  ):
+    text "Build Output"
 
 proc toggleSearchResultsView(self: StatusComponent): VNode =
 
@@ -324,23 +312,10 @@ proc toggleSearchResultsView(self: StatusComponent): VNode =
       ):
         text "search results"
 
-proc buildExpandedView(self: StatusComponent): VNode =
-  self.build.render()
-
-proc errorsExpandedView(self: StatusComponent): VNode =
-  self.errors.render()
-
 proc versionControlStatusView(self: StatusComponent): VNode =
   buildHtml(span(id = "version-control-status")):
     span(class = "status-branch status-inline"):
       text self.versionControlBranch
-
-proc statusExpandedView(self: StatusComponent): VNode =
-  result = buildHtml(tdiv(id = "status-expanded")):
-    if self.build.expanded:
-      buildExpandedView(self)
-    if self.errors.expanded:
-      errorsExpandedView(self)
 
 proc flowTypesListView(self: StatusComponent, flowType: FlowUI): VNode =
   buildHtml(
@@ -553,18 +528,14 @@ method register*(self: StatusComponent, api: MediatorWithSubscribers) =
 
 
 method render*(self: StatusComponent): VNode =
-  let statusExpanded = if self.build.expanded or self.errors.expanded: statusExpandedView(self) else: nil
-  let statusClass = if self.build.expanded or self.errors.expanded: "status-with-expanded" else: ""
   var value: string
 
-  result = buildHtml(tdiv(class=statusClass)):
+  result = buildHtml(tdiv):
     activeNotificationsView(self)
     if self.notifications != @[] and self.notifications[^1].isOperationStatus:
       if self.notifications[^1].active:
         tdiv(class="debug-notification"):
           notificationView(self, self.notifications[^1])
-    if self.build.expanded or self.errors.expanded:
-      statusExpandedView(self)
     tdiv(id = "status-base"):
       fileInfoView(self)
       # TODO: Find another place for these
