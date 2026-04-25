@@ -1195,7 +1195,8 @@ proc onStartShellUi*(sender: js, response: jsobject(config=Config)) =
 
 proc onStartDeepReview*(sender: js, response: jsobject(config=Config, startOptions=StartOptions)) =
   ## Handler for ``CODETRACER::start-deepreview`` IPC message.
-  ## Sets up the frontend for DeepReview offline review mode.
+  ## Sets up the frontend for DeepReview offline review mode using Golden
+  ## Layout with a Modified Files sidebar panel and a center editor stack.
   data.startOptions.loading = false
   data.startOptions.withDeepReview = true
   data.config = response.config
@@ -1208,6 +1209,59 @@ proc onStartDeepReview*(sender: js, response: jsobject(config=Config, startOptio
   if not data.ui.welcomeScreen.isNil:
     data.ui.welcomeScreen.welcomeScreen = false
     data.ui.welcomeScreen.newRecordScreen = false
+
+  # Build a DeepReview-specific GL layout config.
+  # The DeepReview component renders as a single full-width GL panel
+  # that internally manages a sidebar (file list + controls) and
+  # editor/diff area.  This keeps the component within the GL
+  # container system while preserving the existing layout structure.
+  let deepReviewLayoutJson = cstring"""
+  {
+    "settings": {
+      "constrainDragToContainer": true,
+      "reorderEnabled": true,
+      "popoutWholeStack": false,
+      "blockedPopoutsThrowError": true,
+      "responsiveMode": "always"
+    },
+    "dimensions": {
+      "borderWidth": 2,
+      "borderHeight": 4,
+      "headerHeight": 35,
+      "dragProxyWidth": 300,
+      "dragProxyHeight": 200
+    },
+    "root": {
+      "type": "row",
+      "size": "100%",
+      "isClosable": false,
+      "content": [
+        {
+          "type": "stack",
+          "content": [
+            {
+              "type": "component",
+              "size": "100%",
+              "componentType": "genericUiComponent",
+              "componentState": {
+                "id": 0,
+                "label": "deepReviewComponent-0",
+                "content": 36
+              },
+              "title": "Deep Review"
+            }
+          ]
+        }
+      ]
+    }
+  }
+  """
+  data.ui.resolvedConfig = cast[GoldenLayoutResolvedConfig](JSON.parse(deepReviewLayoutJson))
+
+  # Create UI components from the layout config.  This walks the GL config
+  # tree and instantiates each component (including the DeepReviewComponent)
+  # so they are registered in componentMapping before GL renders them.
+  data.createUIComponents()
 
   data.ui.initEventReceived = true
   data.tryInitLayout()

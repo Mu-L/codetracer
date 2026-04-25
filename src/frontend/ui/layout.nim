@@ -276,29 +276,12 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig,
     data.ui.menu.kxi = kxiMap["menu"]
     return
 
-  if data.startOptions.withDeepReview:
-    # DeepReview mode: render a standalone review UI without Golden Layout.
-    # Similar to shell-ui mode, we create a single full-page component.
-    clog "initLayout: setting up DeepReview renderer"
-    let drComponent = data.makeDeepReviewComponent(data.generateId(Content.DeepReview))
-    kxiMap["deepreview"] =
-      setRenderer(
-        proc: VNode =
-          if not drComponent.isNil:
-            drComponent.render()
-          else:
-            buildHtml(tdiv()),
-        "deepreview",
-        proc = discard)
-    drComponent.kxi = kxiMap["deepreview"]
-    redrawSync(kxiMap["deepreview"])
-    # Hide root-container so it doesn't intercept pointer events
-    # over the deepreview view (it has position: fixed and overlays
-    # the entire viewport).
-    let rootCont = document.getElementById(cstring"root-container")
-    if not rootCont.isNil:
-      rootCont.style.display = cstring"none"
-    return
+  # DeepReview mode: uses the normal GL layout path.  The DeepReview-specific
+  # layout config (built in onStartDeepReview) includes a Modified Files
+  # panel and an empty editor stack.  The DeepReviewComponent is registered
+  # as a genericUiComponent and rendered inside the GL container like any
+  # other panel.  File selection in the sidebar opens editor tabs via
+  # data.openTab with diff decorations applied by the component.
 
   if data.startOptions.welcomeScreen and data.trace.isNil:
     clog "initLayout: setting up welcome screen renderer"

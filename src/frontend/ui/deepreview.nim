@@ -1,13 +1,11 @@
 ## DeepReview component for the CodeTracer GUI.
 ##
-## Provides a standalone review view that displays DeepReview data
-## (exported from .dr binary format as JSON) with:
-## - File list sidebar with per-file coverage summary
-## - Monaco editor with coverage line highlighting
-## - Inline variable values as Monaco decorations
-## - Function execution navigation slider
-## - Loop iteration navigation slider
-## - Call trace tree panel
+## Renders as a Golden Layout panel containing the Modified Files sidebar
+## with per-file coverage summary, execution/iteration sliders, call trace,
+## and mode switching controls.  In Full Files mode, file selection opens
+## the file in the standard CodeTracer GL editor panel with diff and
+## coverage decorations applied via Monaco's decoration API.  In Unified
+## Diff mode, the DOM-based diff view is rendered within this panel.
 ##
 ## The component is activated via the ``--deepreview <path>`` CLI argument.
 ## It operates in a read-only, offline mode without a debugger connection.
