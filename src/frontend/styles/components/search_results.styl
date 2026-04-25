@@ -1,0 +1,119 @@
+// Search results panel — VS Code-style grouped results with highlighted matches.
+
+.search-results
+  font-size: 13px
+  background-color: BACKGROUND_COLOR
+  color: COLOR
+  overflow: hidden
+  display: flex
+  flex-direction: column
+  height: 100%
+
+.search-results-header
+  display: flex
+  align-items: center
+  padding: 4px 8px
+  font-size: 12px
+  color: COLOR
+  opacity: 0.8
+  border-bottom: 1px solid HEADER_PANEL_BACKGROUND_COLOR
+  flex-shrink: 0
+
+  .search-results-count
+    font-weight: 600
+
+  .search-results-query-label
+    margin-left: 4px
+
+.search-results-highlight
+  background-color: rgba(234, 179, 8, 0.35)
+  color: inherit
+  border-radius: 2px
+  padding: 0 1px
+
+.search-results-find-query
+  padding: 4px 8px
+  flex-shrink: 0
+
+  input
+    width: 100%
+    box-sizing: border-box
+    padding: 3px 6px
+    font-size: 12px
+    background-color: HEADER_PANEL_BACKGROUND_COLOR
+    color: COLOR
+    border: 1px solid HEADER_PANEL_BACKGROUND_COLOR
+    border-radius: 3px
+    outline: none
+
+    &:focus
+      border-color: HOVERED_BUTTON_BACKGROUND_COLOR
+
+.search-results-body
+  overflow-y: auto
+  flex: 1
+
+.search-results-file-group
+  margin-bottom: 2px
+
+.search-results-file-header
+  display: flex
+  align-items: center
+  padding: 3px 8px
+  font-size: 12px
+  font-weight: 600
+  background-color: HEADER_PANEL_BACKGROUND_COLOR
+  color: COLOR
+  position: sticky
+  top: 0
+  z-index: 1
+
+  .search-results-file-path
+    overflow: hidden
+    text-overflow: ellipsis
+    white-space: nowrap
+    flex: 1
+
+  .search-results-file-count
+    opacity: 0.6
+    margin-left: 4px
+    flex-shrink: 0
+
+.search-results-match-row
+  display: flex
+  align-items: baseline
+  padding: 2px 8px 2px 20px
+  cursor: pointer
+  font-family: monospace
+  font-size: 12px
+  line-height: 1.6
+
+  &:hover
+    background-color: HOVERED_BUTTON_BACKGROUND_COLOR
+
+  .search-results-line-number
+    min-width: 40px
+    text-align: right
+    margin-right: 8px
+    opacity: 0.5
+    flex-shrink: 0
+    user-select: none
+
+  .search-results-match-text
+    overflow: hidden
+    text-overflow: ellipsis
+    white-space: nowrap
+    flex: 1
+
+.search-results-empty
+  padding: 16px
+  text-align: center
+  opacity: 0.5
+  font-size: 12px
+
+// Keep legacy visibility toggle working
+.search-results-active
+  display: flex
+
+.search-results-non-active
+  display: none

@@ -1,5 +1,6 @@
 import
-  service_imports
+  service_imports,
+  ../ui/auto_hide
 
 #data.services.search.pluginCommands = rendererPluginCommands
 
@@ -39,6 +40,11 @@ data.services.search.onSearchResultsUpdated = proc(self: SearchService, results:
   self.results[self.query.searchMode] = self.results[self.query.searchMode].concat(results)
   self.active[self.query.searchMode] = true
   self.data.ui.status.searchResults.active = true
+  # Auto-reveal the search results panel if it is pinned to an auto-hide edge.
+  if not autoHideState.isNil:
+    let panel = autoHideState.findPanelByContent(Content.SearchResults)
+    if not panel.isNil:
+      showOverlay(panel)
   self.data.redraw()
 
 proc restart*(service: SearchService) =
