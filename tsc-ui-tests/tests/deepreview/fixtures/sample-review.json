@@ -7,7 +7,34 @@
     {
       "path": "src/main.rs",
       "contentHash": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
-      "diff": { "status": "M", "linesAdded": 8, "linesRemoved": 3 },
+      "diff": {
+        "status": "M",
+        "linesAdded": 8,
+        "linesRemoved": 3,
+        "hunks": [
+          {
+            "oldStart": 2,
+            "oldCount": 5,
+            "newStart": 2,
+            "newCount": 10,
+            "lines": [
+              {"type": "context", "content": "  let x = 10;", "oldLine": 2, "newLine": 2},
+              {"type": "removed", "content": "-  let y = x * 2;", "oldLine": 3, "newLine": 0},
+              {"type": "removed", "content": "-  let z = x + y;", "oldLine": 4, "newLine": 0},
+              {"type": "removed", "content": "-  compute(z);", "oldLine": 5, "newLine": 0},
+              {"type": "added", "content": "+  let y = x * 3;", "oldLine": 0, "newLine": 3},
+              {"type": "added", "content": "+  let z = x + y;", "oldLine": 0, "newLine": 4},
+              {"type": "added", "content": "+  let w = z * 2;", "oldLine": 0, "newLine": 5},
+              {"type": "added", "content": "+  compute(w);", "oldLine": 0, "newLine": 6},
+              {"type": "added", "content": "+  println!(\"result: {}\", w);", "oldLine": 0, "newLine": 7},
+              {"type": "added", "content": "+  println!(\"extra line\");", "oldLine": 0, "newLine": 8},
+              {"type": "added", "content": "+  println!(\"another line\");", "oldLine": 0, "newLine": 9},
+              {"type": "added", "content": "+  println!(\"yet another\");", "oldLine": 0, "newLine": 10},
+              {"type": "context", "content": "  // end of block", "oldLine": 6, "newLine": 11}
+            ]
+          }
+        ]
+      },
       "symbols": [
         {
           "name": "main",
@@ -255,7 +282,29 @@
     {
       "path": "src/utils.rs",
       "contentHash": "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
-      "diff": { "status": "A", "linesAdded": 8, "linesRemoved": 0 },
+      "diff": {
+        "status": "A",
+        "linesAdded": 8,
+        "linesRemoved": 0,
+        "hunks": [
+          {
+            "oldStart": 0,
+            "oldCount": 0,
+            "newStart": 1,
+            "newCount": 8,
+            "lines": [
+              {"type": "added", "content": "+pub fn format_output(input: &str) -> String {", "oldLine": 0, "newLine": 1},
+              {"type": "added", "content": "+  let trimmed = input.trim();", "oldLine": 0, "newLine": 2},
+              {"type": "added", "content": "+  if trimmed.is_empty() {", "oldLine": 0, "newLine": 3},
+              {"type": "added", "content": "+    return String::new();", "oldLine": 0, "newLine": 4},
+              {"type": "added", "content": "+  }", "oldLine": 0, "newLine": 5},
+              {"type": "added", "content": "+  format!(\"[{}]\", trimmed)", "oldLine": 0, "newLine": 6},
+              {"type": "added", "content": "+}", "oldLine": 0, "newLine": 7},
+              {"type": "added", "content": "+", "oldLine": 0, "newLine": 8}
+            ]
+          }
+        ]
+      },
       "symbols": [
         {
           "name": "format_output",
@@ -328,7 +377,28 @@
     {
       "path": "src/config.rs",
       "contentHash": "1234567812345678123456781234567812345678123456781234567812345678",
-      "diff": { "status": "D", "linesAdded": 0, "linesRemoved": 7 },
+      "diff": {
+        "status": "D",
+        "linesAdded": 0,
+        "linesRemoved": 7,
+        "hunks": [
+          {
+            "oldStart": 1,
+            "oldCount": 7,
+            "newStart": 0,
+            "newCount": 0,
+            "lines": [
+              {"type": "removed", "content": "-pub const DEFAULT_TIMEOUT: u64 = 30;", "oldLine": 1, "newLine": 0},
+              {"type": "removed", "content": "-", "oldLine": 2, "newLine": 0},
+              {"type": "removed", "content": "-pub struct Config {", "oldLine": 3, "newLine": 0},
+              {"type": "removed", "content": "-  pub timeout: u64,", "oldLine": 4, "newLine": 0},
+              {"type": "removed", "content": "-  pub retries: u32,", "oldLine": 5, "newLine": 0},
+              {"type": "removed", "content": "-  pub verbose: bool,", "oldLine": 6, "newLine": 0},
+              {"type": "removed", "content": "-}", "oldLine": 7, "newLine": 0}
+            ]
+          }
+        ]
+      },
       "symbols": [
         {
           "name": "DEFAULT_TIMEOUT",

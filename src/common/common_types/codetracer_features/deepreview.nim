@@ -30,13 +30,37 @@ type
     flags*: DeepReviewFileFlags
     diff*: DeepReviewFileDiff
 
+  DeepReviewHunkLine* = ref object
+    ## A single line within a diff hunk.
+    ## ``type`` is one of "context", "added", "removed".
+    ## ``oldLine`` / ``newLine`` are present depending on the line type:
+    ## context lines have both, added lines only have ``newLine``,
+    ## and removed lines only have ``oldLine``.
+    `type`*: langstring
+    content*: langstring
+    oldLine*: int
+    newLine*: int
+
+  DeepReviewHunk* = ref object
+    ## A contiguous diff hunk within a file.
+    ## ``oldStart`` / ``oldCount`` refer to the base version line range.
+    ## ``newStart`` / ``newCount`` refer to the new version line range.
+    oldStart*: int
+    oldCount*: int
+    newStart*: int
+    newCount*: int
+    lines*: seq[DeepReviewHunkLine]
+
   DeepReviewFileDiff* = ref object
     ## Diff metadata for a file in the review.
     ## ``status`` is one of "A" (added), "M" (modified), "D" (deleted).
     ## ``linesAdded`` / ``linesRemoved`` count the changed lines.
+    ## ``hunks`` contains the actual diff hunks with line-level data
+    ## for unified diff rendering.
     status*: langstring
     linesAdded*: int
     linesRemoved*: int
+    hunks*: seq[DeepReviewHunk]
 
   DeepReviewFileFlags* = ref object
     ## Boolean flags summarising the data availability and coverage

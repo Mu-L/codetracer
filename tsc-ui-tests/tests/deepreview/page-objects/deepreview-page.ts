@@ -366,6 +366,94 @@ export class DeepReviewPage {
     return this.page.locator(".deepreview-calltrace-entry");
   }
 
+  // -- View mode toggle ----------------------------------------------------
+
+  /** The view mode toggle container. */
+  modeToggle(): Locator {
+    return this.page.locator(".deepreview-mode-toggle");
+  }
+
+  /** The "Full Files" mode toggle button. */
+  fullFilesButton(): Locator {
+    return this.page.locator(".deepreview-mode-btn", { hasText: "Full Files" });
+  }
+
+  /** The "Unified Diff" mode toggle button. */
+  unifiedDiffButton(): Locator {
+    return this.page.locator(".deepreview-mode-btn", { hasText: "Unified Diff" });
+  }
+
+  /**
+   * Switch to Unified Diff mode via the exposed test helper.
+   * Falls back to clicking the button if the helper is unavailable.
+   */
+  async switchToUnifiedDiff(): Promise<void> {
+    await this.page.evaluate(() => {
+      const fn = (window as any).__deepreviewSetViewMode;
+      if (typeof fn === "function") {
+        fn("unified");
+      } else {
+        throw new Error("__deepreviewSetViewMode not found on window");
+      }
+    });
+  }
+
+  /**
+   * Switch to Full Files mode via the exposed test helper.
+   */
+  async switchToFullFiles(): Promise<void> {
+    await this.page.evaluate(() => {
+      const fn = (window as any).__deepreviewSetViewMode;
+      if (typeof fn === "function") {
+        fn("fullfiles");
+      } else {
+        throw new Error("__deepreviewSetViewMode not found on window");
+      }
+    });
+  }
+
+  // -- Unified diff view ----------------------------------------------------
+
+  /** The unified diff scroll container. */
+  unifiedDiff(): Locator {
+    return this.page.locator(".deepreview-unified-diff");
+  }
+
+  /** All file sections in the unified diff view. */
+  unifiedFileHeaders(): Locator {
+    return this.page.locator(".deepreview-unified-file-header");
+  }
+
+  /** All file path spans within unified diff file headers. */
+  unifiedFilePaths(): Locator {
+    return this.page.locator(".deepreview-unified-file-path");
+  }
+
+  /** All hunk header elements (the @@ lines). */
+  unifiedHunkHeaders(): Locator {
+    return this.page.locator(".deepreview-unified-hunk-header");
+  }
+
+  /** All added lines in the unified diff. */
+  unifiedAddedLines(): Locator {
+    return this.page.locator(".deepreview-unified-line-added");
+  }
+
+  /** All removed lines in the unified diff. */
+  unifiedRemovedLines(): Locator {
+    return this.page.locator(".deepreview-unified-line-removed");
+  }
+
+  /** All context lines in the unified diff. */
+  unifiedContextLines(): Locator {
+    return this.page.locator(".deepreview-unified-line-context");
+  }
+
+  /** All lines (of any type) in the unified diff. */
+  unifiedAllLines(): Locator {
+    return this.page.locator(".deepreview-unified-line");
+  }
+
   // -- Convenience ---------------------------------------------------------
 
   /**

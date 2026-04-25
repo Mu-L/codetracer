@@ -866,6 +866,12 @@ type
     # lastScrollFireTime*: int64
     service*: FlowService
 
+  DeepReviewViewMode* = enum
+    ## Controls which view is active in the DeepReview component.
+    FullFiles,  ## Single-file Monaco editor view (original behaviour).
+    Unified     ## Unified diff view showing all files as a scrollable
+                ## list of hunks with added/removed/context line decorations.
+
   DeepReviewComponent* = ref object of Component
     ## Standalone DeepReview viewer.
     ## Displays coverage, inline values, and call trace from a
@@ -879,6 +885,7 @@ type
     currentDecorationIds*: js
     decorationCollection*: js
     fileContentCache*: JsAssoc[cstring, cstring]
+    viewMode*: DeepReviewViewMode
 
   AgentWorkspaceComponent* = ref object of Component
     ## Agent workspace view showing the agent's working directory files

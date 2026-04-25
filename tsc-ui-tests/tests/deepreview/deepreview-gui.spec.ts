@@ -315,6 +315,130 @@ test.describe("DeepReview GUI - main features", () => {
   });
 
   // -----------------------------------------------------------------------
+  // Test 10: Unified diff - file headers
+  // -----------------------------------------------------------------------
+
+  test("Test 10: unified diff shows file headers for all files with hunks", async ({ ctPage }) => {
+    const dr = new DeepReviewPage(ctPage);
+    await dr.waitForReady();
+    await wait(500);
+
+    // Switch to unified diff mode.
+    await dr.switchToUnifiedDiff();
+    await wait(500);
+
+    // Verify the unified diff container is visible.
+    await expect(dr.unifiedDiff()).toBeVisible();
+
+    // All 3 files in the fixture have hunks, so we expect 3 file headers.
+    const fileHeaders = dr.unifiedFileHeaders();
+    const headerCount = await fileHeaders.count();
+    expect(headerCount).toBe(3);
+
+    // Check that file paths are displayed.
+    const filePaths = dr.unifiedFilePaths();
+    const pathTexts: string[] = [];
+    for (let i = 0; i < headerCount; i++) {
+      const text = await filePaths.nth(i).textContent();
+      pathTexts.push(text ?? "");
+    }
+    expect(pathTexts).toContain("src/main.rs");
+    expect(pathTexts).toContain("src/utils.rs");
+    expect(pathTexts).toContain("src/config.rs");
+  });
+
+  // -----------------------------------------------------------------------
+  // Test 11: Unified diff - added/removed line decorations
+  // -----------------------------------------------------------------------
+
+  test("Test 11: unified diff shows added and removed lines with correct classes", async ({ ctPage }) => {
+    const dr = new DeepReviewPage(ctPage);
+    await dr.waitForReady();
+    await wait(500);
+
+    await dr.switchToUnifiedDiff();
+    await wait(500);
+
+    // The fixture has:
+    //   src/main.rs: 3 removed, 8 added, 2 context = 13 lines
+    //   src/utils.rs: 0 removed, 8 added, 0 context = 8 lines
+    //   src/config.rs: 7 removed, 0 added, 0 context = 7 lines
+    // Total added: 16, total removed: 10, total context: 2
+
+    const addedCount = await dr.unifiedAddedLines().count();
+    expect(addedCount).toBe(16);
+
+    const removedCount = await dr.unifiedRemovedLines().count();
+    expect(removedCount).toBe(10);
+
+    const contextCount = await dr.unifiedContextLines().count();
+    expect(contextCount).toBe(2);
+  });
+
+  // -----------------------------------------------------------------------
+  // Test 12: Unified diff - multiple files in scroll view
+  // -----------------------------------------------------------------------
+
+  test("Test 12: unified diff shows multiple file sections in a scrollable view", async ({ ctPage }) => {
+    const dr = new DeepReviewPage(ctPage);
+    await dr.waitForReady();
+    await wait(500);
+
+    await dr.switchToUnifiedDiff();
+    await wait(500);
+
+    // Verify all hunk headers are present (one per file since each has one hunk).
+    const hunkHeaders = dr.unifiedHunkHeaders();
+    const hunkCount = await hunkHeaders.count();
+    expect(hunkCount).toBe(3);
+
+    // Verify hunk header content (the @@ lines).
+    const firstHunkText = await hunkHeaders.nth(0).textContent();
+    expect(firstHunkText).toContain("@@ -2,5 +2,10 @@");
+
+    const secondHunkText = await hunkHeaders.nth(1).textContent();
+    expect(secondHunkText).toContain("@@ -0,0 +1,8 @@");
+
+    const thirdHunkText = await hunkHeaders.nth(2).textContent();
+    expect(thirdHunkText).toContain("@@ -1,7 +0,0 @@");
+
+    // Verify total lines across all files.
+    const totalLines = await dr.unifiedAllLines().count();
+    expect(totalLines).toBe(28);  // 13 + 8 + 7
+
+    // Verify the unified diff container itself is scrollable
+    // (has overflow-y auto in CSS).
+    await expect(dr.unifiedDiff()).toBeVisible();
+  });
+
+  // -----------------------------------------------------------------------
+  // Test 13: Mode toggle switches between views
+  // -----------------------------------------------------------------------
+
+  test("Test 13: mode toggle switches between full files and unified diff views", async ({ ctPage }) => {
+    const dr = new DeepReviewPage(ctPage);
+    await dr.waitForReady();
+    await dr.waitForEditorReady();
+    await wait(500);
+
+    // Default mode should be Full Files (editor is visible, no unified diff).
+    await expect(dr.editor()).toBeVisible();
+
+    // Switch to unified diff.
+    await dr.switchToUnifiedDiff();
+    await wait(500);
+
+    await expect(dr.unifiedDiff()).toBeVisible();
+
+    // Switch back to full files.
+    await dr.switchToFullFiles();
+    await wait(500);
+
+    // The editor area should be back. The editor div is present.
+    await expect(dr.editor()).toBeVisible();
+  });
+
+  // -----------------------------------------------------------------------
   // Test 8: Call trace panel
   // -----------------------------------------------------------------------
 

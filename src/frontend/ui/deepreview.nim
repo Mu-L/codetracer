@@ -456,6 +456,26 @@ proc renderLoopSlider(self: DeepReviewComponent): VNode =
     span(class = "deepreview-slider-info"):
       text fmt"{self.selectedIteration + 1}/{maxIter}"
 
+proc renderViewModeToggle(self: DeepReviewComponent): VNode =
+  ## Render toggle buttons to switch between Unified diff and Full Files modes.
+  let isUnified = self.viewMode == Unified
+  let isFullFiles = self.viewMode == FullFiles
+  buildHtml(tdiv(class = "deepreview-mode-toggle")):
+    button(
+      class = cstring(if isFullFiles: "deepreview-mode-btn deepreview-mode-btn-active" else: "deepreview-mode-btn"),
+      onclick = proc(ev: Event, n: VNode) =
+        self.viewMode = FullFiles
+        redrawAll()
+    ):
+      text "Full Files"
+    button(
+      class = cstring(if isUnified: "deepreview-mode-btn deepreview-mode-btn-active" else: "deepreview-mode-btn"),
+      onclick = proc(ev: Event, n: VNode) =
+        self.viewMode = Unified
+        redrawAll()
+    ):
+      text "Unified Diff"
+
 proc renderCallTraceNode(node: DeepReviewCallNode, depth: int): VNode =
   ## Recursively render a call trace tree node.
   let indent = depth * 16
@@ -469,6 +489,68 @@ proc renderCallTraceNode(node: DeepReviewCallNode, depth: int): VNode =
     if node.children.len > 0:
       for child in node.children:
         renderCallTraceNode(child, depth + 1)
+
+proc renderUnifiedDiff(self: DeepReviewComponent): VNode =
+  ## Render all modified files as a vertical scrollable list of diff hunks.
+  ## Each file gets a header with path and diff metadata, followed by its
+  ## hunks with added/removed/context line colouring. This is a pure-DOM
+  ## rendering approach (no Monaco editor) to keep things simple and
+  ## performant for the diff overview.
+  if self.drData.isNil or self.drData.files.len == 0:
+    return buildHtml(tdiv(class = "deepreview-unified-diff")):
+      tdiv(class = "deepreview-unified-empty"):
+        text "No files to display."
+
+  buildHtml(tdiv(class = "deepreview-unified-diff")):
+    for fileIdx, file in self.drData.files:
+      if file.diff.isNil:
+        continue
+      let hasHunks = file.diff.hunks.len > 0
+      if not hasHunks:
+        continue
+
+      # File header with path, status badge and line counts.
+      tdiv(class = "deepreview-unified-file"):
+        tdiv(class = "deepreview-unified-file-header"):
+          if ($file.diff.status).len > 0:
+            span(class = cstring("deepreview-diff-status" & diffStatusCssClass(file.diff))):
+              text diffStatusLabel(file.diff)
+          span(class = "deepreview-unified-file-path"):
+            text $file.path
+          if file.diff.linesAdded > 0 or file.diff.linesRemoved > 0:
+            span(class = "deepreview-unified-file-stats"):
+              span(class = "deepreview-unified-additions"):
+                text cstring(fmt"+{file.diff.linesAdded}")
+              span(class = "deepreview-unified-deletions"):
+                text cstring(fmt"-{file.diff.linesRemoved}")
+
+        # Render each hunk.
+        for hunkIdx, hunk in file.diff.hunks:
+          tdiv(class = "deepreview-unified-hunk"):
+            # Hunk header (like @@ -40,6 +40,12 @@).
+            tdiv(class = "deepreview-unified-hunk-header"):
+              text cstring(fmt"@@ -{hunk.oldStart},{hunk.oldCount} +{hunk.newStart},{hunk.newCount} @@")
+
+            # Hunk lines.
+            for lineItem in hunk.lines:
+              let lineType = $lineItem.`type`
+              let lineClass = case lineType
+                of "added": "deepreview-unified-line deepreview-unified-line-added"
+                of "removed": "deepreview-unified-line deepreview-unified-line-removed"
+                else: "deepreview-unified-line deepreview-unified-line-context"
+
+              tdiv(class = cstring(lineClass)):
+                # Gutter: old line number.
+                span(class = "deepreview-unified-gutter-old"):
+                  if lineType != "added" and lineItem.oldLine > 0:
+                    text cstring($lineItem.oldLine)
+                # Gutter: new line number.
+                span(class = "deepreview-unified-gutter-new"):
+                  if lineType != "removed" and lineItem.newLine > 0:
+                    text cstring($lineItem.newLine)
+                # Line content.
+                span(class = "deepreview-unified-line-content"):
+                  text $lineItem.content
 
 proc renderCallTrace(self: DeepReviewComponent): VNode =
   ## Render the call trace panel.
@@ -503,10 +585,19 @@ proc exposeTestHelpers(self: DeepReviewComponent) =
   proc setIter(idx: int) =
     selfCapture.selectedIteration = idx
     redrawAll()
+  proc setViewMode(mode: cstring) =
+    ## Switch the view mode. Accepts "unified" or "fullfiles".
+    let modeStr = $mode
+    if modeStr == "unified":
+      selfCapture.viewMode = Unified
+    else:
+      selfCapture.viewMode = FullFiles
+    redrawAll()
 
   {.emit: """
   window.__deepreviewSetExecution = `setExec`;
   window.__deepreviewSetIteration = `setIter`;
+  window.__deepreviewSetViewMode = `setViewMode`;
   """.}
 
 method render*(self: DeepReviewComponent): VNode =
@@ -534,10 +625,11 @@ method render*(self: DeepReviewComponent): VNode =
     drData.commitSha
 
   result = buildHtml(tdiv(class = "deepreview-container")):
-    # Header bar with commit info and summary statistics.
+    # Header bar with commit info, view mode toggle, and summary statistics.
     tdiv(class = "deepreview-header"):
       span(class = "deepreview-commit"):
         text fmt"Commit: {commitDisplay}"
+      renderViewModeToggle(self)
       span(class = "deepreview-stats"):
         text fmt"{drData.files.len} files | {drData.recordingCount} recordings | {drData.collectionTimeMs}ms"
 
@@ -545,14 +637,19 @@ method render*(self: DeepReviewComponent): VNode =
       # Left sidebar: file list.
       renderFileList(self)
 
-      # Center: editor area with sliders.
-      tdiv(class = "deepreview-editor-area"):
-        renderExecutionSlider(self)
-        renderLoopSlider(self)
-        tdiv(
-          class = "deepreview-editor",
-          id = cstring(fmt"deepreview-editor-{self.id}")
-        )
+      if self.viewMode == Unified:
+        # Center: unified diff view with all files as scrollable hunks.
+        tdiv(class = "deepreview-editor-area"):
+          renderUnifiedDiff(self)
+      else:
+        # Center: single-file editor area with sliders (original Full Files mode).
+        tdiv(class = "deepreview-editor-area"):
+          renderExecutionSlider(self)
+          renderLoopSlider(self)
+          tdiv(
+            class = "deepreview-editor",
+            id = cstring(fmt"deepreview-editor-{self.id}")
+          )
 
       # Right sidebar: call trace panel.
       renderCallTrace(self)
