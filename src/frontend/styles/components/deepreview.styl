@@ -96,7 +96,7 @@
   flex-shrink 0
 
 .deepreview-file-item
-  padding 6px 12px
+  padding 14px 12px
   cursor pointer
   border-bottom 1px solid var(--border-color, #2a2b34)
   transition background-color 0.15s ease
@@ -227,6 +227,14 @@
 .deepreview-slider-input
   flex 1
   cursor pointer
+  accent-color #5b9bd5
+
+  &::-webkit-slider-runnable-track
+    background-color #3c3c3c
+    border-radius 2px
+
+  &::-webkit-slider-thumb
+    background-color #5b9bd5
 
 .deepreview-slider-info
   flex-shrink 0
@@ -239,7 +247,7 @@
   width 280px
   min-width 200px
   overflow-y auto
-  border-left 1px solid var(--border-color, #3a3b44)
+  border-left 1px solid #3c3c3c
   background-color var(--bg-primary, #1a1b22)
   flex-shrink 0
 
@@ -470,11 +478,11 @@
 // (removed lines have no position in the new file version).
 
 .deepreview-diff-line-added
-  background-color rgba(63, 185, 80, 0.08)
+  background-color rgba(63, 185, 80, 0.18)
   border-left 3px solid #3fb950
 
 .deepreview-diff-line-modified
-  background-color rgba(210, 153, 34, 0.08)
+  background-color rgba(210, 153, 34, 0.18)
   border-left 3px solid #d29922
 
 // --- Inline variable values (Monaco afterContent decorations) ---
@@ -500,3 +508,9 @@
   white-space pre
   user-select none
   flex-shrink 0
+
+// --- Monaco editor overrides for DeepReview ---
+// Brighten gutter line numbers for better readability in the dark theme.
+
+.deepreview-editor-area .line-numbers
+  color #999999 !important
