@@ -320,6 +320,18 @@ export class DeepReviewPage {
     return this.decoratedLines("deepreview-line-partial");
   }
 
+  // -- Diff line decorations (Full Files mode) -----------------------------
+
+  /** Lines with the ``deepreview-diff-line-added`` decoration (green border). */
+  diffAddedLines(): Locator {
+    return this.decoratedLines("deepreview-diff-line-added");
+  }
+
+  /** Lines with the ``deepreview-diff-line-modified`` decoration (yellow border). */
+  diffModifiedLines(): Locator {
+    return this.decoratedLines("deepreview-diff-line-modified");
+  }
+
   // -- Inline value decorations --------------------------------------------
 
   /**

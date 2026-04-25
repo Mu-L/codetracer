@@ -191,6 +191,64 @@ proc buildCoverageDecorations(file: DeepReviewFileData): seq[JsObject] =
       }
     })
 
+proc buildDiffDecorations(file: DeepReviewFileData): seq[JsObject] =
+  ## Build Monaco decoration descriptors for diff line highlighting.
+  ## Uses the hunk data from ``file.diff.hunks`` to mark added and
+  ## modified lines with coloured left borders in the Full Files editor
+  ## view, matching the unified diff colour scheme.
+  ##
+  ## Line types:
+  ## - Added lines (``newLine > 0``, type "added"): green left border.
+  ## - Modified lines: when a hunk contains both removed and added lines
+  ##   in sequence, the added lines are treated as "modified" (yellow
+  ##   border) since they replace existing content.
+  ## - Removed lines are not decorated because they have no line in the
+  ##   new file version displayed in the editor.
+  result = @[]
+  if file.isNil or file.diff.isNil:
+    return
+
+  for hunk in file.diff.hunks:
+    # Determine whether this hunk has both removals and additions,
+    # which indicates modification rather than pure insertion.
+    var hasRemoved = false
+    var hasAdded = false
+    for line in hunk.lines:
+      let lt = $line.`type`
+      if lt == "removed":
+        hasRemoved = true
+      elif lt == "added":
+        hasAdded = true
+
+    let isModification = hasRemoved and hasAdded
+
+    for line in hunk.lines:
+      let lt = $line.`type`
+      if lt != "added":
+        # Only added lines have a position in the new file.
+        continue
+      if line.newLine < 1:
+        continue
+
+      let className = if isModification:
+        cstring"deepreview-diff-line-modified"
+      else:
+        cstring"deepreview-diff-line-added"
+
+      result.add(js{
+        range: js{
+          startLineNumber: line.newLine,
+          startColumn: 1,
+          endLineNumber: line.newLine,
+          endColumn: 1
+        },
+        options: js{
+          isWholeLine: true,
+          className: className,
+          glyphMarginClassName: className
+        }
+      })
+
 proc buildInlineValueDecorations(file: DeepReviewFileData, executionIndex: int): seq[JsObject] =
   ## Build Monaco afterContent decorations for inline variable values
   ## from the flow data of a specific execution index.
@@ -290,6 +348,11 @@ proc updateDecorations(self: DeepReviewComponent) =
   # Coverage decorations.
   let coverageDecos = buildCoverageDecorations(file)
   for d in coverageDecos:
+    allDecorations.add(d)
+
+  # Diff line decorations (added/modified lines from hunk data).
+  let diffDecos = buildDiffDecorations(file)
+  for d in diffDecos:
     allDecorations.add(d)
 
   # Inline value decorations.

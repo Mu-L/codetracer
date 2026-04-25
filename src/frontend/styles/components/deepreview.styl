@@ -421,6 +421,19 @@
   background-color rgba(220, 180, 0, 0.08)
   border-left 3px solid rgba(220, 180, 0, 0.5)
 
+// --- Diff line highlighting (Monaco decorations for Full Files mode) ---
+// Uses the same green/yellow palette as the unified diff view for
+// visual consistency. Only added and modified lines are decorated
+// (removed lines have no position in the new file version).
+
+.deepreview-diff-line-added
+  background-color rgba(63, 185, 80, 0.08)
+  border-left 3px solid #3fb950
+
+.deepreview-diff-line-modified
+  background-color rgba(210, 153, 34, 0.08)
+  border-left 3px solid #d29922
+
 // --- Inline variable values (Monaco afterContent decorations) ---
 
 .deepreview-inline-value

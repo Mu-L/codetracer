@@ -439,6 +439,90 @@ test.describe("DeepReview GUI - main features", () => {
   });
 
   // -----------------------------------------------------------------------
+  // Test 19: Diff decorations in Full Files Mode
+  // -----------------------------------------------------------------------
+
+  test("Test 19: diff decorations appear in Full Files Mode for modified file", async ({ ctPage }) => {
+    const dr = new DeepReviewPage(ctPage);
+    await dr.waitForReady();
+    await dr.waitForEditorReady();
+    await wait(2000);
+
+    // The first file (src/main.rs) has status "M" with both removed and
+    // added lines, so the added lines should get "modified" (yellow)
+    // decorations. The hunk has 8 added lines at newLine 3-10.
+    const modifiedCount = await dr.diffModifiedLines().count();
+    expect(modifiedCount).toBeGreaterThan(0);
+  });
+
+  // -----------------------------------------------------------------------
+  // Test 20: Added lines have green decoration class
+  // -----------------------------------------------------------------------
+
+  test("Test 20: added lines have green decoration class for purely added file", async ({ ctPage }) => {
+    const dr = new DeepReviewPage(ctPage);
+    await dr.waitForReady();
+    await dr.waitForEditorReady();
+    await wait(500);
+
+    // Switch to the second file (src/utils.rs) which has status "A" — all
+    // lines are purely added (no removals in the hunk), so they should get
+    // the green "added" decoration class.
+    const secondItem = dr.fileItemByIndex(1);
+    await secondItem.click();
+    await wait(1000);
+
+    const addedCount = await dr.diffAddedLines().count();
+    expect(addedCount).toBeGreaterThan(0);
+
+    // Verify at least one element actually has the correct CSS class.
+    const firstAdded = dr.diffAddedLines().first();
+    const classes = await firstAdded.getAttribute("class");
+    expect(classes).toContain("deepreview-diff-line-added");
+  });
+
+  // -----------------------------------------------------------------------
+  // Test 21: Diff decorations are removed when switching files
+  // -----------------------------------------------------------------------
+
+  test("Test 21: diff decorations are removed when switching to a file without diff data", async ({ ctPage }) => {
+    const dr = new DeepReviewPage(ctPage);
+    await dr.waitForReady();
+    await dr.waitForEditorReady();
+    await wait(500);
+
+    // Start on the first file (src/main.rs, modified) — should have diff decorations.
+    const initialModified = await dr.diffModifiedLines().count();
+    expect(initialModified).toBeGreaterThan(0);
+
+    // Switch to the second file (src/utils.rs, added) — decorations should
+    // change. The modified decorations from the first file should be gone.
+    const secondItem = dr.fileItemByIndex(1);
+    await secondItem.click();
+    await wait(1000);
+
+    // src/utils.rs is purely added, so it should have added decorations
+    // but no modified decorations.
+    const addedCount = await dr.diffAddedLines().count();
+    expect(addedCount).toBeGreaterThan(0);
+
+    const modifiedCount = await dr.diffModifiedLines().count();
+    expect(modifiedCount).toBe(0);
+
+    // Switch to the third file (src/config.rs, deleted) — all lines are
+    // removed, so there should be no diff decorations at all (removed
+    // lines have no position in the new file).
+    const thirdItem = dr.fileItemByIndex(2);
+    await thirdItem.click();
+    await wait(1000);
+
+    const deletedAdded = await dr.diffAddedLines().count();
+    const deletedModified = await dr.diffModifiedLines().count();
+    expect(deletedAdded).toBe(0);
+    expect(deletedModified).toBe(0);
+  });
+
+  // -----------------------------------------------------------------------
   // Test 14: Context expansion - expand buttons visible
   // -----------------------------------------------------------------------
 
