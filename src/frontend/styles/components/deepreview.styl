@@ -427,3 +427,20 @@
   color var(--text-secondary, #6e7681)
   font-style italic
   opacity 0.8
+
+// --- Omniscience overlay (inline variable values on unified diff lines) ---
+//
+// Matches the CodeTracer flow visualization style: monospace, light blue,
+// slightly dimmed, positioned after the code content within each diff line.
+
+.deepreview-omniscience-value
+  display inline-block
+  margin-left 16px
+  font-family 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace
+  font-size 12px
+  line-height 20px
+  color #9cdcfe
+  opacity 0.65
+  white-space pre
+  user-select none
+  flex-shrink 0

@@ -466,6 +466,13 @@ export class DeepReviewPage {
     return this.page.locator(".deepreview-expanded-context");
   }
 
+  // -- Omniscience overlay (inline values on diff lines) ---------------------
+
+  /** All omniscience inline value spans in the unified diff. */
+  omniscienceValues(): Locator {
+    return this.page.locator(".deepreview-omniscience-value");
+  }
+
   /**
    * Expand context above a specific hunk via the exposed test helper.
    * @param fileIdx 0-based file index

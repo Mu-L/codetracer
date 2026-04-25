@@ -524,6 +524,65 @@ test.describe("DeepReview GUI - main features", () => {
   });
 
   // -----------------------------------------------------------------------
+  // Test 17: Omniscience overlay - inline values appear on diff lines
+  // -----------------------------------------------------------------------
+
+  test("Test 17: omniscience inline values appear on unified diff lines with flow data", async ({ ctPage }) => {
+    const dr = new DeepReviewPage(ctPage);
+    await dr.waitForReady();
+    await wait(500);
+
+    await dr.switchToUnifiedDiff();
+    await wait(500);
+
+    // The fixture has flow data for src/main.rs and src/utils.rs. Lines
+    // in the unified diff that match flow step line numbers should have
+    // an omniscience overlay span appended.
+    const omniscienceCount = await dr.omniscienceValues().count();
+    expect(omniscienceCount).toBeGreaterThan(0);
+  });
+
+  // -----------------------------------------------------------------------
+  // Test 18: Omniscience overlay - values match fixture flow data
+  // -----------------------------------------------------------------------
+
+  test("Test 18: omniscience inline values match the flow data from the fixture", async ({ ctPage }) => {
+    const dr = new DeepReviewPage(ctPage);
+    await dr.waitForReady();
+    await wait(500);
+
+    await dr.switchToUnifiedDiff();
+    await wait(500);
+
+    const normalize = (s: string) => s.replace(/\u00a0/g, " ");
+
+    const allTexts: string[] = [];
+    const locators = await dr.omniscienceValues().all();
+    for (const loc of locators) {
+      const text = await loc.textContent();
+      if (text) allTexts.push(normalize(text));
+    }
+    const combined = allTexts.join(" | ");
+
+    // From the fixture flow data for src/main.rs (first execution):
+    //   line 2: x = 10
+    //   line 3: x = 10, y = 20
+    //   line 4: result = 55
+    //   line 10: result = 55
+    // For src/utils.rs (format_output execution):
+    //   line 2: trimmed = "hello world"
+    //   line 6: result = "[hello world]"
+    // Lines 2, 3, 4 of main.rs are in the hunk (newLine 2, 3, 4).
+    // Line 10 of main.rs is also in the hunk (newLine 10).
+    expect(combined).toContain("x = 10");
+    expect(combined).toContain("y = 20");
+    expect(combined).toContain("result = 55");
+
+    // Verify src/utils.rs flow values are also present.
+    expect(combined).toContain("trimmed =");
+  });
+
+  // -----------------------------------------------------------------------
   // Test 8: Call trace panel
   // -----------------------------------------------------------------------
 

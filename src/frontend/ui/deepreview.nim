@@ -530,6 +530,23 @@ proc setExpand(table: JsAssoc[cstring, JsAssoc[cstring, int]], fileIdx, hunkIdx,
     table[fk] = newJsAssoc[cstring, int]()
   table[fk][hk] = value
 
+proc flowValuesForLine(file: DeepReviewFileData, lineNum: int): string =
+  ## Look up inline variable values from the file's flow data for a given
+  ## line number (1-based, matching the "new" side of the diff). Scans all
+  ## flow executions and returns the first match. The result is formatted as
+  ## ``"// var1 = val1, var2 = val2"`` or empty string if no match.
+  if file.isNil or file.flow.len == 0 or lineNum < 1:
+    return ""
+  for flow in file.flow:
+    for step in flow.steps:
+      if step.line == lineNum and step.values.len > 0:
+        var parts: seq[string] = @[]
+        for v in step.values:
+          let truncMarker = if v.truncated: "..." else: ""
+          parts.add(fmt"{v.name} = {v.value}{truncMarker}")
+        return "// " & parts.join(", ")
+  return ""
+
 proc splitSourceLines(file: DeepReviewFileData): seq[string] =
   ## Split the file's sourceContent into individual lines.
   ## Returns an empty seq if sourceContent is nil or empty.
@@ -682,6 +699,14 @@ proc renderUnifiedDiff(self: DeepReviewComponent): VNode =
                 # Line content.
                 span(class = "deepreview-unified-line-content"):
                   text $lineItem.content
+                # Omniscience overlay: inline variable values from flow data.
+                # Only shown for lines that exist in the new file version
+                # (added or context lines with a valid newLine number).
+                if lineType != "removed" and lineItem.newLine > 0:
+                  let inlineVals = flowValuesForLine(file, lineItem.newLine)
+                  if inlineVals.len > 0:
+                    span(class = "deepreview-omniscience-value"):
+                      text cstring(inlineVals)
 
             # --- "Expand below" button and expanded lines ---
             if hasSource:
