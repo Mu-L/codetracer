@@ -48,6 +48,26 @@ proc buildSeverityToProblem(sev: BuildSeverity): ProblemSeverity =
   of SevWarning: ProbWarning
   of SevInfo:    ProbInfo
 
+proc scrollBuildToBottom(self: BuildComponent) =
+  ## Scroll the build output container to the bottom so the latest lines
+  ## are visible. Called after appending lines when auto-scroll is enabled.
+  let el = document.getElementById("build")
+  if not el.isNil:
+    el.toJs.scrollTop = el.toJs.scrollHeight
+
+proc buildElapsedStr(self: BuildComponent): string =
+  ## Return a human-readable elapsed duration string for the current build.
+  ## Returns "" when no build is running or start time is not set.
+  if self.build.buildStartTime == 0:
+    return ""
+  let elapsedMs = dateNowMs() - self.build.buildStartTime
+  let elapsedSec = elapsedMs / 1000.0
+  if elapsedSec < 60.0:
+    return &"{elapsedSec:.1f}s"
+  let mins = int(elapsedSec) div 60
+  let secs = elapsedSec - float(mins * 60)
+  return &"{mins}m {secs:.1f}s"
+
 template appendBuild(self: BuildComponent, line: string, stdout: bool): untyped =
   let klass = if stdout: "build-stdout" else: "build-stderr"
   let (match, location, rawLocation, other) = self.matchLocation(line)
@@ -73,6 +93,10 @@ template appendBuild(self: BuildComponent, line: string, stdout: bool): untyped 
 
 method onBuildCommand*(self: BuildComponent, response: BuildCommand) {.async.} =
   self.build.command = response.command
+  # Initialise auto-scroll to on and record the build start time.
+  self.build.autoScroll = true
+  self.build.buildStartTime = dateNowMs()
+  self.build.running = true
   self.data.redraw()
 
 method onBuildStdout*(self: BuildComponent, response: BuildOutput) {.async.} =
@@ -82,6 +106,8 @@ method onBuildStdout*(self: BuildComponent, response: BuildOutput) {.async.} =
   for line in lines:
     self.appendBuild(line, true)
   self.data.redraw()
+  if self.build.autoScroll:
+    self.scrollBuildToBottom()
 
 method onBuildStderr*(self: BuildComponent, response: BuildOutput) {.async.} =
   let lines = ($response.data).splitLines
@@ -90,6 +116,8 @@ method onBuildStderr*(self: BuildComponent, response: BuildOutput) {.async.} =
   for line in lines:
     self.appendBuild(line, false)
   self.data.redraw()
+  if self.build.autoScroll:
+    self.scrollBuildToBottom()
 
 method onBuildCode*(self: BuildComponent, response: BuildCode) {.async.} =
   self.build.code = response.code
@@ -118,20 +146,76 @@ proc buildErrorView(self: BuildComponent, location: types.Location, rawLocation:
       tdiv(class="build-other"):
         text other
 
+proc buildHeaderControls(self: BuildComponent): VNode =
+  ## Render the compact header control buttons: stop, clear, auto-scroll toggle,
+  ## and elapsed duration display.
+  let isRunning = self.build.running
+  result = buildHtml(tdiv(class="build-header-controls")):
+    # Stop button — sends IPC to cancel the running build process.
+    if isRunning:
+      tdiv(class="build-ctrl-btn build-stop-btn", title="Stop build",
+           onclick = proc =
+             if not self.data.ipc.isNil:
+               self.data.ipc.send(cstring"CODETRACER::build-cancel", js{})
+      ):
+        text "\u25A0" # ■ square stop icon
+    else:
+      tdiv(class="build-ctrl-btn build-stop-btn disabled", title="No build running"):
+        text "\u25A0"
+
+    # Clear button — empties all build output.
+    tdiv(class="build-ctrl-btn build-clear-btn", title="Clear build output",
+         onclick = proc =
+           self.build.output = @[]
+           self.build.errors = @[]
+           self.build.problems = @[]
+           self.data.redraw()
+    ):
+      text "\u2715" # ✕ clear icon
+
+    # Auto-scroll toggle — toggles sticky scrolling behaviour.
+    let scrollClass = if self.build.autoScroll: "build-ctrl-btn build-scroll-btn active"
+                      else: "build-ctrl-btn build-scroll-btn"
+    tdiv(class=scrollClass, title="Toggle auto-scroll",
+         onclick = proc =
+           self.build.autoScroll = not self.build.autoScroll
+           if self.build.autoScroll:
+             self.scrollBuildToBottom()
+           self.data.redraw()
+    ):
+      text "\u2193" # ↓ down-arrow icon
+
+    # Elapsed duration display — shown while a build is running.
+    if isRunning:
+      let elapsed = self.buildElapsedStr()
+      if elapsed.len > 0:
+        tdiv(class="build-duration"):
+          text elapsed
+
 method render*(self: BuildComponent): VNode =
   result = buildHtml(tdiv(class="build-panel")):
     if self.build.running:
       tdiv(class="build-header"):
         tdiv(class="build-command-label"):
           text "running " & self.build.command
+        buildHeaderControls(self)
     elif self.build.code != 0 and self.build.output.len > 0:
       tdiv(class="build-header build-failed"):
         tdiv(class="build-command-label"):
           text "build failed (exit code " & $self.build.code & ")"
+        buildHeaderControls(self)
     elif self.build.output.len > 0:
       tdiv(class="build-header build-succeeded"):
         tdiv(class="build-command-label"):
           text "build succeeded"
+        buildHeaderControls(self)
+    else:
+      # No build output yet — still show the controls row so clear/scroll
+      # are always accessible.
+      tdiv(class="build-header"):
+        tdiv(class="build-command-label"):
+          text ""
+        buildHeaderControls(self)
     tdiv(id="build", class="build-output-container"):
       for (raw, stdout) in self.build.output:
         let parsed = parseBuildLocation($raw)

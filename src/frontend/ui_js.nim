@@ -504,7 +504,7 @@ proc update*(self: Data, build: bool = false) =
   if build:
     let buildComponent = data.buildComponent(0)
     buildComponent.builds.add(buildComponent.build)
-    buildComponent.build = Build(output: @[], running: true)
+    buildComponent.build = Build(output: @[], running: true, autoScroll: true, buildStartTime: dateNowMs())
     data.saveFiles()
   else:
     let activePath = self.services.editor.active

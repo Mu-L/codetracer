@@ -1781,6 +1781,8 @@ type
     code*:   int
     running*: bool
     command*: cstring
+    autoScroll*: bool       ## When true (default), build output scrolls to bottom on new lines.
+    buildStartTime*: float  ## Timestamp (ms since epoch) when the build started; 0 when idle.
 
   BuildOutput* = object
     data*:    cstring

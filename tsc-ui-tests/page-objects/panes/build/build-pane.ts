@@ -88,4 +88,41 @@ export class BuildPane {
       (el) => window.getComputedStyle(el).color,
     );
   }
+
+  // --- BP-M5: Header control locators ---
+
+  /**
+   * The container holding all header control buttons (stop, clear, auto-scroll).
+   */
+  headerControls(): Locator {
+    return this.page.locator(".build-header-controls");
+  }
+
+  /**
+   * The stop/cancel build button.
+   */
+  stopButton(): Locator {
+    return this.page.locator(".build-stop-btn");
+  }
+
+  /**
+   * The clear build output button.
+   */
+  clearButton(): Locator {
+    return this.page.locator(".build-clear-btn");
+  }
+
+  /**
+   * The auto-scroll toggle button.
+   */
+  scrollToggle(): Locator {
+    return this.page.locator(".build-scroll-btn");
+  }
+
+  /**
+   * The elapsed build duration display.
+   */
+  durationDisplay(): Locator {
+    return this.page.locator(".build-duration");
+  }
 }
