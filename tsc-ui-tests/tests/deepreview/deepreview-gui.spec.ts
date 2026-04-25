@@ -106,6 +106,76 @@ test.describe("DeepReview GUI - main features", () => {
   });
 
   // -----------------------------------------------------------------------
+  // Test 2b: Diff status indicators on file list items
+  // -----------------------------------------------------------------------
+
+  test("Test 2b: file list items show diff status indicators with correct labels", async ({ ctPage }) => {
+    const dr = new DeepReviewPage(ctPage);
+    await dr.waitForReady();
+
+    const items = await dr.fileItems();
+    expect(items.length).toBe(3);
+
+    // src/main.rs is Modified ("M")
+    const mainStatus = await items[0].diffStatus();
+    expect(mainStatus).toBe("M");
+
+    // src/utils.rs is Added ("A")
+    const utilsStatus = await items[1].diffStatus();
+    expect(utilsStatus).toBe("A");
+
+    // src/config.rs is Deleted ("D")
+    const configStatus = await items[2].diffStatus();
+    expect(configStatus).toBe("D");
+  });
+
+  // -----------------------------------------------------------------------
+  // Test 2c: Diff status styling (colour classes)
+  // -----------------------------------------------------------------------
+
+  test("Test 2c: diff status indicators have correct colour classes", async ({ ctPage }) => {
+    const dr = new DeepReviewPage(ctPage);
+    await dr.waitForReady();
+
+    const items = await dr.fileItems();
+
+    const mainClasses = await items[0].diffStatusClasses();
+    expect(mainClasses).toContain("deepreview-diff-modified");
+
+    const utilsClasses = await items[1].diffStatusClasses();
+    expect(utilsClasses).toContain("deepreview-diff-added");
+
+    const configClasses = await items[2].diffStatusClasses();
+    expect(configClasses).toContain("deepreview-diff-deleted");
+  });
+
+  // -----------------------------------------------------------------------
+  // Test 2d: Modified line counts
+  // -----------------------------------------------------------------------
+
+  test("Test 2d: file list items show added/removed line counts", async ({ ctPage }) => {
+    const dr = new DeepReviewPage(ctPage);
+    await dr.waitForReady();
+
+    const items = await dr.fileItems();
+
+    // src/main.rs: +8 / -3
+    const mainLines = await items[0].diffLines();
+    expect(mainLines).toContain("+8");
+    expect(mainLines).toContain("-3");
+
+    // src/utils.rs: +8 / -0
+    const utilsLines = await items[1].diffLines();
+    expect(utilsLines).toContain("+8");
+    expect(utilsLines).toContain("-0");
+
+    // src/config.rs: +0 / -7
+    const configLines = await items[2].diffLines();
+    expect(configLines).toContain("+0");
+    expect(configLines).toContain("-7");
+  });
+
+  // -----------------------------------------------------------------------
   // Test 3: Coverage highlighting
   // -----------------------------------------------------------------------
 

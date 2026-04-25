@@ -79,9 +79,69 @@
   text-overflow ellipsis
   margin-top 2px
 
+// --- File name row (status indicator + basename) ---
+
+.deepreview-file-name-row
+  display flex
+  align-items center
+  gap 6px
+
+// --- Diff status indicator badge (A/M/D) ---
+
+.deepreview-diff-status
+  display inline-flex
+  align-items center
+  justify-content center
+  width 18px
+  height 18px
+  font-size 11px
+  font-weight bold
+  border-radius 3px
+  flex-shrink 0
+  color var(--text-primary, #c9c9c9)
+  background-color var(--bg-hover, #2a2b34)
+
+  &.deepreview-diff-added
+    color #3fb950
+    background-color rgba(63, 185, 80, 0.15)
+
+  &.deepreview-diff-modified
+    color #d29922
+    background-color rgba(210, 153, 34, 0.15)
+
+  &.deepreview-diff-deleted
+    color #f85149
+    background-color rgba(248, 81, 73, 0.15)
+
+// --- File badges row (diff lines + coverage) ---
+
+.deepreview-file-badges
+  display flex
+  align-items center
+  gap 6px
+  margin-top 2px
+
+// --- Diff line count badge (+N / -M) ---
+
+.deepreview-diff-lines
+  display inline-block
+  font-size 11px
+  color var(--text-secondary, #8e8f92)
+  background-color var(--bg-hover, #2a2b34)
+  padding 1px 6px
+  border-radius 3px
+
+  &.deepreview-diff-added
+    color #3fb950
+
+  &.deepreview-diff-modified
+    color #d29922
+
+  &.deepreview-diff-deleted
+    color #f85149
+
 .deepreview-coverage-badge
   display inline-block
-  margin-top 2px
   font-size 11px
   color var(--text-secondary, #8e8f92)
   background-color var(--bg-hover, #2a2b34)

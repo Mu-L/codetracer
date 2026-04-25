@@ -19,7 +19,7 @@ type
     callTrace*: DeepReviewCallTrace
 
   DeepReviewFileData* = ref object
-    ## Per-file data including symbols, coverage, flow, and loops.
+    ## Per-file data including symbols, coverage, flow, loops, and diff info.
     path*: langstring
     contentHash*: langstring
     symbols*: seq[DeepReviewSymbol]
@@ -28,6 +28,15 @@ type
     loops*: seq[DeepReviewLoop]
     flow*: seq[DeepReviewFunctionFlow]
     flags*: DeepReviewFileFlags
+    diff*: DeepReviewFileDiff
+
+  DeepReviewFileDiff* = ref object
+    ## Diff metadata for a file in the review.
+    ## ``status`` is one of "A" (added), "M" (modified), "D" (deleted).
+    ## ``linesAdded`` / ``linesRemoved`` count the changed lines.
+    status*: langstring
+    linesAdded*: int
+    linesRemoved*: int
 
   DeepReviewFileFlags* = ref object
     ## Boolean flags summarising the data availability and coverage

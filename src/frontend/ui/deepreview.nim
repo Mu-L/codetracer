@@ -337,8 +337,38 @@ proc makeFileClickHandler(self: DeepReviewComponent, idx: int): proc(ev: Event, 
     self.switchToFile(idx)
     redrawAll()
 
+proc diffStatusLabel(diff: DeepReviewFileDiff): cstring =
+  ## Return a single-letter label for the diff status.
+  if diff.isNil:
+    return cstring""
+  let s = $diff.status
+  case s
+  of "A": return cstring"A"
+  of "M": return cstring"M"
+  of "D": return cstring"D"
+  else: return cstring""
+
+proc diffStatusCssClass(diff: DeepReviewFileDiff): string =
+  ## Return a CSS modifier class for the diff status colour.
+  if diff.isNil:
+    return ""
+  let s = $diff.status
+  case s
+  of "A": return " deepreview-diff-added"
+  of "M": return " deepreview-diff-modified"
+  of "D": return " deepreview-diff-deleted"
+  else: return ""
+
+proc diffLinesSummary(diff: DeepReviewFileDiff): cstring =
+  ## Return a short "+N / -M" summary of changed lines.
+  if diff.isNil:
+    return cstring""
+  result = cstring(fmt"+{diff.linesAdded} / -{diff.linesRemoved}")
+
 proc renderFileList(self: DeepReviewComponent): VNode =
   ## Render the file list sidebar.
+  ## Each file entry shows a diff status indicator (A/M/D), the file
+  ## basename and path, a modified line count, and a coverage badge.
   buildHtml(tdiv(class = "deepreview-file-list")):
     for i, file in self.drData.files:
       let isSelected = (i == self.selectedFileIndex)
@@ -347,13 +377,23 @@ proc renderFileList(self: DeepReviewComponent): VNode =
         class = cstring(fmt"deepreview-file-item{selectedClass}"),
         onclick = self.makeFileClickHandler(i)
       ):
-        tdiv(class = "deepreview-file-name"):
-          text fileBasename(file.path)
+        # Top row: diff status indicator + file basename.
+        tdiv(class = "deepreview-file-name-row"):
+          if not file.diff.isNil and ($file.diff.status).len > 0:
+            span(class = cstring("deepreview-diff-status" & diffStatusCssClass(file.diff))):
+              text diffStatusLabel(file.diff)
+          tdiv(class = "deepreview-file-name"):
+            text fileBasename(file.path)
         tdiv(class = "deepreview-file-path-full"):
           text $file.path
-        if file.flags.hasCoverage:
-          span(class = "deepreview-coverage-badge"):
-            text coverageSummary(file)
+        # Badge row: diff line count and coverage.
+        tdiv(class = "deepreview-file-badges"):
+          if not file.diff.isNil and (file.diff.linesAdded > 0 or file.diff.linesRemoved > 0):
+            span(class = cstring("deepreview-diff-lines" & diffStatusCssClass(file.diff))):
+              text diffLinesSummary(file.diff)
+          if file.flags.hasCoverage:
+            span(class = "deepreview-coverage-badge"):
+              text coverageSummary(file)
 
 proc renderExecutionSlider(self: DeepReviewComponent): VNode =
   ## Render the function execution index slider.
@@ -447,9 +487,34 @@ proc renderCallTrace(self: DeepReviewComponent): VNode =
 # Main render
 # ---------------------------------------------------------------------------
 
+proc exposeTestHelpers(self: DeepReviewComponent) =
+  ## Expose helper functions on the ``window`` object for E2E test
+  ## interaction. Karax's event delegation can make programmatic
+  ## ``dispatchEvent`` calls unreliable for range inputs, so the
+  ## tests call these helpers directly.
+  ##
+  ## We use closures that capture ``self`` so the JS functions don't
+  ## need to reference mangled Nim method names.
+  let selfCapture = self
+  proc setExec(idx: int) =
+    selfCapture.selectedExecutionIndex = idx
+    selfCapture.updateDecorations()
+    redrawAll()
+  proc setIter(idx: int) =
+    selfCapture.selectedIteration = idx
+    redrawAll()
+
+  {.emit: """
+  window.__deepreviewSetExecution = `setExec`;
+  window.__deepreviewSetIteration = `setIter`;
+  """.}
+
 method render*(self: DeepReviewComponent): VNode =
   ## Render the full DeepReview view with sidebar, editor, and call trace.
   let drData = self.drData
+
+  # Expose test helpers on the window object for E2E tests.
+  self.exposeTestHelpers()
 
   # Schedule editor initialisation after the DOM has been rendered.
   if not self.kxi.isNil:

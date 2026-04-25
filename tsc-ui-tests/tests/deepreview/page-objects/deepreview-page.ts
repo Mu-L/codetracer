@@ -50,6 +50,30 @@ export class DeepReviewFileItem {
     return (await badge.textContent()) ?? "";
   }
 
+  /** Get the diff status indicator text (e.g. "A", "M", "D"), or empty string if absent. */
+  async diffStatus(): Promise<string> {
+    const indicator = this.root.locator(".deepreview-diff-status");
+    const count = await indicator.count();
+    if (count === 0) return "";
+    return (await indicator.textContent()) ?? "";
+  }
+
+  /** Get the diff lines summary text (e.g. "+8 / -3"), or empty string if absent. */
+  async diffLines(): Promise<string> {
+    const lines = this.root.locator(".deepreview-diff-lines");
+    const count = await lines.count();
+    if (count === 0) return "";
+    return (await lines.textContent()) ?? "";
+  }
+
+  /** Get the CSS classes on the diff status indicator element. */
+  async diffStatusClasses(): Promise<string> {
+    const indicator = this.root.locator(".deepreview-diff-status");
+    const count = await indicator.count();
+    if (count === 0) return "";
+    return (await indicator.getAttribute("class")) ?? "";
+  }
+
   /** Whether this file item has the ``selected`` class. */
   async isSelected(): Promise<boolean> {
     const classes = (await this.root.getAttribute("class")) ?? "";
@@ -200,11 +224,18 @@ export class DeepReviewPage {
    * ``fill`` does not work for range inputs.
    */
   async setExecutionSliderValue(value: number): Promise<void> {
-    const input = this.executionSliderInput();
-    await input.evaluate(
-      (el, val) => {
-        (el as HTMLInputElement).value = String(val);
-        el.dispatchEvent(new Event("input", { bubbles: true }));
+    // Karax's event handling for range inputs can make programmatic
+    // ``dispatchEvent`` calls unreliable. Instead, call the exposed
+    // test helper which directly updates the component state and
+    // triggers a Karax re-render.
+    await this.page.evaluate(
+      (val) => {
+        const fn = (window as any).__deepreviewSetExecution;
+        if (typeof fn === "function") {
+          fn(val);
+        } else {
+          throw new Error("__deepreviewSetExecution not found on window");
+        }
       },
       value,
     );
@@ -240,11 +271,18 @@ export class DeepReviewPage {
 
   /** Set the loop slider to a specific value. */
   async setLoopSliderValue(value: number): Promise<void> {
-    const input = this.loopSliderInput();
-    await input.evaluate(
-      (el, val) => {
-        (el as HTMLInputElement).value = String(val);
-        el.dispatchEvent(new Event("input", { bubbles: true }));
+    // Karax's event handling for range inputs can make programmatic
+    // ``dispatchEvent`` calls unreliable. Instead, call the exposed
+    // test helper which directly updates the component state and
+    // triggers a Karax re-render.
+    await this.page.evaluate(
+      (val) => {
+        const fn = (window as any).__deepreviewSetIteration;
+        if (typeof fn === "function") {
+          fn(val);
+        } else {
+          throw new Error("__deepreviewSetIteration not found on window");
+        }
       },
       value,
     );

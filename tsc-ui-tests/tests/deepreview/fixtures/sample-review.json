@@ -7,6 +7,7 @@
     {
       "path": "src/main.rs",
       "contentHash": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      "diff": { "status": "M", "linesAdded": 8, "linesRemoved": 3 },
       "symbols": [
         {
           "name": "main",
@@ -254,6 +255,7 @@
     {
       "path": "src/utils.rs",
       "contentHash": "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
+      "diff": { "status": "A", "linesAdded": 8, "linesRemoved": 0 },
       "symbols": [
         {
           "name": "format_output",
@@ -326,6 +328,7 @@
     {
       "path": "src/config.rs",
       "contentHash": "1234567812345678123456781234567812345678123456781234567812345678",
+      "diff": { "status": "D", "linesAdded": 0, "linesRemoved": 7 },
       "symbols": [
         {
           "name": "DEFAULT_TIMEOUT",
