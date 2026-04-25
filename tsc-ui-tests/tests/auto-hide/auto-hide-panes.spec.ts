@@ -71,12 +71,32 @@ async function clickDropdownItem(
   const dropdown = stack.locator(".layout-dropdown").first();
   await expect(dropdown).not.toHaveClass(/hidden/, { timeout: 5_000 });
 
-  // Click the desired menu item.
+  // Wait for the desired menu item to be visible so the DOM is populated.
   const menuItem = dropdown.locator(".layout-dropdown-node", {
     hasText: itemText,
   });
   await expect(menuItem).toBeVisible({ timeout: 5_000 });
-  await menuItem.click();
+
+  // Click via page.evaluate() to avoid the blur race condition: the
+  // dropdown's onblur handler closes the menu before Playwright's
+  // click() can land. Using the DOM API fires the click synchronously.
+  // We scope the search to the correct stack (by index) since all
+  // stacks have identical menu items.
+  await ctPage.evaluate(
+    ({ text, idx }) => {
+      const stacks = document.querySelectorAll(".lm_stack");
+      const stack = stacks[idx];
+      if (!stack) return;
+      const items = stack.querySelectorAll(".layout-dropdown-node");
+      for (const item of items) {
+        if (item.textContent?.trim() === text) {
+          (item as HTMLElement).click();
+          return;
+        }
+      }
+    },
+    { text: itemText, idx: stackIndex },
+  );
 
   // Allow the pin action to settle (DOM removal + strip re-render).
   await wait(ACTION_SETTLE_MS);
@@ -199,9 +219,16 @@ test.describe("Auto-hide panes", () => {
     await expect(overlay).toHaveClass(/visible/, { timeout: 5_000 });
 
     // Click "Unpin" to restore the panel back into GL.
+    // Use evaluate() for a direct DOM click to avoid the mouse-leave
+    // auto-dismiss race: Playwright's mouse movement to reach the button
+    // can briefly exit the overlay bounds, triggering the 300ms dismiss
+    // timer before the click lands.
     const unpinBtn = ctPage.locator("#auto-hide-overlay-unpin-btn");
     await expect(unpinBtn).toBeVisible();
-    await unpinBtn.click();
+    await ctPage.evaluate(() => {
+      const btn = document.getElementById("auto-hide-overlay-unpin-btn");
+      if (btn) btn.click();
+    });
     await wait(ACTION_SETTLE_MS);
 
     // The overlay should no longer be visible.

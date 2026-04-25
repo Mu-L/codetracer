@@ -55,6 +55,7 @@ type
     ## Central state for all auto-hidden panels.
     panels*: seq[AutoHidePanel]
     activeOverlay*: AutoHidePanel  ## Currently shown overlay, or nil
+    lastActivePanel*: AutoHidePanel  ## Last panel shown in overlay (survives hideOverlay)
     overlayVisible*: bool
     ## Callback to re-render strips after mutations.
     onChanged*: proc()
@@ -115,12 +116,50 @@ proc pinPanel*(
     console.error cstring"auto_hide: pinPanel called with nil contentItem"
     return
 
-  # Serialise before detaching so the config is still valid.
-  let config = contentItem.toConfig().toJs
-  let componentState = cast[GoldenItemState](contentItem.toConfig().componentState)
-  let title = componentState.label
+  # Capture the component state before detaching so we can rebuild
+  # the config later for re-attach.
+  let resolvedConfig = contentItem.toConfig()
+  let componentState = cast[GoldenItemState](resolvedConfig.componentState)
   let content = componentState.content
   let componentId = componentState.id
+
+  # Build an unresolved component config that `addItem` can consume.
+  # We cannot use `toConfig().toJs` directly because the resolved config
+  # uses numeric type enums and `componentType` instead of the string-based
+  # `type` and `componentName` that `addItem` expects.
+  let componentName = if componentState.isEditor:
+      cstring"editorComponent"
+    else:
+      cstring"genericUiComponent"
+  let config = js{
+    "type": cstring"component",
+    "componentName": componentName,
+    "componentState": js{
+      "id": componentState.id,
+      "label": componentState.label,
+      "content": cint(ord(componentState.content)),
+      "fullPath": componentState.fullPath,
+      "name": componentState.name,
+      "editorView": cint(ord(componentState.editorView)),
+      "isEditor": componentState.isEditor,
+      "noInfoMessage": componentState.noInfoMessage
+    }
+  }
+
+  # Extract the display title from the GL tab header element, which
+  # contains the user-visible label (e.g. "FILESYSTEM") set by
+  # layout.nim's tab creation logic. Falls back to the component
+  # state label if the tab element is not available.
+  let title = block:
+    let tab = contentItem.tab
+    if not tab.isNil and not tab.titleElement.isNil:
+      let text = tab.titleElement.textContent
+      if not text.isNil and not text.isUndefined:
+        text.to(cstring)
+      else:
+        componentState.label
+    else:
+      componentState.label
 
   # Detach from GL.  The parent is typically a Stack.
   let parent = contentItem.parent
@@ -157,15 +196,21 @@ proc unpinPanel*(layout: GoldenLayout, panel: AutoHidePanel) =
 
   # Re-add to GL.  We use addItem on the ground item's first container
   # (typically a row/column) which is the same strategy as panel_transfer.
-  let ground = layout.groundItem
-  if not ground.isNil and ground.contentItems.len > 0:
-    let target = ground.contentItems[0]
-    discard target.addItem(panel.config)
-  else:
-    console.warn cstring"auto_hide: no existing container — adding to root"
-    discard ground.addItem(panel.config)
+  try:
+    let ground = layout.groundItem
+    if not ground.isNil and ground.contentItems.len > 0:
+      let target = ground.contentItems[0]
+      discard target.addItem(panel.config)
+    else:
+      console.warn cstring"auto_hide: no existing container — adding to root"
+      discard ground.addItem(panel.config)
+  except:
+    console.error cstring"auto_hide: failed to re-add panel to GL: ",
+      cstring(getCurrentExceptionMsg())
 
-  # Remove from state.
+  # Remove from state regardless of whether re-add succeeded, so the
+  # strip tab is cleaned up and the user can retry by re-opening
+  # the component from the menu.
   autoHideState.panels = autoHideState.panels.filterIt(it != panel)
 
   cdebug fmt"auto_hide: unpinned panel '{panel.title}'"
@@ -217,6 +262,7 @@ proc showOverlay*(panel: AutoHidePanel) =
     return
 
   autoHideState.activeOverlay = panel
+  autoHideState.lastActivePanel = panel
   autoHideState.overlayVisible = true
 
   let overlayEl = document.getElementById(cstring"auto-hide-overlay")

@@ -38,9 +38,18 @@ proc wireOverlayButtons*(layout: GoldenLayout) =
   let unpinBtn = document.getElementById(cstring"auto-hide-overlay-unpin-btn")
   if not unpinBtn.isNil:
     unpinBtn.addEventListener(cstring"click", proc(ev: Event) =
-      if autoHideState.isNil or autoHideState.activeOverlay.isNil:
+      if autoHideState.isNil:
         return
-      let panel = autoHideState.activeOverlay
+      # Use activeOverlay if still set, otherwise fall back to
+      # lastActivePanel. This handles the race where the mouse-leave
+      # auto-dismiss timer fires before the click handler runs,
+      # clearing activeOverlay.
+      let panel = if not autoHideState.activeOverlay.isNil:
+          autoHideState.activeOverlay
+        else:
+          autoHideState.lastActivePanel
+      if panel.isNil:
+        return
       hideOverlay()
       unpinPanel(layout, panel))
 
