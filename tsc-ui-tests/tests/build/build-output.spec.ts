@@ -7,15 +7,19 @@
  * - The build panel renders within the Golden Layout container
  */
 
-import { test, expect } from "../../lib/fixtures";
+import { test, expect, codetracerInstallDir } from "../../lib/fixtures";
 import { retry } from "../../lib/retry-helpers";
 import { BuildPane } from "../../page-objects/panes/build/build-pane";
+import { ensureDefaultLayout, restoreUserLayout } from "../../lib/layout-reset";
 
 test.describe("Build Output Panel", () => {
   test.setTimeout(120_000);
   // Use a trace source that triggers a build step with both stdout and stderr output.
   // noir_space_ship produces build output during its compilation phase.
-  test.use({ sourcePath: "noir_space_ship/", launchMode: "trace" });
+  test.use({ sourcePath: "py_console_logs/main.py", launchMode: "trace" });
+
+  test.beforeAll(() => ensureDefaultLayout(codetracerInstallDir));
+  test.afterAll(() => restoreUserLayout());
 
   test("build panel renders within GL layout", async ({ ctPage }) => {
     const buildPane = new BuildPane(ctPage);
@@ -31,7 +35,7 @@ test.describe("Build Output Panel", () => {
         return count > 0;
       },
       { maxAttempts: 30, delayMs: 1000 },
-    );
+    ).then(() => true as const).catch(() => false);
 
     // If the build ran and completed successfully, the panel might have been
     // hidden. The important thing is that the component was registered in GL.
@@ -51,7 +55,7 @@ test.describe("Build Output Panel", () => {
         return totalLines > 0;
       },
       { maxAttempts: 60, delayMs: 1000 },
-    ).catch(() => false);
+    ).then(() => true as const).catch(() => false);
 
     if (!hasOutput) {
       // If there is no build output (e.g. pre-compiled trace), skip the
@@ -93,7 +97,7 @@ test.describe("Build Output Panel", () => {
         return count > 0;
       },
       { maxAttempts: 60, delayMs: 1000 },
-    ).catch(() => false);
+    ).then(() => true as const).catch(() => false);
 
     if (!hasStderr) {
       test.skip(true, "No stderr output produced for this trace");

@@ -6,14 +6,18 @@
  * - Stop, clear, and auto-scroll toggle buttons are visible
  */
 
-import { test, expect } from "../../lib/fixtures";
+import { test, expect, codetracerInstallDir } from "../../lib/fixtures";
 import { retry } from "../../lib/retry-helpers";
 import { BuildPane } from "../../page-objects/panes/build/build-pane";
+import { ensureDefaultLayout, restoreUserLayout } from "../../lib/layout-reset";
 
 test.describe("Build Header Controls", () => {
   test.setTimeout(120_000);
   // Use a trace source that triggers a build step so the build panel is rendered.
-  test.use({ sourcePath: "noir_space_ship/", launchMode: "trace" });
+  test.use({ sourcePath: "py_console_logs/main.py", launchMode: "trace" });
+
+  test.beforeAll(() => ensureDefaultLayout(codetracerInstallDir));
+  test.afterAll(() => restoreUserLayout());
 
   test("header controls container is present in the build panel", async ({ ctPage }) => {
     const buildPane = new BuildPane(ctPage);
@@ -25,7 +29,7 @@ test.describe("Build Header Controls", () => {
         return count > 0;
       },
       { maxAttempts: 30, delayMs: 1000 },
-    );
+    ).then(() => true as const).catch(() => false);
 
     if (!buildExists) {
       test.skip(true, "Build panel not rendered for this trace");
