@@ -1224,6 +1224,9 @@ proc onStartDeepReview*(sender: js, response: jsobject(config=Config, startOptio
   # The filesystem panel will detect deepReviewActive and show the
   # changed files list.  Editor tabs will apply diff decorations when
   # the opened file has review data.
+  # Use the exact same layout as the default trace mode (from default_layout.json).
+  # No DeepReview panel -- the filesystem panel shows changed files when
+  # deepReviewActive is true, and editor tabs get diff decorations automatically.
   let standardLayoutJson = cstring"""{
     "settings": {
       "constrainDragToContainer": true,
@@ -1286,6 +1289,16 @@ proc onStartDeepReview*(sender: js, response: jsobject(config=Config, startOptio
                         "content": 4
                       },
                       "title": "genericUiComponent"
+                    },
+                    {
+                      "type": "component",
+                      "componentType": "genericUiComponent",
+                      "componentState": {
+                        "id": 0,
+                        "label": "scratchpadComponent-0",
+                        "content": 17
+                      },
+                      "title": "genericUiComponent"
                     }
                   ]
                 },
@@ -1302,6 +1315,16 @@ proc onStartDeepReview*(sender: js, response: jsobject(config=Config, startOptio
                         "content": 6
                       },
                       "title": "genericUiComponent"
+                    },
+                    {
+                      "type": "component",
+                      "componentType": "genericUiComponent",
+                      "componentState": {
+                        "id": 0,
+                        "label": "agentActivityComponent-0",
+                        "content": 35
+                      },
+                      "title": "genericUiComponent"
                     }
                   ]
                 }
@@ -1315,24 +1338,34 @@ proc onStartDeepReview*(sender: js, response: jsobject(config=Config, startOptio
                   "componentType": "genericUiComponent",
                   "componentState": {
                     "id": 0,
-                    "label": "deepReviewComponent-0",
-                    "content": 36
+                    "label": "eventLogComponent-0",
+                    "content": 8
                   },
-                  "title": "Deep Review"
+                  "title": "genericUiComponent"
+                },
+                {
+                  "type": "component",
+                  "componentType": "genericUiComponent",
+                  "componentState": {
+                    "id": 0,
+                    "label": "terminalComponent-0",
+                    "content": 24
+                  },
+                  "title": "genericUiComponent"
                 }
               ]
             }
           ]
         }
       ]
-    }
+    },
+    "openPopouts": []
   }"""
   data.ui.resolvedConfig = cast[GoldenLayoutResolvedConfig](JSON.parse(standardLayoutJson))
 
-  # Create UI components from the layout config.  This walks the GL config
-  # tree and instantiates each component (including the DeepReviewComponent
-  # which is kept for the unified diff view, and the filesystem/calltrace
-  # panels which now participate in DeepReview mode).
+  # Create UI components from the standard layout config.  This walks the GL
+  # config tree and instantiates each component.  The filesystem panel detects
+  # deepReviewActive and shows changed files; editor tabs get diff decorations.
   data.createUIComponents()
 
   data.ui.initEventReceived = true
