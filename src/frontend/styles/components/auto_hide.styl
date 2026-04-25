@@ -1,4 +1,6 @@
 // Auto-hide panes: edge strips, strip tabs, overlay, and backdrop.
+// Styling follows Visual Studio's auto-hide behavior: overlays are flush
+// with window edges, no border-radius, and side strip tabs use vertical text.
 
 // ---------------------------------------------------------------------------
 // Edge strips — thin bars at window edges that hold pinned-panel tabs.
@@ -22,7 +24,7 @@
   background-color: HEADER_PANEL_BACKGROUND_COLOR
   z-index: 50
 
-// Left strip: vertical bar on the left edge.
+// Left strip: vertical bar on the left edge, full height between menu and status bar.
 .auto-hide-strip-left
   top: 34px  // below the menu bar
   left: 0
@@ -33,7 +35,7 @@
   padding-top: 4px
   border-right: 1px solid PRIMARY_BASE
 
-// Right strip: vertical bar on the right edge.
+// Right strip: vertical bar on the right edge, full height between menu and status bar.
 .auto-hide-strip-right
   top: 34px
   right: 0
@@ -44,7 +46,7 @@
   padding-top: 4px
   border-left: 1px solid PRIMARY_BASE
 
-// Bottom strip: horizontal bar at the bottom (above status bar).
+// Bottom strip: horizontal bar at the bottom (above status bar), full width.
 .auto-hide-strip-bottom
   left: 0
   right: 0
@@ -71,7 +73,7 @@
   font-weight: 600
   color: HEADER_PANEL_COLOR
   background-color: HEADER_PANEL_INACTIVE_COLOR
-  border-radius: 4px
+  border-radius: 0
   cursor: pointer
   padding: 3px 6px
   margin: 2px
@@ -89,14 +91,21 @@
     background-color: HEADER_ACTIVE_PANEL_BACKGROUND_COLOR
     color: HEADER_ACTIVE_PANEL_TEXT_COLOR
 
-// Vertical strips: tabs are rotated 90 deg and written vertically.
-.auto-hide-strip-left .auto-hide-strip-tab,
+// Side strip tabs: VS Studio uses vertical text (rotated 90deg).
+// Left side: text reads bottom-to-top (vertical-lr + rotate).
+.auto-hide-strip-left .auto-hide-strip-tab
+  writing-mode: vertical-lr
+  text-orientation: mixed
+  transform: rotate(180deg)
+  max-height: 120px
+
+// Right side: text reads top-to-bottom (vertical-rl).
 .auto-hide-strip-right .auto-hide-strip-tab
   writing-mode: vertical-rl
   text-orientation: mixed
   max-height: 120px
 
-// Horizontal strip: tabs flow left-to-right.
+// Bottom strip: tabs flow left-to-right, horizontal text.
 .auto-hide-strip-bottom .auto-hide-strip-tab
   max-width: 160px
 
@@ -119,14 +128,18 @@
 
 // ---------------------------------------------------------------------------
 // Overlay — the slide-in panel that appears when a strip tab is clicked.
+// Flush with the window edge, no border-radius, no margin/padding gap.
 // ---------------------------------------------------------------------------
 
 #auto-hide-overlay
   position: fixed
   z-index: 99
   background-color: SECONDARY_BASE
-  border: 1px solid PRIMARY_BASE
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3)
+  border: none
+  border-radius: 0
+  box-shadow: none
+  margin: 0
+  padding: 0
   display: none
   flex-direction: column
   overflow: hidden
@@ -135,25 +148,35 @@
   &.visible
     display: flex
 
-// Edge-specific positioning and slide-in direction.
+// Edge-specific positioning: each overlay is flush with its edge and
+// spans the full available dimension along that edge.
 
+// Left overlay: flush with left edge, full height (menu bar to bottom window edge).
+// Only the right edge gets a border (separator from main content).
 #auto-hide-overlay.auto-hide-overlay-left
   top: 34px
-  left: 28px  // flush with the left strip
-  bottom: 28px
+  left: 0
+  bottom: 0
   width: 360px
+  border-right: 1px solid PRIMARY_BASE
 
+// Right overlay: flush with right edge, full height (menu bar to bottom window edge).
+// Only the left edge gets a border.
 #auto-hide-overlay.auto-hide-overlay-right
   top: 34px
-  right: 28px
-  bottom: 28px
+  right: 0
+  bottom: 0
   width: 360px
+  border-left: 1px solid PRIMARY_BASE
 
+// Bottom overlay: flush with bottom window edge, full width.
+// Only the top edge gets a border.
 #auto-hide-overlay.auto-hide-overlay-bottom
-  left: 28px
-  right: 28px
-  bottom: 56px  // above the bottom strip (28px) + status bar (28px)
+  left: 0
+  right: 0
+  bottom: 0
   height: 280px
+  border-top: 1px solid PRIMARY_BASE
 
 // ---------------------------------------------------------------------------
 // Overlay header
@@ -189,7 +212,7 @@
   cursor: pointer
   font-size: 12px
   padding: 2px 8px
-  border-radius: 4px
+  border-radius: 0
   color: HEADER_PANEL_COLOR
   background-color: transparent
   border: 1px solid PRIMARY_BASE
@@ -205,4 +228,4 @@
 #auto-hide-overlay-content
   flex: 1
   overflow: auto
-  padding: 4px
+  padding: 0
