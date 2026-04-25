@@ -1,11 +1,10 @@
 import ui_imports, ../types
 
 proc focusBuild*(self: BuildComponent) =
-  discard
-  # TODO move to search somehow
-  #var parent = self.data.ui.layout.root.contentItems[0].contentItems[0].contentItems[2]
-  # taken from golden layout source
-  #jsAsFunction[proc(a: int)](parent.childElementContainer[cast[cstring](parent[cstring"_docker"].dimension)])(cast[int](parent[cstring"_docker"].realSize))
+  ## Activate the build pane in the GL layout using the component mapping.
+  ## This avoids hard-coded tree indices and works regardless of layout structure.
+  if not self.data.ui.layout.isNil:
+    self.data.openLayoutTab(Content.Build)
 
 proc matchLocation*(self: BuildComponent, raw: string): (bool, types.Location, cstring, cstring) =
   var l = types.Location(line: 0)
@@ -72,7 +71,7 @@ method onBuildStderr*(self: BuildComponent, response: BuildOutput) {.async.} =
   if self.build.output.len == 0:
     self.focusBuild()
   for line in lines:
-    self.appendBuild(line, true)
+    self.appendBuild(line, false)
   self.data.redraw()
 
 method onBuildCode*(self: BuildComponent, response: BuildCode) {.async.} =
@@ -80,8 +79,10 @@ method onBuildCode*(self: BuildComponent, response: BuildCode) {.async.} =
   self.build.running = false
   if self.build.code != 0:
     self.focusBuild()
-    self.data.ui.layout.root.contentItems[0].contentItems[0].contentItems[2].setActiveContentItem(
-      self.data.ui.layout.root.contentItems[0].contentItems[0].contentItems[2].contentItems[1])
+    # Also focus the build errors tab via the component mapping,
+    # instead of hard-coded GL tree indices that break with layout changes.
+    if self.data.ui.componentMapping[Content.BuildErrors].len > 0:
+      self.data.openLayoutTab(Content.BuildErrors)
     self.data.functions.switchToEdit(self.data)
   else:
     self.data.functions.switchToDebug(self.data)
