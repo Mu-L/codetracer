@@ -2,6 +2,16 @@ import ui_imports, ../types, build_location_parser
 
 export build_location_parser
 
+# AnsiUp converts ANSI escape sequences (e.g. from GCC, cargo, Go) to HTML
+# <span> elements with inline styles. The library is already bundled via webpack.
+var newAnsiUp {.importcpp: "new AnsiUp".}: proc: js
+let buildAnsiUp {.exportc.} = newAnsiUp()
+
+proc ansiToHtml(raw: cstring): cstring =
+  ## Convert a single line of build output from raw text (possibly containing
+  ## ANSI color codes) to an HTML string safe for use with `verbatim`.
+  cast[cstring](buildAnsiUp.ansi_to_html(raw))
+
 proc focusBuild*(self: BuildComponent) =
   ## Activate the build pane in the GL layout using the component mapping.
   ## This avoids hard-coded tree indices and works regardless of layout structure.
@@ -115,11 +125,11 @@ method render*(self: BuildComponent): VNode =
             of SevInfo: "build-line-info"
           tdiv(class = "build-output-line build-clickable " & colorClass,
                onclick = proc = discard jumpLocation(loc)):
-            text raw
+            verbatim ansiToHtml(raw)
         else:
           let klass = if stdout: "build-stdout" else: "build-stderr"
           tdiv(class=klass):
-            text raw
+            verbatim ansiToHtml(raw)
 
 proc renderErrorsView*(self: BuildComponent): VNode =
   result = buildHtml(tdiv):
