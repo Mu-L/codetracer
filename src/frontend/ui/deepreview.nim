@@ -530,7 +530,11 @@ proc renderViewModeToggle(self: DeepReviewComponent): VNode =
       class = cstring(if isFullFiles: "deepreview-mode-btn deepreview-mode-btn-active" else: "deepreview-mode-btn"),
       onclick = proc(ev: Event, n: VNode) =
         # Preserve selectedFileIndex across mode switch.
+        # Reset editor state so it re-initialises after the DOM
+        # is re-created by Karax (see setViewMode comment).
         self.viewMode = FullFiles
+        self.editorInitialized = false
+        self.decorationCollection = nil
         redrawAll()
     ):
       text "Full Files"
@@ -912,7 +916,12 @@ proc exposeTestHelpers(self: DeepReviewComponent) =
     if modeStr == "unified":
       selfCapture.viewMode = Unified
     else:
+      # Switching back to FullFiles requires re-initialising the Monaco
+      # editor because Karax destroys and re-creates the editor div when
+      # toggling between the Unified diff VNode and the editor VNode.
       selfCapture.viewMode = FullFiles
+      selfCapture.editorInitialized = false
+      selfCapture.decorationCollection = nil
     redrawAll()
 
   proc setTraceContext(id: int) =

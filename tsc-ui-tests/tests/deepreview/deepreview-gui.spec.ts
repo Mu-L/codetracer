@@ -858,3 +858,202 @@ test.describe("DeepReview GUI - empty data handling", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Test suite: DR-8 comprehensive workflow (uses all 3 fixtures)
+// ---------------------------------------------------------------------------
+
+test.describe("DeepReview comprehensive workflow", () => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+  test.skip(!fixturesExist, "DeepReview fixtures not found");
+
+  // -----------------------------------------------------------------------
+  // Full workflow: exercises the entire feature end-to-end
+  // -----------------------------------------------------------------------
+
+  test.describe("full workflow", () => {
+    test.use({ launchMode: "deepreview", deepreviewJsonPath: sampleReviewPath });
+
+    test("DR-8: full end-to-end workflow through all DeepReview features", async ({ ctPage }) => {
+      const dr = new DeepReviewPage(ctPage);
+      await dr.waitForReady();
+
+      // Step 1-2: Verify header shows session title.
+      await expect(dr.sessionTitle()).toBeVisible();
+      const titleText = await dr.sessionTitle().textContent();
+      expect(titleText).toContain("DeepReview: parser cleanup");
+
+      // Step 3: Verify Modified Files panel shows 3 files with correct diff statuses.
+      const items = await dr.fileItems();
+      expect(items.length).toBe(3);
+
+      const expectedStatuses = ["M", "A", "D"];
+      for (let i = 0; i < items.length; i++) {
+        const status = await items[i].diffStatus();
+        expect(status).toBe(expectedStatuses[i]);
+      }
+
+      // Verify the first file is selected by default.
+      expect(await items[0].isSelected()).toBe(true);
+
+      // Step 4: Click the second file and verify editor updates.
+      await dr.waitForEditorReady();
+      await wait(500);
+
+      const secondItem = dr.fileItemByIndex(1);
+      await secondItem.click();
+      await wait(500);
+
+      expect(await secondItem.isSelected()).toBe(true);
+      expect(await dr.fileItemByIndex(0).isSelected()).toBe(false);
+      await expect(dr.editor()).toBeVisible();
+
+      // Step 5: Switch to Unified Diff mode.
+      await dr.switchToUnifiedDiff();
+      await wait(500);
+
+      await expect(dr.unifiedDiff()).toBeVisible();
+
+      // Step 6: Verify hunks are rendered with correct added/removed counts.
+      // Totals across all files: 16 added, 10 removed.
+      const addedCount = await dr.unifiedAddedLines().count();
+      expect(addedCount).toBe(16);
+
+      const removedCount = await dr.unifiedRemovedLines().count();
+      expect(removedCount).toBe(10);
+
+      // Verify all 3 hunk headers are present.
+      const hunkHeaders = dr.unifiedHunkHeaders();
+      expect(await hunkHeaders.count()).toBe(3);
+
+      // Step 7-8: Expand context above the first hunk and verify expanded
+      // lines appear.
+      const initialExpanded = await dr.expandedContextLines().count();
+      expect(initialExpanded).toBe(0);
+
+      await dr.expandAbove(0, 0);
+      await wait(500);
+
+      const expandedCount = await dr.expandedContextLines().count();
+      expect(expandedCount).toBeGreaterThan(0);
+
+      // Verify expanded lines have the context class.
+      const expandedClasses = await dr.expandedContextLines().first().getAttribute("class");
+      expect(expandedClasses).toContain("deepreview-unified-line-context");
+
+      // Step 9: Verify Omniscience inline values on diff lines.
+      const omniscienceCount = await dr.omniscienceValues().count();
+      expect(omniscienceCount).toBeGreaterThan(0);
+
+      const normalize = (s: string) => s.replace(/\u00a0/g, " ");
+      const allOmnTexts: string[] = [];
+      const omnLocators = await dr.omniscienceValues().all();
+      for (const loc of omnLocators) {
+        const text = await loc.textContent();
+        if (text) allOmnTexts.push(normalize(text));
+      }
+      const combinedOmn = allOmnTexts.join(" | ");
+      expect(combinedOmn).toContain("x = 10");
+      expect(combinedOmn).toContain("y = 20");
+
+      // Step 10: Switch trace context if the selector is available.
+      const selectorVisible = await dr.traceContextSelector().isVisible();
+      if (selectorVisible) {
+        const options = dr.traceContextSelect().locator("option");
+        const optionCount = await options.count();
+        expect(optionCount).toBe(2);
+
+        // Switch to the second trace context.
+        await dr.setTraceContext(1);
+        await wait(500);
+      }
+
+      // Step 11: Switch back to Full Files mode.
+      await dr.switchToFullFiles();
+      await wait(500);
+
+      await expect(dr.editor()).toBeVisible();
+
+      // Step 12: Verify file selection is preserved (second file was
+      // selected before switching modes).
+      expect(await dr.fileItemByIndex(1).isSelected()).toBe(true);
+      expect(await dr.fileItemByIndex(0).isSelected()).toBe(false);
+
+      // Step 13: Verify diff decorations are present. Switch to the first
+      // file which has modified diff decorations. After switching from
+      // unified diff back to full files, Monaco re-initialises, so wait
+      // for editor readiness and decoration rendering.
+      await dr.fileItemByIndex(0).click();
+      await dr.waitForEditorReady();
+      await wait(2000);
+
+      const modifiedCount = await dr.diffModifiedLines().count();
+      expect(modifiedCount).toBeGreaterThan(0);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Empty review data: no crash, no file items, editor shows empty state
+  // -----------------------------------------------------------------------
+
+  test.describe("empty review data", () => {
+    test.use({ launchMode: "deepreview", deepreviewJsonPath: emptyReviewPath });
+
+    test("DR-8: empty review loads without crash and shows empty state", async ({ ctPage }) => {
+      const dr = new DeepReviewPage(ctPage);
+      await dr.waitForReady();
+
+      // Verify no crash: container visible, no error message.
+      await expect(dr.container()).toBeVisible();
+      await expect(dr.errorMessage()).toBeHidden();
+
+      // Verify no file items.
+      const items = await dr.fileItems();
+      expect(items.length).toBe(0);
+
+      // Verify stats reflect empty data.
+      const statsText = await dr.statsDisplay().textContent();
+      expect(statsText).toContain("0 files");
+
+      // Verify the editor area shows empty state (execution slider has
+      // "No execution data" label).
+      const sliderLabel = await dr.executionSliderLabel().textContent();
+      expect(sliderLabel).toContain("No execution data");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // No calltrace review data: everything works except calltrace is empty
+  // -----------------------------------------------------------------------
+
+  test.describe("no calltrace review data", () => {
+    test.use({ launchMode: "deepreview", deepreviewJsonPath: noCalltracePath });
+
+    test("DR-8: no-calltrace review loads and shows empty calltrace panel", async ({ ctPage }) => {
+      const dr = new DeepReviewPage(ctPage);
+      await dr.waitForReady();
+
+      // Verify the container renders without errors.
+      await expect(dr.container()).toBeVisible();
+      await expect(dr.errorMessage()).toBeHidden();
+
+      // Verify the file list works (1 file in the fixture).
+      const items = await dr.fileItems();
+      expect(items.length).toBe(1);
+
+      const name = await items[0].name();
+      expect(name).toBe("lib.rs");
+
+      // Verify the calltrace panel is present but shows the empty message.
+      await expect(dr.callTracePanel()).toBeVisible();
+      await expect(dr.callTraceEmpty()).toBeVisible();
+      const emptyText = await dr.callTraceEmpty().textContent();
+      expect(emptyText).toContain("No call trace data");
+
+      // Verify that the calltrace body (tree nodes) is not rendered.
+      const entries = dr.callTraceEntries();
+      const entryCount = await entries.count();
+      expect(entryCount).toBe(0);
+    });
+  });
+});
