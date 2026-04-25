@@ -2,7 +2,7 @@ import
   asyncjs, strformat, strutils, sequtils, jsffi, algorithm,
   karax, karaxdsl, vstyles,
   state, editor, debug, menu, status, command, search_results, shell, deepreview, session_tabs,
-  session_switch, panel_transfer,
+  session_switch, panel_transfer, auto_hide, auto_hide_overlay,
   ../[ types, renderer, config ],
   ../lib/[ logging, misc_lib, jslib ]
 
@@ -153,6 +153,15 @@ proc createContextMenuFromOptions(
     actions: actions
   )
 
+proc pinActiveContentItem(layout: js, stack: js, edge: AutoHideEdge) =
+  ## Pin the currently active tab in `stack` to the given auto-hide edge.
+  ## Uses `getActiveContentItem` to find what to detach.
+  let activeItem = stack.getActiveContentItem()
+  if activeItem.isNil or activeItem.isUndefined:
+    cwarn "auto_hide: no active content item in stack"
+    return
+  pinPanel(cast[GoldenLayout](layout), cast[GoldenContentItem](activeItem), edge)
+
 proc makeNestedButton(layout: js, ev: Event): VNode =
   buildHtml(
     tdiv(
@@ -177,6 +186,25 @@ proc makeNestedButton(layout: js, ev: Event): VNode =
           e.target.innerHTML = "Minimise container"
     ):
       text "Maximise container"
+    # Auto-hide: pin the active tab to an edge strip.
+    tdiv(
+      class = "layout-dropdown-node",
+      onclick = proc(e: Event, tg: VNode) =
+        pinActiveContentItem(layout, ev.toJs.target, AutoHideEdge.Bottom)
+    ):
+      text "Pin to Bottom"
+    tdiv(
+      class = "layout-dropdown-node",
+      onclick = proc(e: Event, tg: VNode) =
+        pinActiveContentItem(layout, ev.toJs.target, AutoHideEdge.Left)
+    ):
+      text "Pin to Left"
+    tdiv(
+      class = "layout-dropdown-node",
+      onclick = proc(e: Event, tg: VNode) =
+        pinActiveContentItem(layout, ev.toJs.target, AutoHideEdge.Right)
+    ):
+      text "Pin to Right"
 
 proc closeLayoutTab*(data: Data, content: Content, id: int) =
   if not data.ui.componentMapping[content].hasKey(id):
@@ -521,6 +549,22 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig,
   # M21: Register IPC handler for receiving panels from other windows.
   registerPanelAttachHandler(layout)
 
+  # Auto-hide panes: initialise state and set up the edge strip renderer
+  # and overlay event handlers.
+  initAutoHideState()
+  autoHideState.onChanged = proc() =
+    # Re-render the strip tabs whenever the auto-hide state changes.
+    if kxiMap.hasKey(cstring"auto-hide-strips"):
+      redraw(kxiMap[cstring"auto-hide-strips"])
+
+  kxiMap["auto-hide-strips"] = setRenderer(
+    proc: VNode = renderAutoHideStrips(),
+    "auto-hide-strips",
+    proc = discard)
+
+  # Wire overlay header buttons and dismissal handlers.
+  setupAutoHideOverlay(layout)
+
   layout.on(cstring"stateChanged") do (event: js):
     cdebug "layout event: stateChanged"
 
@@ -541,6 +585,15 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig,
       data.ui.resolvedConfig = data.ui.layout.saveLayout()
       data.saveConfig(data.ui.layoutConfig.fromResolved(data.ui.resolvedConfig))
       data.ui.saveLayout = false
+
+      # Persist auto-hide panel state alongside the GL layout config.
+      # The auto-hide state is saved as a separate IPC message so that
+      # the existing config loading path does not need modification.
+      let autoHideSerialized = serializeAutoHideState()
+      if not autoHideSerialized.isNil and not autoHideSerialized.isUndefined:
+        ipc.send "CODETRACER::save-auto-hide-state", js{
+          state: JSON.stringify(autoHideSerialized)
+        }
 
   layout.on(cstring"stackCreated") do (event: js):
     cdebug "layout event: stackCreated"

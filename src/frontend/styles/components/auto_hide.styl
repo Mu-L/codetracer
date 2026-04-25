@@ -1,0 +1,208 @@
+// Auto-hide panes: edge strips, strip tabs, overlay, and backdrop.
+
+// ---------------------------------------------------------------------------
+// Edge strips — thin bars at window edges that hold pinned-panel tabs.
+// ---------------------------------------------------------------------------
+
+.auto-hide-strips-container
+  pointer-events: none
+  position: absolute
+  top: 0
+  left: 0
+  right: 0
+  bottom: 0
+  z-index: 50
+
+.auto-hide-strip-left,
+.auto-hide-strip-right,
+.auto-hide-strip-bottom
+  pointer-events: auto
+  position: absolute
+  display: flex
+  background-color: HEADER_PANEL_BACKGROUND_COLOR
+  z-index: 50
+
+// Left strip: vertical bar on the left edge.
+.auto-hide-strip-left
+  top: 34px  // below the menu bar
+  left: 0
+  bottom: 28px  // above the status bar
+  width: 28px
+  flex-direction: column
+  align-items: center
+  padding-top: 4px
+  border-right: 1px solid PRIMARY_BASE
+
+// Right strip: vertical bar on the right edge.
+.auto-hide-strip-right
+  top: 34px
+  right: 0
+  bottom: 28px
+  width: 28px
+  flex-direction: column
+  align-items: center
+  padding-top: 4px
+  border-left: 1px solid PRIMARY_BASE
+
+// Bottom strip: horizontal bar at the bottom (above status bar).
+.auto-hide-strip-bottom
+  left: 0
+  right: 0
+  bottom: 28px
+  height: 28px
+  flex-direction: row
+  align-items: center
+  padding-left: 4px
+  border-top: 1px solid PRIMARY_BASE
+
+// Hide empty strips so they don't consume space or show borders.
+.auto-hide-strip-left:empty,
+.auto-hide-strip-right:empty,
+.auto-hide-strip-bottom:empty
+  display: none
+
+// ---------------------------------------------------------------------------
+// Strip tabs — individual clickable tabs within a strip.
+// ---------------------------------------------------------------------------
+
+.auto-hide-strip-tab
+  font-family: "SpaceGrotesk"
+  font-size: 12px
+  font-weight: 600
+  color: HEADER_PANEL_COLOR
+  background-color: HEADER_PANEL_INACTIVE_COLOR
+  border-radius: 4px
+  cursor: pointer
+  padding: 3px 6px
+  margin: 2px
+  white-space: nowrap
+  overflow: hidden
+  text-overflow: ellipsis
+  user-select: none
+  transition: background-color 150ms ease
+
+  &:hover
+    background-color: HEADER_ACTIVE_PANEL_BACKGROUND_COLOR
+    color: HEADER_ACTIVE_PANEL_TEXT_COLOR
+
+  &.active
+    background-color: HEADER_ACTIVE_PANEL_BACKGROUND_COLOR
+    color: HEADER_ACTIVE_PANEL_TEXT_COLOR
+
+// Vertical strips: tabs are rotated 90 deg and written vertically.
+.auto-hide-strip-left .auto-hide-strip-tab,
+.auto-hide-strip-right .auto-hide-strip-tab
+  writing-mode: vertical-rl
+  text-orientation: mixed
+  max-height: 120px
+
+// Horizontal strip: tabs flow left-to-right.
+.auto-hide-strip-bottom .auto-hide-strip-tab
+  max-width: 160px
+
+// ---------------------------------------------------------------------------
+// Backdrop — semi-transparent overlay behind the slide-in panel.
+// ---------------------------------------------------------------------------
+
+#auto-hide-backdrop
+  display: none
+  position: fixed
+  top: 0
+  left: 0
+  right: 0
+  bottom: 0
+  background-color: rgba(0, 0, 0, 0.25)
+  z-index: 98
+
+#auto-hide-overlay.visible ~ #auto-hide-backdrop
+  display: block
+
+// ---------------------------------------------------------------------------
+// Overlay — the slide-in panel that appears when a strip tab is clicked.
+// ---------------------------------------------------------------------------
+
+#auto-hide-overlay
+  position: fixed
+  z-index: 99
+  background-color: SECONDARY_BASE
+  border: 1px solid PRIMARY_BASE
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3)
+  display: none
+  flex-direction: column
+  overflow: hidden
+  transition: transform 200ms ease
+
+  &.visible
+    display: flex
+
+// Edge-specific positioning and slide-in direction.
+
+#auto-hide-overlay.auto-hide-overlay-left
+  top: 34px
+  left: 28px  // flush with the left strip
+  bottom: 28px
+  width: 360px
+
+#auto-hide-overlay.auto-hide-overlay-right
+  top: 34px
+  right: 28px
+  bottom: 28px
+  width: 360px
+
+#auto-hide-overlay.auto-hide-overlay-bottom
+  left: 28px
+  right: 28px
+  bottom: 56px  // above the bottom strip (28px) + status bar (28px)
+  height: 280px
+
+// ---------------------------------------------------------------------------
+// Overlay header
+// ---------------------------------------------------------------------------
+
+#auto-hide-overlay-header
+  display: flex
+  align-items: center
+  justify-content: space-between
+  padding: 4px 8px
+  background-color: HEADER_PANEL_BACKGROUND_COLOR
+  border-bottom: 1px solid PRIMARY_BASE
+  min-height: 32px
+  flex-shrink: 0
+
+#auto-hide-overlay-title
+  font-family: "SpaceGrotesk"
+  font-size: 13px
+  font-weight: 600
+  color: HEADER_PANEL_COLOR
+  overflow: hidden
+  text-overflow: ellipsis
+  white-space: nowrap
+  flex: 1
+
+.auto-hide-overlay-header-buttons
+  display: flex
+  gap: 4px
+  align-items: center
+
+#auto-hide-overlay-unpin-btn,
+#auto-hide-overlay-close-btn
+  cursor: pointer
+  font-size: 12px
+  padding: 2px 8px
+  border-radius: 4px
+  color: HEADER_PANEL_COLOR
+  background-color: transparent
+  border: 1px solid PRIMARY_BASE
+  transition: background-color 150ms ease
+
+  &:hover
+    background-color: ACTIVE_ROW
+
+// ---------------------------------------------------------------------------
+// Overlay content area
+// ---------------------------------------------------------------------------
+
+#auto-hide-overlay-content
+  flex: 1
+  overflow: auto
+  padding: 4px
