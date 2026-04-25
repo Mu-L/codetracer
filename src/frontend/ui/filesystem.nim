@@ -148,6 +148,13 @@ proc mapDiff(service: EditorService, node: CodetracerFile) =
 proc openTab(currentPath: cstring) =
   data.openTab(data.trace.outputFolder & "files".cstring & currentPath, ViewSource)
 
+proc makeDeepReviewFileClickHandler(filePath: cstring): proc(ev: Event, tg: VNode) =
+  ## Create a click handler for a DeepReview file list item.
+  ## Using a separate proc avoids the Nim JS backend closure-in-loop
+  ## bug where all closures capture the same loop variable by reference.
+  result = proc(ev: Event, tg: VNode) =
+    data.openTab(filePath, ViewSource)
+
 proc diffItem(path: string, klass: string): VNode =
   buildHtml(tdiv(
     class = fmt"diff-file-path {klass}",
@@ -157,7 +164,9 @@ proc diffItem(path: string, klass: string): VNode =
     text path.split("/")[^1]
 
 method render*(self: FilesystemComponent): VNode =
-  if not self.initFilesystem:
+  if not self.initFilesystem and not self.data.deepReviewActive:
+    # Skip jstree initialization in DeepReview mode -- the filesystem
+    # panel renders a Karax-based changed-files list instead.
     kxiMap["filesystemComponent"].afterRedraws.add(proc =
       if not self.initFilesystem:
         if not jqFind(".filesystem").isNil and
@@ -225,6 +234,11 @@ method render*(self: FilesystemComponent): VNode =
             self.initFilesystem = true
       )
 
+  # In DeepReview mode, mark filesystem as initialized immediately since
+  # we don't need jstree.
+  if self.data.deepReviewActive and not self.initFilesystem:
+    self.initFilesystem = true
+
   if self.forceRedraw:
     data.redraw()
     self.forceRedraw = false
@@ -234,12 +248,58 @@ method render*(self: FilesystemComponent): VNode =
       class = componentContainerClass("filesystem-container")
     )
   ):
-    tdiv(class = "filesystem",
-      onclick = proc(ev: Event, tg: VNode) =
-        ev.currentTarget.focus()
-    )
-    if not self.data.startOptions.diff.isNil:
-      tdiv(class = "diff-files-list"):
-        for i, fd in self.data.startOptions.diff.files:
-          let klass = if i mod 2 == 0: "path-even" else: "path-odd"
-          diffItem($fd.currentPath, klass)
+    if self.data.deepReviewActive and not self.data.deepReviewData.isNil:
+      # DeepReview mode: show the changed files list from review data
+      # instead of the normal jstree filesystem tree. Each file entry
+      # shows a diff status badge (A/M/D), the filename, and a line
+      # count summary. Clicking a file opens it in the standard editor
+      # with diff decorations applied.
+      tdiv(class = "deepreview-file-list"):
+        for i, file in self.data.deepReviewData.files:
+          let isSelected = false  # TODO: track selected file index
+          let selectedClass = if isSelected: " selected" else: ""
+          tdiv(
+            class = cstring(fmt"deepreview-file-item{selectedClass}"),
+            onclick = makeDeepReviewFileClickHandler(file.path)
+          ):
+            # Top row: diff status + file basename.
+            tdiv(class = "deepreview-file-name-row"):
+              if not file.diff.isNil and ($file.diff.status).len > 0:
+                let statusStr = $file.diff.status
+                let statusClass = case statusStr
+                  of "A": " deepreview-diff-added"
+                  of "M": " deepreview-diff-modified"
+                  of "D": " deepreview-diff-deleted"
+                  else: ""
+                span(class = cstring("deepreview-diff-status" & statusClass)):
+                  text cstring(statusStr)
+              tdiv(class = "deepreview-file-name"):
+                # Extract basename from path.
+                let pathStr = $file.path
+                let slashIdx = pathStr.rfind('/')
+                let baseName = if slashIdx >= 0: pathStr[slashIdx + 1 .. ^1] else: pathStr
+                text cstring(baseName)
+            tdiv(class = "deepreview-file-path-full"):
+              text $file.path
+            # Badge row: diff line count.
+            if not file.diff.isNil and (file.diff.linesAdded > 0 or file.diff.linesRemoved > 0):
+              tdiv(class = "deepreview-file-badges"):
+                let statusStr = $file.diff.status
+                let badgeClass = case statusStr
+                  of "A": " deepreview-diff-added"
+                  of "M": " deepreview-diff-modified"
+                  of "D": " deepreview-diff-deleted"
+                  else: ""
+                span(class = cstring("deepreview-diff-lines" & badgeClass)):
+                  text cstring(fmt"+{file.diff.linesAdded} / -{file.diff.linesRemoved}")
+    else:
+      # Normal mode: standard jstree filesystem.
+      tdiv(class = "filesystem",
+        onclick = proc(ev: Event, tg: VNode) =
+          ev.currentTarget.focus()
+      )
+      if not self.data.startOptions.diff.isNil:
+        tdiv(class = "diff-files-list"):
+          for i, fd in self.data.startOptions.diff.files:
+            let klass = if i mod 2 == 0: "path-even" else: "path-odd"
+            diffItem($fd.currentPath, klass)

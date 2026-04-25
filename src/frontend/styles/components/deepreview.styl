@@ -509,6 +509,23 @@
   user-select none
   flex-shrink 0
 
+// --- Diff line highlighting for standard editor in DeepReview mode ---
+// These classes are applied by the editor's ``deepReviewDiffStyleLines``
+// via the existing ``styleLines`` / ``deltaDecorations`` pattern when a
+// file is opened in DeepReview mode and has diff hunk data.
+
+.line-diff-added
+  background-color rgba(63, 185, 80, 0.18)
+  border-left 3px solid #3fb950
+
+.line-diff-modified
+  background-color rgba(210, 153, 34, 0.18)
+  border-left 3px solid #d29922
+
+.line-diff-removed
+  background-color rgba(248, 81, 73, 0.18)
+  border-left 3px solid #f85149
+
 // --- Monaco editor overrides for DeepReview ---
 // Brighten gutter line numbers for better readability in the dark theme.
 

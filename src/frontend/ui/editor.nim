@@ -298,7 +298,7 @@ proc styleLines(self: EditorViewComponent, editor: MonacoEditor, lines: seq[Mona
     newDecorations.add(DeltaDecoration(
       `range`: newMonacoRange(line.line, startIndex, line.line, endIndex),
       options: js{
-        isWholeLine: line.class.isNil or ui_imports.jslib.startsWith(line.class, "on") or line.class == "diff-added",
+        isWholeLine: line.class.isNil or ui_imports.jslib.startsWith(line.class, "on") or line.class == "diff-added" or ui_imports.jslib.startsWith(line.class, "line-diff-"),
         className: line.class,
         inlineClassName: line.inlineClass}))
 
@@ -499,12 +499,56 @@ proc diffStyleLines(self: EditorViewComponent): seq[MonacoLineStyle] =
 
   lines
 
+proc deepReviewDiffStyleLines(self: EditorViewComponent): seq[MonacoLineStyle] =
+  ## Build diff decoration lines from DeepReview data for the current file.
+  ## When DeepReview mode is active, this checks the review data for diff
+  ## hunks matching the editor's file path and produces line styles:
+  ##   - Added lines in pure-addition hunks: green border (``line-diff-added``)
+  ##   - Added lines in mixed hunks (modification): yellow border (``line-diff-modified``)
+  ## Removed lines are not decorated since they have no position in the new file.
+  var lines: seq[MonacoLineStyle] = @[]
+  if not self.data.deepReviewActive or self.data.deepReviewData.isNil:
+    return lines
+
+  for file in self.data.deepReviewData.files:
+    if file.path == self.path:
+      if file.diff.isNil:
+        break
+      for hunk in file.diff.hunks:
+        # Determine if hunk has both removals and additions (= modification).
+        var hasRemoved = false
+        var hasAdded = false
+        for line in hunk.lines:
+          let lt = $line.`type`
+          if lt == "removed":
+            hasRemoved = true
+          elif lt == "added":
+            hasAdded = true
+
+        let isModification = hasRemoved and hasAdded
+
+        for line in hunk.lines:
+          let lt = $line.`type`
+          if lt != "added":
+            continue
+          if line.newLine < 1:
+            continue
+          let className = if isModification:
+            cstring"line-diff-modified"
+          else:
+            cstring"line-diff-added"
+          lines.add(MonacoLineStyle(line: line.newLine, class: className))
+      # Found the matching file, no need to continue.
+      break
+  lines
+
 proc applyEventualStylesLines(self: EditorViewComponent) =
   var colorLineList = self.colorLines()
   var conditionFlowLines = self.conditionStyleLines()
   # var diffLineList = self.diffStyleLines()
   var flowLineList = self.flowStyleLines(conditionFlowLines)
-  let lines = concat(colorLineList, concat(flowLineList, conditionFlowLines))
+  var deepReviewDiffLines = self.deepReviewDiffStyleLines()
+  let lines = concat(colorLineList, concat(flowLineList, concat(conditionFlowLines, deepReviewDiffLines)))
 
   self.styleLines(self.monacoEditor, lines)
 

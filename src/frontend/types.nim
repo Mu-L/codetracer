@@ -1698,6 +1698,14 @@ type
     lastRestartKind*:       RestartKind
     workspaceFolder*:       cstring  # The folder opened in edit mode (persists across mode switches)
 
+    # DeepReview data: populated when DeepReview mode is active.
+    # Stored at the Data level so that all panels (editor, filesystem,
+    # calltrace) can access it without going through a dedicated
+    # DeepReviewComponent. Set from data.startOptions.deepReview in
+    # onStartDeepReview.
+    deepReviewActive*:      bool
+    deepReviewData*:        DeepReviewData
+
     # Multi-replay-window architecture (M0): session management.
     # During the migration the first (and only) session mirrors the
     # fields above; later milestones will move the per-replay state

@@ -1195,8 +1195,12 @@ proc onStartShellUi*(sender: js, response: jsobject(config=Config)) =
 
 proc onStartDeepReview*(sender: js, response: jsobject(config=Config, startOptions=StartOptions)) =
   ## Handler for ``CODETRACER::start-deepreview`` IPC message.
-  ## Sets up the frontend for DeepReview offline review mode using Golden
-  ## Layout with a Modified Files sidebar panel and a center editor stack.
+  ## Sets up the frontend for DeepReview offline review mode using the
+  ## standard GL layout (filesystem, editor, calltrace panels) instead
+  ## of a monolithic DeepReview panel.  The filesystem panel detects
+  ## ``data.deepReviewActive`` and shows changed files from the review
+  ## data.  Editor tabs receive diff decorations when a file has review
+  ## data.  The calltrace panel works as normal.
   data.startOptions.loading = false
   data.startOptions.withDeepReview = true
   data.config = response.config
@@ -1204,19 +1208,23 @@ proc onStartDeepReview*(sender: js, response: jsobject(config=Config, startOptio
   # but since the renderer runs in a separate Electron process, the
   # startOptions are forwarded via the IPC message.
   data.startOptions.deepReview = response.startOptions.deepReview
+
+  # Store DeepReview data at the Data level so all panels can access it.
+  data.deepReviewActive = true
+  data.deepReviewData = response.startOptions.deepReview
+
   loadTheme(data.config.theme)
 
   if not data.ui.welcomeScreen.isNil:
     data.ui.welcomeScreen.welcomeScreen = false
     data.ui.welcomeScreen.newRecordScreen = false
 
-  # Build a DeepReview-specific GL layout config.
-  # The DeepReview component renders as a single full-width GL panel
-  # that internally manages a sidebar (file list + controls) and
-  # editor/diff area.  This keeps the component within the GL
-  # container system while preserving the existing layout structure.
-  let deepReviewLayoutJson = cstring"""
-  {
+  # Use the standard GL layout (same as normal trace mode) so that
+  # DeepReview reuses the filesystem, editor, and calltrace panels.
+  # The filesystem panel will detect deepReviewActive and show the
+  # changed files list.  Editor tabs will apply diff decorations when
+  # the opened file has review data.
+  let standardLayoutJson = cstring"""{
     "settings": {
       "constrainDragToContainer": true,
       "reorderEnabled": true,
@@ -1237,34 +1245,105 @@ proc onStartDeepReview*(sender: js, response: jsobject(config=Config, startOptio
       "isClosable": false,
       "content": [
         {
-          "type": "stack",
+          "type": "column",
+          "size": "20%",
           "content": [
             {
-              "type": "component",
-              "size": "100%",
-              "componentType": "genericUiComponent",
-              "componentState": {
-                "id": 0,
-                "label": "deepReviewComponent-0",
-                "content": 36
-              },
-              "title": "Deep Review"
+              "type": "stack",
+              "content": [
+                {
+                  "type": "component",
+                  "size": "100%",
+                  "componentType": "genericUiComponent",
+                  "componentState": {
+                    "id": 0,
+                    "label": "filesystemComponent",
+                    "content": 9
+                  },
+                  "title": "genericUiComponent"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "column",
+          "content": [
+            {
+              "type": "row",
+              "size": "50%",
+              "content": [
+                {
+                  "type": "stack",
+                  "size": "50%",
+                  "content": [
+                    {
+                      "type": "component",
+                      "componentType": "genericUiComponent",
+                      "componentState": {
+                        "id": 0,
+                        "label": "stateComponent-0",
+                        "content": 4
+                      },
+                      "title": "genericUiComponent"
+                    }
+                  ]
+                },
+                {
+                  "type": "stack",
+                  "size": "50%",
+                  "content": [
+                    {
+                      "type": "component",
+                      "componentType": "genericUiComponent",
+                      "componentState": {
+                        "id": 0,
+                        "label": "calltraceComponent-0",
+                        "content": 6
+                      },
+                      "title": "genericUiComponent"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "stack",
+              "content": [
+                {
+                  "type": "component",
+                  "componentType": "genericUiComponent",
+                  "componentState": {
+                    "id": 0,
+                    "label": "deepReviewComponent-0",
+                    "content": 36
+                  },
+                  "title": "Deep Review"
+                }
+              ]
             }
           ]
         }
       ]
     }
-  }
-  """
-  data.ui.resolvedConfig = cast[GoldenLayoutResolvedConfig](JSON.parse(deepReviewLayoutJson))
+  }"""
+  data.ui.resolvedConfig = cast[GoldenLayoutResolvedConfig](JSON.parse(standardLayoutJson))
 
   # Create UI components from the layout config.  This walks the GL config
-  # tree and instantiates each component (including the DeepReviewComponent)
-  # so they are registered in componentMapping before GL renders them.
+  # tree and instantiates each component (including the DeepReviewComponent
+  # which is kept for the unified diff view, and the filesystem/calltrace
+  # panels which now participate in DeepReview mode).
   data.createUIComponents()
 
   data.ui.initEventReceived = true
   data.tryInitLayout()
+
+  # After the layout is initialised, open the first changed file in an
+  # editor tab so the user sees something immediately.
+  if not data.deepReviewData.isNil and data.deepReviewData.files.len > 0:
+    let firstFile = data.deepReviewData.files[0]
+    if not firstFile.path.isNil and ($firstFile.path).len > 0:
+      data.openTab(firstFile.path, ViewSource)
 
 
 proc onFilenamesLoaded(
