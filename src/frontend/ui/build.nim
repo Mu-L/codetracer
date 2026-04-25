@@ -1,4 +1,6 @@
-import ui_imports, ../types
+import ui_imports, ../types, build_location_parser
+
+export build_location_parser
 
 proc focusBuild*(self: BuildComponent) =
   ## Activate the build pane in the GL layout using the component mapping.
@@ -7,39 +9,25 @@ proc focusBuild*(self: BuildComponent) =
     self.data.openLayoutTab(Content.Build)
 
 proc matchLocation*(self: BuildComponent, raw: string): (bool, types.Location, cstring, cstring) =
+  ## Legacy API kept for backward compatibility.
+  ## Delegates to `parseBuildLocation` and converts the result.
   var l = types.Location(line: 0)
   if "Hint" in raw:
     return (false, l, cstring"", cstring"")
 
-  if raw.startsWith("/"):
-    var after = raw.find(") ")
+  let parsed = parseBuildLocation(raw)
+  if not parsed.found:
+    return (false, l, cstring"", cstring"")
 
-    if after != -1:
-      var maybeLocation = raw[0 .. after]
-      var left = maybeLocation.find("(")
+  let loc = types.Location(path: cstring(parsed.path), line: parsed.line)
+  # Reconstruct a display string similar to the old format for the location part.
+  var locDisplay: string
+  if parsed.col >= 0:
+    locDisplay = parsed.path & "(" & $parsed.line & ", " & $parsed.col & ")"
+  else:
+    locDisplay = parsed.path & "(" & $parsed.line & ")"
 
-      if left != -1:
-        try:
-          let space = maybeLocation.find(", ")
-          var line = -1
-          var column = -1
-
-          if space != -1:
-            line = maybeLocation[left + 1 ..< space].parseInt
-            column = maybeLocation[space + 2 ..< after].parseInt
-
-          else:
-            line = maybeLocation[left + 1 ..< after].parseInt
-
-          return (
-              true,
-              types.Location(path: maybeLocation[0 ..< left], line: line),
-              cstring(maybeLocation),
-              cstring(raw[after + 1 .. ^1]))
-        except:
-          discard
-
-  return (false, l, cstring"", cstring"")
+  return (true, loc, cstring(locDisplay), cstring(parsed.message))
 
 template appendBuild(self: BuildComponent, line: string, stdout: bool): untyped =
   let klass = if stdout: "build-stdout" else: "build-stderr"
@@ -117,10 +105,21 @@ method render*(self: BuildComponent): VNode =
           text "build succeeded"
     tdiv(id="build", class="build-output-container"):
       for (raw, stdout) in self.build.output:
-        let klass = if stdout: "build-stdout" else: "build-stderr"
-
-        tdiv(class=klass):
-          text raw
+        let parsed = parseBuildLocation($raw)
+        if parsed.found:
+          # Clickable line -- navigate to the parsed location on click.
+          let loc = types.Location(path: cstring(parsed.path), line: parsed.line)
+          let colorClass = case parsed.severity
+            of SevError: "build-line-error"
+            of SevWarning: "build-line-warning"
+            of SevInfo: "build-line-info"
+          tdiv(class = "build-output-line build-clickable " & colorClass,
+               onclick = proc = discard jumpLocation(loc)):
+            text raw
+        else:
+          let klass = if stdout: "build-stdout" else: "build-stderr"
+          tdiv(class=klass):
+            text raw
 
 proc renderErrorsView*(self: BuildComponent): VNode =
   result = buildHtml(tdiv):
