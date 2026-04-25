@@ -1,6 +1,75 @@
-import ui_imports, ../types, build_location_parser
+import ui_imports, ../types, build_location_parser, auto_hide
 
 export build_location_parser
+
+# ---------------------------------------------------------------------------
+# BP-M6: Auto-hide integration state
+# ---------------------------------------------------------------------------
+
+var buildAutoDismissTimer: int = 0
+  ## Timer handle for the auto-dismiss delay after a successful build.
+  ## Zero means no timer is active.
+
+var buildOverlayInteracted: bool = false
+  ## Set to true when the user interacts with the auto-shown overlay
+  ## during the auto-dismiss countdown, cancelling the dismiss.
+
+proc cancelBuildAutoDismiss*() =
+  ## Cancel any pending auto-dismiss timer. Called when the user interacts
+  ## with the overlay or when a new build starts.
+  if buildAutoDismissTimer != 0:
+    windowClearTimeout(buildAutoDismissTimer)
+    buildAutoDismissTimer = 0
+  buildOverlayInteracted = false
+
+proc autoRevealBuildPanel*() =
+  ## If the build panel is pinned to an auto-hide edge strip, show the
+  ## overlay so the user can see build output. No-op if the build panel
+  ## is not in auto-hide state.
+  if autoHideState.isNil:
+    return
+  let panel = autoHideState.findPanelByContent(Content.Build)
+  if not panel.isNil:
+    cancelBuildAutoDismiss()
+    showOverlay(panel)
+
+proc autoDismissBuildPanel*() =
+  ## After a successful build, keep the overlay visible for 2 seconds,
+  ## then auto-hide it. If the user interacts with the overlay during
+  ## the countdown (e.g. clicks, scrolls), the dismiss is cancelled.
+  if autoHideState.isNil:
+    return
+  let panel = autoHideState.findPanelByContent(Content.Build)
+  if panel.isNil:
+    return
+  # Only dismiss if the build panel is currently shown in the overlay.
+  if autoHideState.activeOverlay != panel or not autoHideState.overlayVisible:
+    return
+
+  cancelBuildAutoDismiss()
+  buildOverlayInteracted = false
+
+  # Listen for any user interaction on the overlay to cancel the dismiss.
+  let overlayEl = document.getElementById(cstring"auto-hide-overlay")
+  if not overlayEl.isNil:
+    # Use a one-shot listener: on any pointer/keyboard activity, cancel.
+    let handler = proc(ev: Event) =
+      buildOverlayInteracted = true
+      cancelBuildAutoDismiss()
+    # Attach listeners that fire once and then remove themselves.
+    overlayEl.addEventListener(cstring"pointerdown", handler)
+    overlayEl.addEventListener(cstring"keydown", handler)
+
+  buildAutoDismissTimer = windowSetTimeout(proc() =
+    buildAutoDismissTimer = 0
+    if buildOverlayInteracted:
+      return
+    # Verify the build panel is still the active overlay before hiding.
+    if not autoHideState.isNil and
+       autoHideState.activeOverlay == panel and
+       autoHideState.overlayVisible:
+      hideOverlay()
+  , 2000)
 
 # AnsiUp converts ANSI escape sequences (e.g. from GCC, cargo, Go) to HTML
 # <span> elements with inline styles. The library is already bundled via webpack.
@@ -97,6 +166,10 @@ method onBuildCommand*(self: BuildComponent, response: BuildCommand) {.async.} =
   self.build.autoScroll = true
   self.build.buildStartTime = dateNowMs()
   self.build.running = true
+
+  # BP-M6: Auto-reveal the build pane if it is pinned to an auto-hide strip.
+  autoRevealBuildPanel()
+
   self.data.redraw()
 
 method onBuildStdout*(self: BuildComponent, response: BuildOutput) {.async.} =
@@ -128,8 +201,21 @@ method onBuildCode*(self: BuildComponent, response: BuildCode) {.async.} =
     # instead of hard-coded GL tree indices that break with layout changes.
     if self.data.ui.componentMapping[Content.BuildErrors].len > 0:
       self.data.openLayoutTab(Content.BuildErrors)
+
+    # BP-M6: Auto-reveal the build pane on failure so errors are visible,
+    # and also reveal the Problems (BuildErrors) panel if it is pinned.
+    autoRevealBuildPanel()
+    if not autoHideState.isNil:
+      let errorsPanel = autoHideState.findPanelByContent(Content.BuildErrors)
+      if not errorsPanel.isNil:
+        showOverlay(errorsPanel)
+
     self.data.functions.switchToEdit(self.data)
   else:
+    # BP-M6: On success, schedule auto-dismiss of the build overlay after
+    # a short delay so the user can see the success state briefly.
+    autoDismissBuildPanel()
+
     self.data.functions.switchToDebug(self.data)
 
 

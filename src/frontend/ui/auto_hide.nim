@@ -100,6 +100,16 @@ proc panelsForEdge*(state: AutoHideState, edge: AutoHideEdge): seq[AutoHidePanel
   ## Return all panels pinned to a given edge.
   state.panels.filterIt(it.edge == edge)
 
+proc findPanelByContent*(state: AutoHideState, content: Content): AutoHidePanel =
+  ## Return the first auto-hidden panel matching the given Content type,
+  ## or nil if no such panel is pinned.
+  if state.isNil:
+    return nil
+  for panel in state.panels:
+    if panel.content == content:
+      return panel
+  return nil
+
 proc edgeCssClass*(edge: AutoHideEdge): cstring =
   case edge
   of Left:   cstring"auto-hide-strip-left"
