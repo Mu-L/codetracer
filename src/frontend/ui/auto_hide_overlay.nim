@@ -24,7 +24,7 @@ import
   ../lib/[ jslib, logging ],
   auto_hide
 
-from dom import Node
+# Node type comes from kdom (karax); do not import dom.Node which conflicts.
 
 # ---------------------------------------------------------------------------
 # Overlay header button wiring
@@ -60,18 +60,20 @@ proc wireOverlayButtons*(layout: GoldenLayout) =
       hideOverlay())
 
 # ---------------------------------------------------------------------------
-# Overlay content injection
+# Overlay content management
 # ---------------------------------------------------------------------------
 
 proc setOverlayContent*(html: cstring) =
   ## Replace the overlay body with the given HTML string.
-  ## Used when showing a pinned panel's content in the overlay.
+  ## Prefer the live-element reparenting in showOverlay() — this fallback
+  ## is kept for panels restored from serialised state that lack a live element.
   let contentEl = document.getElementById(cstring"auto-hide-overlay-content")
   if not contentEl.isNil:
     contentEl.innerHTML = html
 
 proc clearOverlayContent*() =
-  ## Remove all content from the overlay body.
+  ## Remove all content from the overlay body. Does NOT destroy live elements —
+  ## use hideOverlay() which properly detaches them first.
   let contentEl = document.getElementById(cstring"auto-hide-overlay-content")
   if not contentEl.isNil:
     contentEl.innerHTML = cstring""

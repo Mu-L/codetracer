@@ -5,19 +5,33 @@
 ## Golden Layout v2.6.0's public `removeChild`/`addChild`/`addItem` APIs.
 ## No GL fork is required.
 ##
+## Key design principle: LIVE DOM ELEMENT PRESERVATION.
+## When a panel is pinned, its DOM element (containing the Monaco editor,
+## Karax-rendered tree, scroll state, etc.) is captured and kept alive.
+## The overlay shows this same element by reparenting it into the overlay
+## container — no component recreation, no state loss. On unpin, the live
+## element is reparented back into the GL layout.
+##
+## This follows the same pattern as VS Code's auto-hide and GL's own
+## DragProxy: detach the DOM node, move it around, reattach it.
+##
 ## Usage flow:
 ##   1. User clicks "Pin to Edge" in a stack's dropdown menu (added by
 ##      layout.nim's stackCreated handler).
-##   2. `pinPanel` detaches the component from GL via `removeChild` and
-##      stores its serialised config + metadata in `AutoHideState`.
+##   2. `pinPanel` detaches the component from GL via `removeChild`,
+##      captures the live DOM element from the GL container, and stores
+##      both the element reference and serialised config in `AutoHideState`.
 ##   3. A thin strip tab appears on the chosen edge.
-##   4. Clicking the strip tab calls `showOverlay` which renders the
-##      component in an absolutely-positioned overlay that slides in.
+##   4. Clicking the strip tab calls `showOverlay` which reparents the
+##      LIVE DOM element into the overlay container — content is visible
+##      immediately with full state preserved.
 ##   5. The overlay has an "Unpin" button (`unpinPanel`) that re-adds
-##      the component to GL via `addItem`.
+##      the component to GL via `addItem`, then swaps the new container's
+##      content with the preserved live DOM element.
 ##
 ## Persistence: auto-hide state is saved alongside the GL layout config
-## via `serializeAutoHideState` / `restoreAutoHideState`.
+## via `serializeAutoHideState` / `restoreAutoHideState`. Restored panels
+## lack a live DOM element and will use config-based recreation.
 
 import
   std / [ jsffi, jsconsole, strformat, sequtils ],
@@ -26,7 +40,7 @@ import
   ../lib/[ jslib, logging ]
 
 import vdom except Event
-from dom import Node
+# Node type comes from kdom (karax); do not import dom.Node which conflicts.
 
 # JS array helpers (not exported from any shared module).
 proc newJsArray(): JsObject {.importjs: "(new Array())".}
@@ -50,6 +64,8 @@ type
     componentId*: int         ## The component id within its Content group
     config*: JsObject         ## Serialised GL component config for re-attach
     domTab*: Element          ## The strip tab DOM element (for removal)
+    liveElement*: Element     ## The preserved live DOM element from the GL container
+    containerElement*: Element ## The GL container element (parent of liveElement)
 
   AutoHideState* = ref object
     ## Central state for all auto-hidden panels.
@@ -161,6 +177,21 @@ proc pinPanel*(
     else:
       componentState.label
 
+  # Capture the live DOM element from the GL container BEFORE detaching.
+  # GL's container.getElement() returns the wrapper div that holds the
+  # component's rendered content (Monaco editor, Karax tree, etc.).
+  # We must grab this reference before removeChild, because GL may
+  # clean up container references during removal.
+  var liveEl: Element = nil
+  var containerEl: Element = nil
+  if not contentItem.container.isNil:
+    let glEl = contentItem.container.getElement()
+    if not glEl.isNil and not glEl.isUndefined:
+      containerEl = cast[Element](glEl)
+      # The live content is the container element itself — it wraps
+      # the component-container div with the Karax/Monaco content.
+      liveEl = containerEl
+
   # Detach from GL.  The parent is typically a Stack.
   let parent = contentItem.parent
   if not parent.isNil:
@@ -168,13 +199,32 @@ proc pinPanel*(
   else:
     console.warn cstring"auto_hide: contentItem has no parent, skipping removeChild"
 
+  # After removeChild, GL detaches the container element from the DOM tree
+  # but does not destroy it. If we didn't capture it above, try again from
+  # the now-orphaned contentItem.
+  if liveEl.isNil and not contentItem.container.isNil:
+    let glEl = contentItem.container.getElement()
+    if not glEl.isNil and not glEl.isUndefined:
+      containerEl = cast[Element](glEl)
+      liveEl = containerEl
+
+  if liveEl.isNil:
+    console.warn cstring"auto_hide: could not capture live DOM element for panel"
+
+  # Detach the live element from wherever GL left it so it doesn't get
+  # garbage-collected or hidden. We'll reparent it on overlay show.
+  if not liveEl.isNil and not liveEl.parentNode.isNil:
+    liveEl.parentNode.removeChild(liveEl)
+
   let panel = AutoHidePanel(
     edge: edge,
     title: title,
     content: content,
     componentId: componentId,
     config: config,
-    domTab: nil  # will be set when strip is rendered
+    domTab: nil,  # will be set when strip is rendered
+    liveElement: liveEl,
+    containerElement: containerEl
   )
   autoHideState.panels.add(panel)
 
@@ -185,17 +235,23 @@ proc pinPanel*(
 
 proc unpinPanel*(layout: GoldenLayout, panel: AutoHidePanel) =
   ## Re-attach a pinned panel back into Golden Layout and remove it
-  ## from the auto-hide state.
+  ## from the auto-hide state. The live DOM element is reparented into
+  ## the newly created GL container, preserving all component state.
   if autoHideState.isNil or layout.isNil:
     return
 
-  # Hide overlay if this panel is currently shown.
+  # Detach the live element from the overlay if it's currently shown there.
   if autoHideState.activeOverlay == panel:
+    let contentEl = document.getElementById(cstring"auto-hide-overlay-content")
+    if not contentEl.isNil and not panel.liveElement.isNil:
+      if panel.liveElement.parentNode == cast[Node](contentEl):
+        contentEl.removeChild(panel.liveElement)
     autoHideState.activeOverlay = nil
     autoHideState.overlayVisible = false
 
-  # Re-add to GL.  We use addItem on the ground item's first container
-  # (typically a row/column) which is the same strategy as panel_transfer.
+  # Re-add to GL via addItem — this creates a new GL container + component
+  # shell. We'll then swap the new container's content with our preserved
+  # live DOM element.
   try:
     let ground = layout.groundItem
     if not ground.isNil and ground.contentItems.len > 0:
@@ -204,6 +260,38 @@ proc unpinPanel*(layout: GoldenLayout, panel: AutoHidePanel) =
     else:
       console.warn cstring"auto_hide: no existing container — adding to root"
       discard ground.addItem(panel.config)
+
+    # After addItem, GL has created a new component with a fresh container.
+    # Find the newly created container and swap its content with our live
+    # DOM element. The new component will have the same componentState
+    # (content + id), so we can locate it via the component label.
+    if not panel.liveElement.isNil:
+      # GL's addItem triggers the registerComponent factory, which creates
+      # a new container element and sets innerHTML. We need to find that
+      # new container and replace its children with our live element.
+      # Use a short delay to let GL finish its internal layout cycle.
+      discard windowSetTimeout(proc() =
+        let componentLabel = if panel.config["componentName"].to(cstring) == cstring"editorComponent":
+            cstring("editorComponent-" & $panel.componentId)
+          else:
+            panel.config["componentState"]["label"].to(cstring)
+
+        # Find the newly created component-container div by its id.
+        let newContainerDiv = document.getElementById(componentLabel)
+        if not newContainerDiv.isNil and not newContainerDiv.parentNode.isNil:
+          # The new container div is inside the GL container element.
+          # Replace the GL container element's content with our live element's
+          # children, preserving the component's full DOM tree.
+          let glContainerEl = newContainerDiv.parentNode
+          # Clear the newly created (empty) content.
+          glContainerEl.innerHTML = cstring""
+          # Move all children from our live element into the GL container.
+          while panel.liveElement.childNodes.len > 0:
+            glContainerEl.appendChild(panel.liveElement.childNodes[0])
+          cdebug fmt"auto_hide: reparented live DOM back into GL for '{panel.title}'"
+        else:
+          console.warn cstring"auto_hide: could not find new GL container to swap live DOM into"
+      , 50)
   except:
     console.error cstring"auto_hide: failed to re-add panel to GL: ",
       cstring(getCurrentExceptionMsg())
@@ -224,8 +312,24 @@ proc unpinPanel*(layout: GoldenLayout, panel: AutoHidePanel) =
 
 proc hideOverlay*() =
   ## Hide the currently visible auto-hide overlay.
+  ## The live DOM element is detached from the overlay but NOT destroyed —
+  ## it remains referenced by the AutoHidePanel and will be reparented
+  ## back into the overlay on next show, or into GL on unpin.
   if autoHideState.isNil:
     return
+
+  # Before clearing state, detach the live element from the overlay so it
+  # survives. We must NOT use innerHTML = "" which would destroy child nodes.
+  let activePanel = autoHideState.activeOverlay
+  let contentEl = document.getElementById(cstring"auto-hide-overlay-content")
+  if not contentEl.isNil and not activePanel.isNil and not activePanel.liveElement.isNil:
+    # Detach the live element — removeChild returns the node, keeping it alive.
+    if activePanel.liveElement.parentNode == cast[Node](contentEl):
+      contentEl.removeChild(activePanel.liveElement)
+  elif not contentEl.isNil:
+    # No live element to preserve — safe to clear.
+    contentEl.innerHTML = cstring""
+
   autoHideState.activeOverlay = nil
   autoHideState.overlayVisible = false
 
@@ -237,11 +341,6 @@ proc hideOverlay*() =
     overlayEl.classList.remove(cstring"auto-hide-overlay-left")
     overlayEl.classList.remove(cstring"auto-hide-overlay-right")
     overlayEl.classList.remove(cstring"auto-hide-overlay-bottom")
-
-  # Clear the overlay content.
-  let contentEl = document.getElementById(cstring"auto-hide-overlay-content")
-  if not contentEl.isNil:
-    contentEl.innerHTML = cstring""
 
   if not autoHideState.onChanged.isNil:
     autoHideState.onChanged()
@@ -260,6 +359,10 @@ proc showOverlay*(panel: AutoHidePanel) =
   if autoHideState.activeOverlay == panel and autoHideState.overlayVisible:
     hideOverlay()
     return
+
+  # Capture the previously active panel before updating state, so we can
+  # safely detach its live element from the overlay without destroying it.
+  let previousPanel = autoHideState.lastActivePanel
 
   autoHideState.activeOverlay = panel
   autoHideState.lastActivePanel = panel
@@ -281,6 +384,32 @@ proc showOverlay*(panel: AutoHidePanel) =
   overlayEl.classList.remove(cstring"auto-hide-overlay-bottom")
   overlayEl.classList.add(edgeOverlayCssClass(panel.edge))
   overlayEl.classList.add(cstring"visible")
+
+  # Reparent the live DOM element into the overlay content area.
+  # This preserves all component state (scroll position, Monaco editor
+  # content, Karax tree state, event listeners, etc.).
+  let contentEl = document.getElementById(cstring"auto-hide-overlay-content")
+  if not contentEl.isNil:
+    # If a different panel's live element is still in the overlay, detach it
+    # safely (don't use innerHTML="" which would destroy it).
+    if not previousPanel.isNil and
+       previousPanel != panel and
+       not previousPanel.liveElement.isNil:
+      let prevEl = previousPanel.liveElement
+      if prevEl.parentNode == cast[Node](contentEl):
+        contentEl.removeChild(prevEl)
+    # Clear any remaining non-live content.
+    contentEl.innerHTML = cstring""
+    if not panel.liveElement.isNil:
+      contentEl.appendChild(panel.liveElement)
+      # Ensure the reparented element is visible and fills the overlay.
+      panel.liveElement.style.display = cstring"block"
+      panel.liveElement.style.width = cstring"100%"
+      panel.liveElement.style.height = cstring"100%"
+      panel.liveElement.style.position = cstring"relative"
+      cdebug fmt"auto_hide: reparented live DOM element into overlay for '{panel.title}'"
+    else:
+      console.warn cstring"auto_hide: no live DOM element for panel — overlay will be empty"
 
   if not autoHideState.onChanged.isNil:
     autoHideState.onChanged()
@@ -359,7 +488,9 @@ proc restoreAutoHideState*(saved: JsObject) =
       content: Content(obj["content"].to(int)),
       componentId: obj["componentId"].to(int),
       config: obj["config"],
-      domTab: nil
+      domTab: nil,
+      liveElement: nil,      # No live element for restored panels — will use config fallback
+      containerElement: nil
     )
     autoHideState.panels.add(panel)
 
