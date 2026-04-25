@@ -523,6 +523,79 @@ test.describe("DeepReview GUI - main features", () => {
   });
 
   // -----------------------------------------------------------------------
+  // Test 22: DR-6 - Mode switch preserves file selection
+  // -----------------------------------------------------------------------
+
+  test("Test 22: mode switch preserves the selected file index", async ({ ctPage }) => {
+    const dr = new DeepReviewPage(ctPage);
+    await dr.waitForReady();
+    await dr.waitForEditorReady();
+    await wait(500);
+
+    // Select the second file (src/utils.rs).
+    const secondItem = dr.fileItemByIndex(1);
+    await secondItem.click();
+    await wait(500);
+    expect(await secondItem.isSelected()).toBe(true);
+
+    // Switch to unified diff mode.
+    await dr.switchToUnifiedDiff();
+    await wait(500);
+
+    // The second file should still be selected in the sidebar.
+    expect(await secondItem.isSelected()).toBe(true);
+    expect(await dr.fileItemByIndex(0).isSelected()).toBe(false);
+
+    // Switch back to full files mode.
+    await dr.switchToFullFiles();
+    await wait(500);
+
+    // The second file should still be selected.
+    expect(await secondItem.isSelected()).toBe(true);
+  });
+
+  // -----------------------------------------------------------------------
+  // Test 23: DR-6 - Trace context selector is present
+  // -----------------------------------------------------------------------
+
+  test("Test 23: trace context selector is visible with correct options", async ({ ctPage }) => {
+    const dr = new DeepReviewPage(ctPage);
+    await dr.waitForReady();
+    await wait(500);
+
+    // The fixture has 2 trace contexts, so the selector should be visible.
+    await expect(dr.traceContextSelector()).toBeVisible();
+    await expect(dr.traceContextSelect()).toBeVisible();
+
+    // Verify the dropdown has the correct number of options.
+    const options = dr.traceContextSelect().locator("option");
+    const optionCount = await options.count();
+    expect(optionCount).toBe(2);
+
+    // Verify option labels match fixture data.
+    const firstLabel = await options.nth(0).textContent();
+    expect(firstLabel).toContain("latest passing run");
+
+    const secondLabel = await options.nth(1).textContent();
+    expect(secondLabel).toContain("previous run");
+  });
+
+  // -----------------------------------------------------------------------
+  // Test 24: DR-6 - Header shows session title
+  // -----------------------------------------------------------------------
+
+  test("Test 24: header bar displays the session title", async ({ ctPage }) => {
+    const dr = new DeepReviewPage(ctPage);
+    await dr.waitForReady();
+    await wait(500);
+
+    // The fixture has sessionTitle "DeepReview: parser cleanup".
+    await expect(dr.sessionTitle()).toBeVisible();
+    const titleText = await dr.sessionTitle().textContent();
+    expect(titleText).toContain("DeepReview: parser cleanup");
+  });
+
+  // -----------------------------------------------------------------------
   // Test 14: Context expansion - expand buttons visible
   // -----------------------------------------------------------------------
 

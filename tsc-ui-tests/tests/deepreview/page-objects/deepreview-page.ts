@@ -161,6 +161,43 @@ export class DeepReviewPage {
     return this.page.locator(".deepreview-stats");
   }
 
+  // -- Session title -------------------------------------------------------
+
+  /** The session title displayed in the header bar. */
+  sessionTitle(): Locator {
+    return this.page.locator(".deepreview-session-title");
+  }
+
+  // -- Trace context selector ----------------------------------------------
+
+  /** The trace context selector container. */
+  traceContextSelector(): Locator {
+    return this.page.locator(".deepreview-trace-selector");
+  }
+
+  /** The trace context dropdown element. */
+  traceContextSelect(): Locator {
+    return this.page.locator(".deepreview-trace-select");
+  }
+
+  /**
+   * Set the trace context via the exposed test helper.
+   * @param id The trace context id to select.
+   */
+  async setTraceContext(id: number): Promise<void> {
+    await this.page.evaluate(
+      (val) => {
+        const fn = (window as any).__deepreviewSetTraceContext;
+        if (typeof fn === "function") {
+          fn(val);
+        } else {
+          throw new Error("__deepreviewSetTraceContext not found on window");
+        }
+      },
+      id,
+    );
+  }
+
   // -- File list sidebar ---------------------------------------------------
 
   /** The file list sidebar container. */

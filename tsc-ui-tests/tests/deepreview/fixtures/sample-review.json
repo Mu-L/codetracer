@@ -3,6 +3,11 @@
   "baseCommitSha": "0000000000000000000000000000000000000000000000000000000000000000",
   "collectionTimeMs": 1542,
   "recordingCount": 2,
+  "sessionTitle": "DeepReview: parser cleanup",
+  "traceContexts": [
+    {"id": 0, "label": "latest passing run", "traceId": 42},
+    {"id": 1, "label": "previous run", "traceId": 41}
+  ],
   "files": [
     {
       "path": "src/main.rs",

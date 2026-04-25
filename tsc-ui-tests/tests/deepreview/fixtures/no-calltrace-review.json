@@ -3,6 +3,8 @@
   "baseCommitSha": "0000000000000000000000000000000000000000000000000000000000000000",
   "collectionTimeMs": 200,
   "recordingCount": 1,
+  "sessionTitle": "",
+  "traceContexts": [],
   "files": [
     {
       "path": "src/lib.rs",

@@ -521,12 +521,15 @@ proc renderLoopSlider(self: DeepReviewComponent): VNode =
 
 proc renderViewModeToggle(self: DeepReviewComponent): VNode =
   ## Render toggle buttons to switch between Unified diff and Full Files modes.
+  ## Mode switching preserves the current ``selectedFileIndex`` so the user
+  ## does not lose their place when toggling views.
   let isUnified = self.viewMode == Unified
   let isFullFiles = self.viewMode == FullFiles
   buildHtml(tdiv(class = "deepreview-mode-toggle")):
     button(
       class = cstring(if isFullFiles: "deepreview-mode-btn deepreview-mode-btn-active" else: "deepreview-mode-btn"),
       onclick = proc(ev: Event, n: VNode) =
+        # Preserve selectedFileIndex across mode switch.
         self.viewMode = FullFiles
         redrawAll()
     ):
@@ -534,10 +537,47 @@ proc renderViewModeToggle(self: DeepReviewComponent): VNode =
     button(
       class = cstring(if isUnified: "deepreview-mode-btn deepreview-mode-btn-active" else: "deepreview-mode-btn"),
       onclick = proc(ev: Event, n: VNode) =
+        # Preserve selectedFileIndex across mode switch.
         self.viewMode = Unified
         redrawAll()
     ):
       text "Unified Diff"
+
+proc makeTraceContextChangeHandler(self: DeepReviewComponent): proc(ev: Event, n: VNode) =
+  ## Create a change handler for the trace context selector dropdown.
+  result = proc(ev: Event, n: VNode) =
+    let val = cast[cstring](ev.target.toJs.value)
+    self.selectedTraceContextId = ($val).parseInt
+    # TODO(DR-6): When actual per-context data switching is implemented,
+    # reload coverage/flow overlays for the selected trace context here.
+    self.updateDecorations()
+    redrawAll()
+
+proc renderTraceContextSelector(self: DeepReviewComponent): VNode =
+  ## Render a dropdown to select between available trace contexts.
+  ## Each trace context represents a different recording run (e.g.
+  ## "latest passing run", "previous run"). When no contexts are
+  ## available, the selector is hidden.
+  let drData = self.drData
+  if drData.isNil or drData.traceContexts.len == 0:
+    return buildHtml(tdiv())
+
+  buildHtml(tdiv(class = "deepreview-trace-selector")):
+    select(
+      class = "deepreview-trace-select",
+      onchange = self.makeTraceContextChangeHandler()
+    ):
+      for ctx in drData.traceContexts:
+        let isSelected = (ctx.id == self.selectedTraceContextId)
+        if isSelected:
+          option(
+            value = cstring($ctx.id),
+            selected = "selected"
+          ):
+            text $ctx.label
+        else:
+          option(value = cstring($ctx.id)):
+            text $ctx.label
 
 proc renderCallTraceNode(node: DeepReviewCallNode, depth: int): VNode =
   ## Recursively render a call trace tree node.
@@ -662,7 +702,9 @@ proc renderUnifiedDiff(self: DeepReviewComponent): VNode =
       let hasSource = sourceLines.len > 0
 
       # File header with path, status badge and line counts.
-      tdiv(class = "deepreview-unified-file"):
+      # Add a data attribute so the unified diff can scroll to the
+      # selected file's section when switching modes.
+      tdiv(class = "deepreview-unified-file", `data-file-index` = cstring($fileIdx)):
         tdiv(class = "deepreview-unified-file-header"):
           if ($file.diff.status).len > 0:
             span(class = cstring("deepreview-diff-status" & diffStatusCssClass(file.diff))):
@@ -873,6 +915,12 @@ proc exposeTestHelpers(self: DeepReviewComponent) =
       selfCapture.viewMode = FullFiles
     redrawAll()
 
+  proc setTraceContext(id: int) =
+    ## Set the trace context to the given id.
+    selfCapture.selectedTraceContextId = id
+    selfCapture.updateDecorations()
+    redrawAll()
+
   proc expandAbove(fileIdx: int, hunkIdx: int) =
     ## Expand context above a hunk by EXPAND_STEP lines.
     selfCapture.ensureExpansionState()
@@ -890,6 +938,7 @@ proc exposeTestHelpers(self: DeepReviewComponent) =
   window.__deepreviewSetExecution = `setExec`;
   window.__deepreviewSetIteration = `setIter`;
   window.__deepreviewSetViewMode = `setViewMode`;
+  window.__deepreviewSetTraceContext = `setTraceContext`;
   window.__deepreviewExpandAbove = `expandAbove`;
   window.__deepreviewExpandBelow = `expandBelow`;
   """.}
@@ -901,10 +950,21 @@ method render*(self: DeepReviewComponent): VNode =
   # Expose test helpers on the window object for E2E tests.
   self.exposeTestHelpers()
 
-  # Schedule editor initialisation after the DOM has been rendered.
+  # Schedule editor initialisation and unified diff scroll-to-file
+  # after the DOM has been rendered.
   if not self.kxi.isNil:
     self.kxi.afterRedraws.add(proc() =
       self.initEditor()
+      # In unified diff mode, scroll to the selected file's section
+      # so that switching modes preserves the user's context.
+      if self.viewMode == Unified:
+        {.emit: """
+        var fileEl = document.querySelector(
+          '.deepreview-unified-file[data-file-index="' + `self`.selectedFileIndex + '"]');
+        if (fileEl) {
+          fileEl.scrollIntoView({ behavior: 'auto', block: 'start' });
+        }
+        """.}
     )
 
   if drData.isNil:
@@ -918,11 +978,21 @@ method render*(self: DeepReviewComponent): VNode =
   else:
     drData.commitSha
 
+  # Session title: use the sessionTitle field if present, otherwise
+  # fall back to the commit-based display.
+  let hasSessionTitle = not drData.sessionTitle.isNil and ($drData.sessionTitle).len > 0
+
   result = buildHtml(tdiv(class = "deepreview-container")):
-    # Header bar with commit info, view mode toggle, and summary statistics.
+    # Header bar with session title, trace context selector, view mode
+    # toggle, and summary statistics. Compact layout (32-36px height)
+    # matching the CodeTracer status bar style.
     tdiv(class = "deepreview-header"):
+      if hasSessionTitle:
+        span(class = "deepreview-session-title"):
+          text drData.sessionTitle
       span(class = "deepreview-commit"):
         text fmt"Commit: {commitDisplay}"
+      renderTraceContextSelector(self)
       renderViewModeToggle(self)
       span(class = "deepreview-stats"):
         text fmt"{drData.files.len} files | {drData.recordingCount} recordings | {drData.collectionTimeMs}ms"

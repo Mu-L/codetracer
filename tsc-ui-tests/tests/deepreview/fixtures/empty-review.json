@@ -3,6 +3,8 @@
   "baseCommitSha": "0000000000000000000000000000000000000000000000000000000000000000",
   "collectionTimeMs": 50,
   "recordingCount": 0,
+  "sessionTitle": "",
+  "traceContexts": [],
   "files": [],
   "callTrace": null
 }

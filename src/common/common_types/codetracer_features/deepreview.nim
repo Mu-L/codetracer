@@ -15,6 +15,13 @@ type
     baseCommitSha*: langstring
     collectionTimeMs*: int
     recordingCount*: int
+    sessionTitle*: langstring
+      ## Human-readable session title displayed in the header bar
+      ## (e.g. "DeepReview: parser cleanup"). May be nil/empty.
+    traceContexts*: seq[DeepReviewTraceContext]
+      ## Available trace contexts for the review session. Each
+      ## context maps to a different recording run. The first entry
+      ## is selected by default.
     files*: seq[DeepReviewFileData]
     callTrace*: DeepReviewCallTrace
 
@@ -144,3 +151,12 @@ type
     name*: langstring
     executionCount*: int
     children*: seq[DeepReviewCallNode]
+
+  DeepReviewTraceContext* = ref object
+    ## A selectable trace context that maps to a specific recording.
+    ## Multiple trace contexts allow the user to switch between
+    ## different runs (e.g. latest passing, previous failing) and
+    ## see the overlay data (flow values, coverage) for that run.
+    id*: int
+    label*: langstring
+    traceId*: int

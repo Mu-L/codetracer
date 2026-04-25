@@ -886,6 +886,9 @@ type
     decorationCollection*: js
     fileContentCache*: JsAssoc[cstring, cstring]
     viewMode*: DeepReviewViewMode
+    selectedTraceContextId*: int
+      ## Currently selected trace context id (index into
+      ## ``drData.traceContexts``). Defaults to 0 (first context).
     ## Per-file, per-hunk expansion state. Outer key is file index,
     ## inner key is hunk index. Each entry stores how many extra lines
     ## have been expanded above and below the hunk.

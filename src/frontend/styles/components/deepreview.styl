@@ -12,23 +12,66 @@
   font-family 'SpaceGrotesk', sans-serif
 
 // --- Header ---
+// Compact header bar (32-36px height) matching CodeTracer status bar style.
+// Dark background (#252526), light text (#cccccc).
 
 .deepreview-header
   display flex
   justify-content space-between
   align-items center
-  padding 6px 16px
-  background-color var(--bg-secondary, #1e1f26)
+  gap 12px
+  padding 4px 16px
+  min-height 32px
+  max-height 36px
+  background-color #252526
   border-bottom 1px solid var(--border-color, #3a3b44)
   flex-shrink 0
 
+.deepreview-session-title
+  font-size 13px
+  font-weight 600
+  color #cccccc
+  white-space nowrap
+  overflow hidden
+  text-overflow ellipsis
+  flex-shrink 1
+  min-width 0
+
 .deepreview-commit
   font-size 13px
-  color var(--text-primary, #c9c9c9)
+  color #cccccc
 
 .deepreview-stats
   font-size 12px
   color var(--text-secondary, #8e8f92)
+
+// --- Trace context selector ---
+// Dropdown matching the GL tab styling: dark background, light text,
+// compact sizing consistent with the header bar height.
+
+.deepreview-trace-selector
+  display flex
+  align-items center
+  flex-shrink 0
+
+.deepreview-trace-select
+  font-family 'SpaceGrotesk', sans-serif
+  font-size 12px
+  color #cccccc
+  background-color #3c3c3c
+  border 1px solid var(--border-color, #3a3b44)
+  border-radius 3px
+  padding 2px 8px
+  height 24px
+  cursor pointer
+  outline none
+  appearance auto
+
+  &:hover
+    background-color #4a4a4a
+
+  &:focus
+    border-color #007acc
 
 .deepreview-error
   padding 24px
