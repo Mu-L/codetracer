@@ -197,7 +197,9 @@ proc makeErrorsComponent*(data: Data): ErrorsComponent =
     id: data.generateId(Content.BuildErrors),
     service: data.services.debugger,
     expanded: false,
-    errors: @[])
+    errors: @[],
+    filter: FilterAll,
+    groupByFile: false)
   data.registerComponent(result, Content.BuildErrors)
 
 

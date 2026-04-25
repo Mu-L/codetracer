@@ -1,0 +1,141 @@
+// BP-M4: Problems panel styles
+// Matches the dark theme of existing CodeTracer panels.
+
+.problems-panel
+  display: flex
+  flex-direction: column
+  height: 100%
+  overflow: hidden
+  color: PRIMARY_TEXT_COLOR
+  font-size: 13px
+
+// -- Header bar --
+
+.problems-header
+  display: flex
+  align-items: center
+  justify-content: space-between
+  padding: 4px 10px
+  border-bottom: 1px solid ACTIVE_MENU_BACKGROUND
+  flex-shrink: 0
+  user-select: none
+
+.problems-counts
+  display: flex
+  align-items: center
+  gap: 12px
+
+.problems-count-badge
+  font-size: 12px
+  opacity: 0.8
+
+.problems-count-error
+  color: #f85149
+
+.problems-count-warning
+  color: #d29922
+
+// -- Filter / control buttons --
+
+.problems-controls
+  display: flex
+  align-items: center
+  gap: 4px
+
+.problems-filter-btn
+  padding: 2px 8px
+  border-radius: 4px
+  cursor: pointer
+  font-size: 12px
+  color: DROPDOWN_TEXT_COLOR
+  background: transparent
+  &:hover
+    background: ACTIVE_MENU_BACKGROUND
+  &.active
+    background: ACTIVE_MENU_BACKGROUND
+    color: PRIMARY_TEXT_COLOR
+    font-weight: 600
+
+// -- Problem list --
+
+.problems-list
+  flex: 1
+  overflow-y: auto
+  overflow-x: hidden
+
+.problems-empty
+  padding: 16px 10px
+  opacity: 0.6
+  font-style: italic
+
+// -- Individual problem row --
+
+.problems-row
+  display: flex
+  align-items: baseline
+  gap: 8px
+  padding: 3px 10px
+  cursor: pointer
+  white-space: nowrap
+  &:hover
+    background: ACTIVE_MENU_BACKGROUND
+
+.problems-icon
+  flex-shrink: 0
+  width: 16px
+  text-align: center
+  font-size: 12px
+
+.problems-icon-error
+  color: #f85149
+
+.problems-icon-warning
+  color: #d29922
+
+.problems-icon-info
+  color: #58a6ff
+
+.problems-path
+  color: #8b949e
+  flex-shrink: 1
+  overflow: hidden
+  text-overflow: ellipsis
+  font-size: 12px
+
+.problems-location
+  color: #8b949e
+  flex-shrink: 0
+  font-size: 12px
+
+.problems-message
+  flex: 1
+  overflow: hidden
+  text-overflow: ellipsis
+  color: PRIMARY_TEXT_COLOR
+
+// -- Grouped-by-file mode --
+
+.problems-grouped
+  // no additional wrapper styles needed
+  display: block
+
+.problems-file-group
+  margin-bottom: 2px
+
+.problems-file-header
+  padding: 4px 10px
+  font-weight: 600
+  font-size: 12px
+  color: #8b949e
+  background: rgba(255, 255, 255, 0.03)
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05)
+
+// Severity-tinted left border for quick scanning
+.problems-severity-error
+  border-left: 3px solid #f85149
+
+.problems-severity-warning
+  border-left: 3px solid #d29922
+
+.problems-severity-info
+  border-left: 3px solid #58a6ff

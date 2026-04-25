@@ -63,6 +63,12 @@ proc newGoldenLayout*(
 ): GoldenLayout {.importjs: "new GoldenLayout(#, #, #)".}
 
 proc convertTabTitle(content: cstring): cstring =
+  ## Derive a human-readable uppercase tab title from a Content enum name.
+  ## Special-case overrides are listed first; the generic fallback splits
+  ## CamelCase into separate uppercase words (e.g. "EventLog" -> "EVENT LOG").
+  if content == cstring"BuildErrors":
+    return cstring"PROBLEMS"
+
   var title: cstring = ""
   var label = content
   let pattern = regex("[A-Z][a-z0-9]*")

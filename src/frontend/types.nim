@@ -1427,10 +1427,18 @@ type
     expanded*: bool
     service*: DebuggerService
 
+  ProblemFilter* = enum
+    ## Which problems to show in the Problems panel.
+    FilterAll,
+    FilterErrors,
+    FilterWarnings
+
   ErrorsComponent* = ref object of Component
     errors*: seq[(Location, cstring)]
     expanded*: bool
     service*: DebuggerService
+    filter*: ProblemFilter   ## Active severity filter
+    groupByFile*: bool       ## Whether to group problems by file path
 
   SearchResultsComponent* = ref object of Component
     query*: cstring
@@ -1750,9 +1758,26 @@ type
     redrawBreakpoints*: bool
     redrawTracepoints*: bool
 
+  ProblemSeverity* = enum
+    ## Severity level for a parsed build problem.
+    ProbError,
+    ProbWarning,
+    ProbInfo
+
+  BuildProblem* = object
+    ## A structured build problem extracted from build output.
+    ## Used by the Problems panel (BP-M4) to display a filterable,
+    ## clickable list of errors and warnings.
+    severity*: ProblemSeverity
+    path*: cstring          ## Source file path
+    line*: int              ## 1-based line number
+    col*: int               ## 1-based column number, or -1 when unknown
+    message*: cstring       ## The diagnostic message text
+
   Build* = object
     output*: seq[(cstring, bool)]
     errors*: seq[(Location, cstring, cstring)]
+    problems*: seq[BuildProblem]
     code*:   int
     running*: bool
     command*: cstring

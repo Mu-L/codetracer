@@ -39,6 +39,15 @@ proc matchLocation*(self: BuildComponent, raw: string): (bool, types.Location, c
 
   return (true, loc, cstring(locDisplay), cstring(parsed.message))
 
+proc buildSeverityToProblem(sev: BuildSeverity): ProblemSeverity =
+  ## Convert a BuildSeverity from the parser to the ProblemSeverity used
+  ## by the Problems panel. Keeps the two enums decoupled so the parser
+  ## module stays free of UI types.
+  case sev
+  of SevError:   ProbError
+  of SevWarning: ProbWarning
+  of SevInfo:    ProbInfo
+
 template appendBuild(self: BuildComponent, line: string, stdout: bool): untyped =
   let klass = if stdout: "build-stdout" else: "build-stderr"
   let (match, location, rawLocation, other) = self.matchLocation(line)
@@ -48,6 +57,16 @@ template appendBuild(self: BuildComponent, line: string, stdout: bool): untyped 
     if other.len > 0:
       self.build.output.add((other, stdout))
     self.build.errors.add((location, rawLocation, other))
+
+    # BP-M4: Publish a structured Problem for the Problems panel.
+    let parsed = parseBuildLocation(line)
+    if parsed.found:
+      self.build.problems.add(BuildProblem(
+        severity: buildSeverityToProblem(parsed.severity),
+        path: cstring(parsed.path),
+        line: parsed.line,
+        col: parsed.col,
+        message: cstring(parsed.message)))
   else:
     if line.len > 0:
       self.build.output.add((cstring(line), stdout))
