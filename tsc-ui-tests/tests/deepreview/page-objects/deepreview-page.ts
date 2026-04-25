@@ -454,6 +454,56 @@ export class DeepReviewPage {
     return this.page.locator(".deepreview-unified-line");
   }
 
+  // -- Context expansion ----------------------------------------------------
+
+  /** All "Expand above/below" rows in the unified diff. */
+  expandRows(): Locator {
+    return this.page.locator(".deepreview-expand-row");
+  }
+
+  /** All expanded context lines (lines added via expand buttons). */
+  expandedContextLines(): Locator {
+    return this.page.locator(".deepreview-expanded-context");
+  }
+
+  /**
+   * Expand context above a specific hunk via the exposed test helper.
+   * @param fileIdx 0-based file index
+   * @param hunkIdx 0-based hunk index within the file
+   */
+  async expandAbove(fileIdx: number, hunkIdx: number): Promise<void> {
+    await this.page.evaluate(
+      ({ fi, hi }) => {
+        const fn = (window as any).__deepreviewExpandAbove;
+        if (typeof fn === "function") {
+          fn(fi, hi);
+        } else {
+          throw new Error("__deepreviewExpandAbove not found on window");
+        }
+      },
+      { fi: fileIdx, hi: hunkIdx },
+    );
+  }
+
+  /**
+   * Expand context below a specific hunk via the exposed test helper.
+   * @param fileIdx 0-based file index
+   * @param hunkIdx 0-based hunk index within the file
+   */
+  async expandBelow(fileIdx: number, hunkIdx: number): Promise<void> {
+    await this.page.evaluate(
+      ({ fi, hi }) => {
+        const fn = (window as any).__deepreviewExpandBelow;
+        if (typeof fn === "function") {
+          fn(fi, hi);
+        } else {
+          throw new Error("__deepreviewExpandBelow not found on window");
+        }
+      },
+      { fi: fileIdx, hi: hunkIdx },
+    );
+  }
+
   // -- Convenience ---------------------------------------------------------
 
   /**

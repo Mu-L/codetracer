@@ -7,6 +7,7 @@
     {
       "path": "src/main.rs",
       "contentHash": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      "sourceContent": "fn main() {\n  let x = 10;\n  let y = x * 3;\n  let z = x + y;\n  let w = z * 2;\n  compute(w);\n  println!(\"result: {}\", w);\n  println!(\"extra line\");\n  println!(\"another line\");\n  println!(\"yet another\");\n  // end of block\n}\n\nfn compute(n: i32) -> i32 {\n  let mut acc = 0;\n  for i in 0..n {\n    acc += i;\n  }\n  acc\n}\n\nfn helper() {\n  // helper function\n  println!(\"helper\");\n}",
       "diff": {
         "status": "M",
         "linesAdded": 8,
@@ -282,6 +283,7 @@
     {
       "path": "src/utils.rs",
       "contentHash": "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
+      "sourceContent": "pub fn format_output(input: &str) -> String {\n  let trimmed = input.trim();\n  if trimmed.is_empty() {\n    return String::new();\n  }\n  format!(\"[{}]\", trimmed)\n}\n",
       "diff": {
         "status": "A",
         "linesAdded": 8,
@@ -377,6 +379,7 @@
     {
       "path": "src/config.rs",
       "contentHash": "1234567812345678123456781234567812345678123456781234567812345678",
+      "sourceContent": "pub const DEFAULT_TIMEOUT: u64 = 30;\n\npub struct Config {\n  pub timeout: u64,\n  pub retries: u32,\n  pub verbose: bool,\n}",
       "diff": {
         "status": "D",
         "linesAdded": 0,

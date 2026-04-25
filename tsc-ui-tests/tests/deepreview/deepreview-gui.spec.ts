@@ -439,6 +439,91 @@ test.describe("DeepReview GUI - main features", () => {
   });
 
   // -----------------------------------------------------------------------
+  // Test 14: Context expansion - expand buttons visible
+  // -----------------------------------------------------------------------
+
+  test("Test 14: expand buttons are visible around hunks in unified diff", async ({ ctPage }) => {
+    const dr = new DeepReviewPage(ctPage);
+    await dr.waitForReady();
+    await wait(500);
+
+    await dr.switchToUnifiedDiff();
+    await wait(500);
+
+    // The fixture has sourceContent for all 3 files. The first file
+    // (src/main.rs) has a hunk starting at newLine 2, so there is 1 line
+    // above (line 1 "fn main() {") to expand, and lines below (12+).
+    // We expect expand rows to be present in the unified diff.
+    const expandRows = dr.expandRows();
+    const expandCount = await expandRows.count();
+    expect(expandCount).toBeGreaterThan(0);
+
+    // Verify the expand label text is correct.
+    const firstExpandText = await expandRows.first().textContent();
+    expect(firstExpandText).toContain("Expand 10 lines");
+  });
+
+  // -----------------------------------------------------------------------
+  // Test 15: Context expansion - clicking expand above reveals lines
+  // -----------------------------------------------------------------------
+
+  test("Test 15: clicking expand above reveals additional context lines", async ({ ctPage }) => {
+    const dr = new DeepReviewPage(ctPage);
+    await dr.waitForReady();
+    await wait(500);
+
+    await dr.switchToUnifiedDiff();
+    await wait(500);
+
+    // Before expanding, no expanded context lines should exist.
+    const initialExpanded = await dr.expandedContextLines().count();
+    expect(initialExpanded).toBe(0);
+
+    // Expand above the first hunk of the first file (src/main.rs).
+    // The hunk starts at newLine 2, and there is 1 line above (line 1).
+    // So expanding should reveal 1 context line ("fn main() {").
+    await dr.expandAbove(0, 0);
+    await wait(500);
+
+    const expandedCount = await dr.expandedContextLines().count();
+    expect(expandedCount).toBeGreaterThan(0);
+
+    // The expanded line should be a context line (not added/removed).
+    const expandedLine = dr.expandedContextLines().first();
+    const classes = await expandedLine.getAttribute("class");
+    expect(classes).toContain("deepreview-unified-line-context");
+  });
+
+  // -----------------------------------------------------------------------
+  // Test 16: Context expansion - clicking expand below reveals lines
+  // -----------------------------------------------------------------------
+
+  test("Test 16: clicking expand below reveals additional context lines", async ({ ctPage }) => {
+    const dr = new DeepReviewPage(ctPage);
+    await dr.waitForReady();
+    await wait(500);
+
+    await dr.switchToUnifiedDiff();
+    await wait(500);
+
+    // Expand below the first hunk of the first file (src/main.rs).
+    // The hunk ends at newLine 11, and the file has 25 lines, so
+    // expanding should reveal up to 10 more context lines.
+    await dr.expandBelow(0, 0);
+    await wait(500);
+
+    const expandedCount = await dr.expandedContextLines().count();
+    expect(expandedCount).toBeGreaterThan(0);
+
+    // The expanded lines should contain source content from the file.
+    const firstExpandedContent = await dr.expandedContextLines().first()
+      .locator(".deepreview-unified-line-content").textContent();
+    expect(firstExpandedContent).toBeTruthy();
+    // Line 12 of main.rs is "}" (closing brace of fn main).
+    expect(firstExpandedContent).toContain("}");
+  });
+
+  // -----------------------------------------------------------------------
   // Test 8: Call trace panel
   // -----------------------------------------------------------------------
 

@@ -886,6 +886,11 @@ type
     decorationCollection*: js
     fileContentCache*: JsAssoc[cstring, cstring]
     viewMode*: DeepReviewViewMode
+    ## Per-file, per-hunk expansion state. Outer key is file index,
+    ## inner key is hunk index. Each entry stores how many extra lines
+    ## have been expanded above and below the hunk.
+    expandAbove*: JsAssoc[cstring, JsAssoc[cstring, int]]
+    expandBelow*: JsAssoc[cstring, JsAssoc[cstring, int]]
 
   AgentWorkspaceComponent* = ref object of Component
     ## Agent workspace view showing the agent's working directory files

@@ -22,6 +22,10 @@ type
     ## Per-file data including symbols, coverage, flow, loops, and diff info.
     path*: langstring
     contentHash*: langstring
+    sourceContent*: langstring
+      ## Full source text of the file (new version for added/modified,
+      ## old version for deleted). Used to expand context around diff
+      ## hunks. May be empty/nil if the export did not include source.
     symbols*: seq[DeepReviewSymbol]
     coverage*: seq[DeepReviewLineCoverage]
     functions*: seq[DeepReviewFunctionCoverage]

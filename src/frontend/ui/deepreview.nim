@@ -490,16 +490,85 @@ proc renderCallTraceNode(node: DeepReviewCallNode, depth: int): VNode =
       for child in node.children:
         renderCallTraceNode(child, depth + 1)
 
+# ---------------------------------------------------------------------------
+# Context expansion helpers
+# ---------------------------------------------------------------------------
+
+proc drHasKey(obj: JsObject, key: cstring): bool
+  {.importjs: "#.hasOwnProperty(#)".}
+  ## Check if a JS object has a given own property. Works on JsAssoc and
+  ## JsObject alike since both compile to plain JS objects.
+
+const EXPAND_STEP = 10
+  ## Number of lines to expand on each click of "Expand above/below".
+
+proc ensureExpansionState(self: DeepReviewComponent) =
+  ## Lazily initialise the expansion state tables if they are nil.
+  if self.expandAbove.isNil:
+    self.expandAbove = newJsAssoc[cstring, JsAssoc[cstring, int]]()
+  if self.expandBelow.isNil:
+    self.expandBelow = newJsAssoc[cstring, JsAssoc[cstring, int]]()
+
+proc getExpand(table: JsAssoc[cstring, JsAssoc[cstring, int]], fileIdx, hunkIdx: int): int =
+  ## Read an expansion count from the nested table, defaulting to 0.
+  let fk = cstring($fileIdx)
+  let hk = cstring($hunkIdx)
+  if table.isNil:
+    return 0
+  if not drHasKey(table.toJs, fk):
+    return 0
+  let inner = table[fk]
+  if inner.isNil or not drHasKey(inner.toJs, hk):
+    return 0
+  return inner[hk]
+
+proc setExpand(table: JsAssoc[cstring, JsAssoc[cstring, int]], fileIdx, hunkIdx, value: int) =
+  ## Write an expansion count into the nested table.
+  let fk = cstring($fileIdx)
+  let hk = cstring($hunkIdx)
+  if not drHasKey(table.toJs, fk):
+    table[fk] = newJsAssoc[cstring, int]()
+  table[fk][hk] = value
+
+proc splitSourceLines(file: DeepReviewFileData): seq[string] =
+  ## Split the file's sourceContent into individual lines.
+  ## Returns an empty seq if sourceContent is nil or empty.
+  if file.isNil or file.sourceContent.isNil or ($file.sourceContent).len == 0:
+    return @[]
+  result = ($file.sourceContent).split('\n')
+
+proc makeExpandAboveHandler(self: DeepReviewComponent, fileIdx, hunkIdx: int): proc(ev: Event, n: VNode) =
+  ## Create a click handler for expanding context above a hunk.
+  result = proc(ev: Event, n: VNode) =
+    self.ensureExpansionState()
+    let current = self.expandAbove.getExpand(fileIdx, hunkIdx)
+    self.expandAbove.setExpand(fileIdx, hunkIdx, current + EXPAND_STEP)
+    redrawAll()
+
+proc makeExpandBelowHandler(self: DeepReviewComponent, fileIdx, hunkIdx: int): proc(ev: Event, n: VNode) =
+  ## Create a click handler for expanding context below a hunk.
+  result = proc(ev: Event, n: VNode) =
+    self.ensureExpansionState()
+    let current = self.expandBelow.getExpand(fileIdx, hunkIdx)
+    self.expandBelow.setExpand(fileIdx, hunkIdx, current + EXPAND_STEP)
+    redrawAll()
+
 proc renderUnifiedDiff(self: DeepReviewComponent): VNode =
   ## Render all modified files as a vertical scrollable list of diff hunks.
   ## Each file gets a header with path and diff metadata, followed by its
   ## hunks with added/removed/context line colouring. This is a pure-DOM
   ## rendering approach (no Monaco editor) to keep things simple and
   ## performant for the diff overview.
+  ##
+  ## Context expansion: if the file has ``sourceContent``, "Expand above"
+  ## and "Expand below" buttons appear around each hunk. Clicking them
+  ## reveals additional unchanged source lines, rendered as context type.
   if self.drData.isNil or self.drData.files.len == 0:
     return buildHtml(tdiv(class = "deepreview-unified-diff")):
       tdiv(class = "deepreview-unified-empty"):
         text "No files to display."
+
+  self.ensureExpansionState()
 
   buildHtml(tdiv(class = "deepreview-unified-diff")):
     for fileIdx, file in self.drData.files:
@@ -508,6 +577,9 @@ proc renderUnifiedDiff(self: DeepReviewComponent): VNode =
       let hasHunks = file.diff.hunks.len > 0
       if not hasHunks:
         continue
+
+      let sourceLines = splitSourceLines(file)
+      let hasSource = sourceLines.len > 0
 
       # File header with path, status badge and line counts.
       tdiv(class = "deepreview-unified-file"):
@@ -524,12 +596,71 @@ proc renderUnifiedDiff(self: DeepReviewComponent): VNode =
               span(class = "deepreview-unified-deletions"):
                 text cstring(fmt"-{file.diff.linesRemoved}")
 
-        # Render each hunk.
+        # Render each hunk with optional expansion buttons.
         for hunkIdx, hunk in file.diff.hunks:
           tdiv(class = "deepreview-unified-hunk"):
             # Hunk header (like @@ -40,6 +40,12 @@).
             tdiv(class = "deepreview-unified-hunk-header"):
               text cstring(fmt"@@ -{hunk.oldStart},{hunk.oldCount} +{hunk.newStart},{hunk.newCount} @@")
+
+            # --- "Expand above" button and expanded lines ---
+            if hasSource:
+              let aboveCount = self.expandAbove.getExpand(fileIdx, hunkIdx)
+
+              # Determine the first line of the hunk (1-based) and the
+              # upper boundary (line after previous hunk, or 1).
+              var hunkFirstLine = 0
+              for lineItem in hunk.lines:
+                let ln = if lineItem.newLine > 0: lineItem.newLine
+                          elif lineItem.oldLine > 0: lineItem.oldLine
+                          else: 0
+                if ln > 0:
+                  hunkFirstLine = ln
+                  break
+
+              # Compute the earliest line we can show above. For the
+              # first hunk this is line 1; for subsequent hunks it is
+              # one line after the previous hunk's last line.
+              var aboveLimit = 1
+              if hunkIdx > 0:
+                let prevHunk = file.diff.hunks[hunkIdx - 1]
+                # The last line of the previous hunk in the new file.
+                var prevLast = 0
+                for pli in countdown(prevHunk.lines.len - 1, 0):
+                  let pln = prevHunk.lines[pli].newLine
+                  if pln > 0:
+                    prevLast = pln
+                    break
+                # Also account for existing "expand below" on the
+                # previous hunk.
+                let prevBelowCount = self.expandBelow.getExpand(fileIdx, hunkIdx - 1)
+                aboveLimit = max(aboveLimit, prevLast + prevBelowCount + 1)
+
+              if hunkFirstLine > aboveLimit:
+                # There are lines available to expand.
+                let startLine = max(aboveLimit, hunkFirstLine - aboveCount)
+
+                # Render the expand-above button.
+                if startLine > aboveLimit or aboveCount == 0:
+                  tdiv(
+                    class = "deepreview-expand-row",
+                    onclick = self.makeExpandAboveHandler(fileIdx, hunkIdx)
+                  ):
+                    span(class = "deepreview-expand-icon"): text "..."
+                    span(class = "deepreview-expand-label"):
+                      text cstring(fmt"Expand 10 lines above")
+
+                # Render expanded lines above as context.
+                if aboveCount > 0 and startLine < hunkFirstLine:
+                  for lineNum in startLine ..< hunkFirstLine:
+                    if lineNum >= 1 and lineNum <= sourceLines.len:
+                      tdiv(class = "deepreview-unified-line deepreview-unified-line-context deepreview-expanded-context"):
+                        span(class = "deepreview-unified-gutter-old"):
+                          text cstring($lineNum)
+                        span(class = "deepreview-unified-gutter-new"):
+                          text cstring($lineNum)
+                        span(class = "deepreview-unified-line-content"):
+                          text cstring(sourceLines[lineNum - 1])
 
             # Hunk lines.
             for lineItem in hunk.lines:
@@ -551,6 +682,66 @@ proc renderUnifiedDiff(self: DeepReviewComponent): VNode =
                 # Line content.
                 span(class = "deepreview-unified-line-content"):
                   text $lineItem.content
+
+            # --- "Expand below" button and expanded lines ---
+            if hasSource:
+              let belowCount = self.expandBelow.getExpand(fileIdx, hunkIdx)
+
+              # Determine the last line of the hunk (1-based).
+              var hunkLastLine = 0
+              for lineItem in hunk.lines:
+                let ln = lineItem.newLine
+                if ln > hunkLastLine:
+                  hunkLastLine = ln
+                let oln = lineItem.oldLine
+                if oln > hunkLastLine:
+                  hunkLastLine = oln
+
+              # Compute the furthest line we can show below. For the
+              # last hunk this is the end of the file; for earlier
+              # hunks it is one line before the next hunk's first line.
+              var belowLimit = sourceLines.len
+              if hunkIdx < file.diff.hunks.len - 1:
+                let nextHunk = file.diff.hunks[hunkIdx + 1]
+                var nextFirst = 0
+                for nli in nextHunk.lines:
+                  let nln = if nli.newLine > 0: nli.newLine
+                            elif nli.oldLine > 0: nli.oldLine
+                            else: 0
+                  if nln > 0:
+                    nextFirst = nln
+                    break
+                # Also account for existing "expand above" on the
+                # next hunk.
+                let nextAboveCount = self.expandAbove.getExpand(fileIdx, hunkIdx + 1)
+                if nextFirst > 0:
+                  belowLimit = min(belowLimit, nextFirst - nextAboveCount - 1)
+
+              if hunkLastLine < belowLimit:
+                # There are lines available to expand.
+                let endLine = min(belowLimit, hunkLastLine + belowCount)
+
+                # Render expanded lines below as context.
+                if belowCount > 0 and endLine > hunkLastLine:
+                  for lineNum in (hunkLastLine + 1) .. endLine:
+                    if lineNum >= 1 and lineNum <= sourceLines.len:
+                      tdiv(class = "deepreview-unified-line deepreview-unified-line-context deepreview-expanded-context"):
+                        span(class = "deepreview-unified-gutter-old"):
+                          text cstring($lineNum)
+                        span(class = "deepreview-unified-gutter-new"):
+                          text cstring($lineNum)
+                        span(class = "deepreview-unified-line-content"):
+                          text cstring(sourceLines[lineNum - 1])
+
+                # Render the expand-below button.
+                if endLine < belowLimit or belowCount == 0:
+                  tdiv(
+                    class = "deepreview-expand-row",
+                    onclick = self.makeExpandBelowHandler(fileIdx, hunkIdx)
+                  ):
+                    span(class = "deepreview-expand-icon"): text "..."
+                    span(class = "deepreview-expand-label"):
+                      text cstring(fmt"Expand 10 lines below")
 
 proc renderCallTrace(self: DeepReviewComponent): VNode =
   ## Render the call trace panel.
@@ -594,10 +785,25 @@ proc exposeTestHelpers(self: DeepReviewComponent) =
       selfCapture.viewMode = FullFiles
     redrawAll()
 
+  proc expandAbove(fileIdx: int, hunkIdx: int) =
+    ## Expand context above a hunk by EXPAND_STEP lines.
+    selfCapture.ensureExpansionState()
+    let current = selfCapture.expandAbove.getExpand(fileIdx, hunkIdx)
+    selfCapture.expandAbove.setExpand(fileIdx, hunkIdx, current + EXPAND_STEP)
+    redrawAll()
+  proc expandBelow(fileIdx: int, hunkIdx: int) =
+    ## Expand context below a hunk by EXPAND_STEP lines.
+    selfCapture.ensureExpansionState()
+    let current = selfCapture.expandBelow.getExpand(fileIdx, hunkIdx)
+    selfCapture.expandBelow.setExpand(fileIdx, hunkIdx, current + EXPAND_STEP)
+    redrawAll()
+
   {.emit: """
   window.__deepreviewSetExecution = `setExec`;
   window.__deepreviewSetIteration = `setIter`;
   window.__deepreviewSetViewMode = `setViewMode`;
+  window.__deepreviewExpandAbove = `expandAbove`;
+  window.__deepreviewExpandBelow = `expandBelow`;
   """.}
 
 method render*(self: DeepReviewComponent): VNode =

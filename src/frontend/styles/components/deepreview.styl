@@ -372,6 +372,41 @@
 .deepreview-unified-line-removed .deepreview-unified-line-content
   color #f85149
 
+// --- Context expansion buttons ---
+
+.deepreview-expand-row
+  display flex
+  align-items center
+  gap 6px
+  padding 1px 12px
+  cursor pointer
+  user-select none
+  color var(--text-secondary, #6e7681)
+  font-family 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace
+  font-size 11px
+  line-height 20px
+  background-color transparent
+  transition color 0.15s ease, background-color 0.15s ease
+
+  &:hover
+    color var(--text-primary, #c9c9c9)
+    background-color rgba(56, 58, 68, 0.3)
+
+.deepreview-expand-icon
+  color var(--text-secondary, #6e7681)
+  width 48px
+  min-width 48px
+  text-align center
+  flex-shrink 0
+
+.deepreview-expand-label
+  color inherit
+
+// --- Expanded context lines (slightly dimmer than normal context) ---
+
+.deepreview-expanded-context
+  opacity 0.75
+
 // --- Coverage line highlighting (Monaco decorations) ---
 
 .deepreview-line-executed
