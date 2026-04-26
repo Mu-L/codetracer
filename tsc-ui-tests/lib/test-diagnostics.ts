@@ -70,7 +70,7 @@ async function captureDomSummary(page: Page, baseName: string): Promise<void> {
       const variables = document.querySelectorAll('[class*="variables"], [id*="variables"]');
       const programState = document.querySelectorAll('[class*="program-state"]');
       const goldenLayout = document.querySelectorAll(".lm_goldenlayout");
-      const flowValues = document.querySelectorAll('[class*="flow-value"], [class*="omniscience"]');
+      const flowValues = document.querySelectorAll('[class*="flow-value"], [class*="deepreview-flow-values"]');
 
       // Hidden elements
       const hidden = Array.from(all).filter((el) => {

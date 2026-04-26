@@ -517,9 +517,9 @@ export class DeepReviewPage {
 
   // -- Omniscience overlay (inline values on diff lines) ---------------------
 
-  /** All omniscience inline value spans in the unified diff. */
+  /** All omniscience flow value containers in the unified diff. */
   omniscienceValues(): Locator {
-    return this.page.locator(".deepreview-omniscience-value");
+    return this.page.locator(".deepreview-flow-values");
   }
 
   /**

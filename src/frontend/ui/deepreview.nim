@@ -635,22 +635,34 @@ proc setExpand(table: JsAssoc[cstring, JsAssoc[cstring, int]], fileIdx, hunkIdx,
     table[fk] = newJsAssoc[cstring, int]()
   table[fk][hk] = value
 
-proc flowValuesForLine(file: DeepReviewFileData, lineNum: int): string =
+type
+  FlowValuePair = object
+    ## A single variable name/value pair from a flow step, used to render
+    ## Omniscience annotations in the unified diff view.
+    name: string
+    value: string
+    truncated: bool
+
+proc flowValuesForLine(file: DeepReviewFileData, lineNum: int): seq[FlowValuePair] =
   ## Look up inline variable values from the file's flow data for a given
   ## line number (1-based, matching the "new" side of the diff). Scans all
-  ## flow executions and returns the first match. The result is formatted as
-  ## ``"// var1 = val1, var2 = val2"`` or empty string if no match.
+  ## flow executions and returns the first match as structured pairs so that
+  ## the caller can render each variable using the standard flow CSS classes
+  ## (``flow-parallel-value-name``, ``flow-parallel-value-box``, etc.).
   if file.isNil or file.flow.len == 0 or lineNum < 1:
-    return ""
+    return @[]
   for flow in file.flow:
     for step in flow.steps:
       if step.line == lineNum and step.values.len > 0:
-        var parts: seq[string] = @[]
+        var pairs: seq[FlowValuePair] = @[]
         for v in step.values:
-          let truncMarker = if v.truncated: "..." else: ""
-          parts.add(fmt"{v.name} = {v.value}{truncMarker}")
-        return "// " & parts.join(", ")
-  return ""
+          pairs.add(FlowValuePair(
+            name: $v.name,
+            value: $v.value,
+            truncated: v.truncated
+          ))
+        return pairs
+  return @[]
 
 proc splitSourceLines(file: DeepReviewFileData): seq[string] =
   ## Split the file's sourceContent into individual lines.
@@ -809,11 +821,23 @@ proc renderUnifiedDiff(self: DeepReviewComponent): VNode =
                 # Omniscience overlay: inline variable values from flow data.
                 # Only shown for lines that exist in the new file version
                 # (added or context lines with a valid newLine number).
+                #
+                # Renders each variable using the same CSS classes as the
+                # standard CodeTracer flow visualization (flow-parallel-value,
+                # flow-parallel-value-name, flow-parallel-value-box) so the
+                # values look identical to flow annotations in the editor.
                 if lineType != "removed" and lineItem.newLine > 0:
-                  let inlineVals = flowValuesForLine(file, lineItem.newLine)
-                  if inlineVals.len > 0:
-                    span(class = "deepreview-omniscience-value"):
-                      text cstring(inlineVals)
+                  let valuePairs = flowValuesForLine(file, lineItem.newLine)
+                  if valuePairs.len > 0:
+                    span(class = "deepreview-flow-values"):
+                      for vp in valuePairs:
+                        span(class = "flow-parallel-value"):
+                          span(class = "flow-parallel-value-name"):
+                            text cstring("<" & vp.name & ">")
+                          let valText = if vp.truncated: vp.value & "..."
+                                        else: vp.value
+                          span(class = "flow-parallel-value-box flow-parallel-value-before-only"):
+                            text cstring(valText)
 
             # --- "Expand below" button and expanded lines ---
             if hasSource:

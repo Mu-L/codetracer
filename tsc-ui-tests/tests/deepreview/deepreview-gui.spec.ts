@@ -731,12 +731,20 @@ test.describe("DeepReview GUI - main features", () => {
     //   line 6: result = "[hello world]"
     // Lines 2, 3, 4 of main.rs are in the hunk (newLine 2, 3, 4).
     // Line 10 of main.rs is also in the hunk (newLine 10).
-    expect(combined).toContain("x = 10");
-    expect(combined).toContain("y = 20");
-    expect(combined).toContain("result = 55");
+    //
+    // Flow values are now rendered using the standard flow CSS classes:
+    //   <span class="flow-parallel-value-name"><x></span>
+    //   <span class="flow-parallel-value-box">10</span>
+    // so textContent reads as "<x>10" rather than "x = 10".
+    expect(combined).toContain("<x>");
+    expect(combined).toContain("10");
+    expect(combined).toContain("<y>");
+    expect(combined).toContain("20");
+    expect(combined).toContain("<result>");
+    expect(combined).toContain("55");
 
     // Verify src/utils.rs flow values are also present.
-    expect(combined).toContain("trimmed =");
+    expect(combined).toContain("<trimmed>");
   });
 
   // -----------------------------------------------------------------------
@@ -953,8 +961,12 @@ test.describe("DeepReview comprehensive workflow", () => {
         if (text) allOmnTexts.push(normalize(text));
       }
       const combinedOmn = allOmnTexts.join(" | ");
-      expect(combinedOmn).toContain("x = 10");
-      expect(combinedOmn).toContain("y = 20");
+      // Flow values use standard flow CSS classes; textContent reads
+      // "<x>10" rather than the old "x = 10" format.
+      expect(combinedOmn).toContain("<x>");
+      expect(combinedOmn).toContain("10");
+      expect(combinedOmn).toContain("<y>");
+      expect(combinedOmn).toContain("20");
 
       // Step 10: Switch trace context if the selector is available.
       const selectorVisible = await dr.traceContextSelector().isVisible();
