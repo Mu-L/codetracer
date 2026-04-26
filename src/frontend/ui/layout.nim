@@ -710,21 +710,6 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig,
     window.__ctRedrawAll = function() {
       `redrawAll`();
     };
-    window.__ctRenderAutoHidePanel = function(contentId) {
-      var component = `data`.ui.componentMapping[contentId] && `data`.ui.componentMapping[contentId][0];
-      if (!component) return;
-      var label = "";
-      if (contentId === 11) label = "buildComponent-0";
-      else if (contentId === 21) label = "errorsComponent-0";
-      else if (contentId === 20) label = "searchResultsComponent-0";
-      var target = document.getElementById(label);
-      if (target) {
-        target.innerHTML = "";
-        var vnode = component.render();
-        var dom = `vnodeToDom`(vnode, `KaraxInstance`());
-        target.appendChild(dom);
-      }
-    };
   """.}
 
   layout.on(cstring"stateChanged") do (event: js):
