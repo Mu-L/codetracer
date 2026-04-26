@@ -1,67 +1,65 @@
 // Auto-hide panes: edge strips, strip tabs, overlay, and backdrop.
 // Styling follows Visual Studio's auto-hide behavior: overlays are flush
 // with window edges, no border-radius, and side strip tabs use vertical text.
+//
+// Layout: side strips tile WITH the GL container in a flex row, so the GL
+// area shrinks to accommodate them (no overlay on top of content).
+// Bottom auto-hide labels render inside #status-base (the footer).
 
 // ---------------------------------------------------------------------------
-// Edge strips — thin bars at window edges that hold pinned-panel tabs.
+// Layout row — flex container that holds left strip, GL (#ROOT), right strip.
 // ---------------------------------------------------------------------------
 
-.auto-hide-strips-container
-  pointer-events: none
-  position: absolute
-  top: 0
-  left: 0
-  right: 0
-  bottom: 0
-  z-index: 50
-
-.auto-hide-strip-left,
-.auto-hide-strip-right,
-.auto-hide-strip-bottom
-  pointer-events: auto
-  position: absolute
+#auto-hide-layout-row
   display: flex
-  background-color: HEADER_PANEL_BACKGROUND_COLOR
-  z-index: 50
+  flex-direction: row
+  flex: 1
+  min-height: 0
+  width: 100%
 
-// Left strip: vertical bar on the left edge, full height between menu and status bar.
-.auto-hide-strip-left
-  top: 34px  // below the menu bar
-  left: 0
-  bottom: 28px  // above the status bar
-  width: 28px
+// ---------------------------------------------------------------------------
+// Side edge strips — flex items that sit beside #ROOT.
+// Width is 0 when empty (no tabs), 28px when populated.
+// ---------------------------------------------------------------------------
+
+#auto-hide-strip-left,
+#auto-hide-strip-right
+  display: flex
   flex-direction: column
   align-items: center
-  padding-top: 4px
+  background-color: HEADER_PANEL_BACKGROUND_COLOR
+  flex-shrink: 0
+  flex-grow: 0
+  width: 0
+  overflow: hidden
+  transition: width 150ms ease, padding 150ms ease
+
+  // Expand to 28px when the strip has tabs (class toggled by auto_hide.nim).
+  &.has-tabs
+    width: 28px
+    padding-top: 4px
+
+#auto-hide-strip-left.has-tabs
   border-right: 1px solid PRIMARY_BASE
 
-// Right strip: vertical bar on the right edge, full height between menu and status bar.
-.auto-hide-strip-right
-  top: 34px
-  right: 0
-  bottom: 28px
-  width: 28px
-  flex-direction: column
-  align-items: center
-  padding-top: 4px
+#auto-hide-strip-right.has-tabs
   border-left: 1px solid PRIMARY_BASE
 
-// Bottom strip: horizontal bar at the bottom (above status bar), full width.
-.auto-hide-strip-bottom
-  left: 0
-  right: 0
-  bottom: 28px
-  height: 28px
+// ---------------------------------------------------------------------------
+// Bottom auto-hide tabs — rendered inside #status-base (the footer).
+// Styled as inline status-bar items on the left side.
+// ---------------------------------------------------------------------------
+
+.auto-hide-bottom-tabs
+  display: flex
   flex-direction: row
   align-items: center
-  padding-left: 4px
-  border-top: 1px solid PRIMARY_BASE
+  gap: 2px
+  margin-left: 8px
 
-// Hide empty strips so they don't consume space or show borders.
-.auto-hide-strip-left:empty,
-.auto-hide-strip-right:empty,
-.auto-hide-strip-bottom:empty
-  display: none
+  // Hide when empty so it doesn't affect status bar layout.
+  &:empty
+    display: none
 
 // ---------------------------------------------------------------------------
 // Strip tabs — individual clickable tabs within a strip.
@@ -93,21 +91,27 @@
 
 // Side strip tabs: VS Studio uses vertical text (rotated 90deg).
 // Left side: text reads bottom-to-top (vertical-lr + rotate).
-.auto-hide-strip-left .auto-hide-strip-tab
+#auto-hide-strip-left .auto-hide-strip-tab
   writing-mode: vertical-lr
   text-orientation: mixed
   transform: rotate(180deg)
   max-height: 120px
 
 // Right side: text reads top-to-bottom (vertical-rl).
-.auto-hide-strip-right .auto-hide-strip-tab
+#auto-hide-strip-right .auto-hide-strip-tab
   writing-mode: vertical-rl
   text-orientation: mixed
   max-height: 120px
 
-// Bottom strip: tabs flow left-to-right, horizontal text.
-.auto-hide-strip-bottom .auto-hide-strip-tab
+// Bottom tabs in the status bar: horizontal, compact style matching status items.
+.auto-hide-bottom-tabs .auto-hide-strip-tab
   max-width: 160px
+  padding: 2px 8px
+  font-size: 12px
+  line-height: 18px
+  height: 22px
+  margin: 0 1px
+  border-radius: 3px
 
 // ---------------------------------------------------------------------------
 // Backdrop — semi-transparent overlay behind the slide-in panel.

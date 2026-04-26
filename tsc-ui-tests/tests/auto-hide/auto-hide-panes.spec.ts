@@ -7,10 +7,10 @@
  *
  * DOM elements under test (defined in index.html and rendered by
  * auto_hide.nim / auto_hide_overlay.nim):
- *   #auto-hide-strips            — container for all three edge strips
- *   .auto-hide-strip-bottom      — bottom edge strip
- *   .auto-hide-strip-left        — left edge strip
- *   .auto-hide-strip-right       — right edge strip
+ *   #auto-hide-layout-row        — flex row: left strip + #ROOT + right strip
+ *   #auto-hide-strip-left        — left edge strip (ID, flex item beside GL)
+ *   #auto-hide-strip-right       — right edge strip (ID, flex item beside GL)
+ *   .auto-hide-bottom-tabs       — bottom tabs rendered inside #status-base
  *   .auto-hide-strip-tab         — individual tab within a strip
  *   #auto-hide-overlay           — slide-in overlay container
  *   #auto-hide-overlay-title     — title text inside overlay header
@@ -135,12 +135,12 @@ test.describe("Auto-hide panes", () => {
 
     // Each individual strip should either be absent or empty (CSS hides
     // empty strips via :empty { display: none }).
-    for (const stripClass of [
-      ".auto-hide-strip-bottom",
-      ".auto-hide-strip-left",
-      ".auto-hide-strip-right",
+    for (const stripSelector of [
+      ".auto-hide-bottom-tabs",
+      "#auto-hide-strip-left",
+      "#auto-hide-strip-right",
     ]) {
-      const strip = ctPage.locator(stripClass);
+      const strip = ctPage.locator(stripSelector);
       const count = await strip.count();
       if (count > 0) {
         // Strip div exists but should contain no tabs.
@@ -161,8 +161,8 @@ test.describe("Auto-hide panes", () => {
     // Pin the active tab of the first stack to the bottom edge.
     const pinnedTitle = await pinToEdge(ctPage, "Bottom", 0);
 
-    // A strip tab should now exist in the bottom strip.
-    const bottomStrip = ctPage.locator(".auto-hide-strip-bottom");
+    // A strip tab should now exist in the bottom tabs (inside the status bar).
+    const bottomStrip = ctPage.locator(".auto-hide-bottom-tabs");
     const bottomTabs = bottomStrip.locator(".auto-hide-strip-tab");
     await expect(bottomTabs).toHaveCount(1, { timeout: 5_000 });
 
@@ -319,15 +319,15 @@ test.describe("Auto-hide panes", () => {
     // index 0 which is now the next available stack.
     const leftTitle = await pinToEdge(ctPage, "Left", 0);
 
-    // Bottom strip should have exactly one tab.
+    // Bottom tabs (in the status bar) should have exactly one tab.
     const bottomTabs = ctPage
-      .locator(".auto-hide-strip-bottom .auto-hide-strip-tab");
+      .locator(".auto-hide-bottom-tabs .auto-hide-strip-tab");
     await expect(bottomTabs).toHaveCount(1, { timeout: 5_000 });
     await expect(bottomTabs.first()).toHaveText(bottomTitle);
 
     // Left strip should have exactly one tab.
     const leftTabs = ctPage
-      .locator(".auto-hide-strip-left .auto-hide-strip-tab");
+      .locator("#auto-hide-strip-left .auto-hide-strip-tab");
     await expect(leftTabs).toHaveCount(1, { timeout: 5_000 });
     await expect(leftTabs.first()).toHaveText(leftTitle);
 

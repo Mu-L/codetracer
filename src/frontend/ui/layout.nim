@@ -542,13 +542,24 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig,
   # and overlay event handlers.
   initAutoHideState()
   autoHideState.onChanged = proc() =
-    # Re-render the strip tabs whenever the auto-hide state changes.
-    if kxiMap.hasKey(cstring"auto-hide-strips"):
-      redraw(kxiMap[cstring"auto-hide-strips"])
+    # Re-render the side strip tabs whenever the auto-hide state changes.
+    # Left and right strips are separate Karax renderers in the layout row.
+    if kxiMap.hasKey(cstring"auto-hide-strip-left"):
+      redraw(kxiMap[cstring"auto-hide-strip-left"])
+    if kxiMap.hasKey(cstring"auto-hide-strip-right"):
+      redraw(kxiMap[cstring"auto-hide-strip-right"])
+    # Bottom tabs are rendered inside the status bar; trigger a status redraw.
+    if kxiMap.hasKey(cstring"status"):
+      redraw(kxiMap[cstring"status"])
 
-  kxiMap["auto-hide-strips"] = setRenderer(
-    proc: VNode = renderAutoHideStrips(),
-    "auto-hide-strips",
+  kxiMap["auto-hide-strip-left"] = setRenderer(
+    proc: VNode = renderAutoHideLeftStrip(),
+    "auto-hide-strip-left",
+    proc = discard)
+
+  kxiMap["auto-hide-strip-right"] = setRenderer(
+    proc: VNode = renderAutoHideRightStrip(),
+    "auto-hide-strip-right",
     proc = discard)
 
   # Wire overlay header buttons and dismissal handlers.

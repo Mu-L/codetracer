@@ -428,31 +428,68 @@ proc showOverlay*(panel: AutoHidePanel) =
 # Strip rendering (called from layout.nim or a dedicated Karax renderer)
 # ---------------------------------------------------------------------------
 
-proc renderStripTabs*(edge: AutoHideEdge): VNode =
-  ## Render the tab elements for a single edge strip.
-  ## Each tab is a clickable element that shows the overlay on click.
+proc renderStripTabsInto*(edge: AutoHideEdge): seq[VNode] =
+  ## Render the tab elements for a single edge strip as a sequence of VNodes.
+  ## Used for side strips (rendered into their own DOM containers) and
+  ## bottom tabs (rendered into the status bar).
   let panels = if not autoHideState.isNil:
       autoHideState.panelsForEdge(edge)
     else:
       @[]
 
-  buildHtml(tdiv(class = edgeCssClass(edge))):
-    for panel in panels:
-      let capturedPanel = panel
+  result = @[]
+  for panel in panels:
+    let capturedPanel = panel
+    let node = buildHtml(
       tdiv(
         class = "auto-hide-strip-tab",
         onclick = proc(e: Event, tg: VNode) =
           showOverlay(capturedPanel)
-      ):
-        text panel.title
+      )
+    ):
+      text panel.title
+    result.add(node)
 
-proc renderAutoHideStrips*(): VNode =
-  ## Top-level Karax component that renders all three edge strips.
-  ## Attach this as a Karax renderer to #auto-hide-strips.
-  buildHtml(tdiv(class = "auto-hide-strips-container")):
-    renderStripTabs(AutoHideEdge.Left)
-    renderStripTabs(AutoHideEdge.Right)
-    renderStripTabs(AutoHideEdge.Bottom)
+proc renderAutoHideSideStrip(edge: AutoHideEdge): VNode =
+  ## Render a side strip's content. The parent element's "has-tabs" class
+  ## is toggled by updating the DOM directly after Karax renders, so the
+  ## CSS width transitions between 0 (empty) and 28px (has tabs).
+  let tabs = renderStripTabsInto(edge)
+  let stripId = case edge
+    of Left:   cstring"auto-hide-strip-left"
+    of Right:  cstring"auto-hide-strip-right"
+    of Bottom: cstring""
+
+  # After rendering, toggle the "has-tabs" class on the parent strip element.
+  # We use a short timeout to run after Karax has committed the VDOM to the DOM.
+  discard windowSetTimeout(proc() =
+    let el = document.getElementById(stripId)
+    if not el.isNil:
+      if tabs.len > 0:
+        el.classList.add(cstring"has-tabs")
+      else:
+        el.classList.remove(cstring"has-tabs")
+  , 0)
+
+  buildHtml(tdiv):
+    for tab in tabs:
+      tab
+
+proc renderAutoHideLeftStrip*(): VNode =
+  ## Karax renderer for the left side strip.
+  renderAutoHideSideStrip(AutoHideEdge.Left)
+
+proc renderAutoHideRightStrip*(): VNode =
+  ## Karax renderer for the right side strip.
+  renderAutoHideSideStrip(AutoHideEdge.Right)
+
+proc renderBottomAutoHideTabs*(): VNode =
+  ## Render bottom auto-hide tabs as a container to be placed inside
+  ## the status bar. Returns an empty div when there are no bottom tabs.
+  let tabs = renderStripTabsInto(AutoHideEdge.Bottom)
+  buildHtml(tdiv(class = "auto-hide-bottom-tabs")):
+    for tab in tabs:
+      tab
 
 # ---------------------------------------------------------------------------
 # Serialisation for layout save/load

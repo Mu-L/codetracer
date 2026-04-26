@@ -2,7 +2,7 @@ import
   std/sequtils,
   ../communication,
   ../../common/ct_event,
-  ui_imports, flow, shell, build
+  ui_imports, flow, shell, build, auto_hide
 
 from editor import clearViewZones
 
@@ -537,6 +537,7 @@ method render*(self: StatusComponent): VNode =
         tdiv(class="debug-notification"):
           notificationView(self, self.notifications[^1])
     tdiv(id = "status-base"):
+      renderBottomAutoHideTabs()
       fileInfoView(self)
       # TODO: Find another place for these
       # toggleInlineValues(self)

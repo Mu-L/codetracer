@@ -119,7 +119,9 @@ proc recordDb(
 
       startArgs = @["trace", "--out-dir", traceFolder].concat(backendArgs)
     of LangPythonDb:
-      var recorderArgs = @["--out-dir", traceFolder]
+      # Explicit --format binary: the Python recorder's pure-Python CLI
+      # defaults to 'ctfs' but the Rust extension doesn't support it yet.
+      var recorderArgs = @["--out-dir", traceFolder, "--format", "binary"]
       if pythonActivationPath.len > 0:
         recorderArgs.add("--activation-path")
         recorderArgs.add(pythonActivationPath)
