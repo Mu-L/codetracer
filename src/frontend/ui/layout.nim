@@ -511,6 +511,14 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig,
       # M21: Attach "Send to Window" context menu to the tab.
       addPanelTransferContextMenu(tab, cast[GoldenContentItem](tab.contentItem))
 
+    # When a background tab becomes visible, force Karax to redraw into the
+    # now-visible DOM element.  Without this, panels like BUILD, PROBLEMS and
+    # SEARCH RESULTS stay blank if they were initialised while hidden.
+    let label = state.label
+    container.on(cstring"show") do ():
+      if kxiMap.hasKey(label):
+        redrawSync(kxiMap[label])
+
     var containerId: cstring
     containerId = state.label
 
