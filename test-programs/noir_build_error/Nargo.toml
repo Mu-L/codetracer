@@ -1,0 +1,6 @@
+[package]
+name = "noir_build_error"
+type = "bin"
+authors = [""]
+
+[dependencies]
