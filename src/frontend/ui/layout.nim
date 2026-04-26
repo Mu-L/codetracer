@@ -68,6 +68,8 @@ proc convertTabTitle(content: cstring): cstring =
   ## CamelCase into separate uppercase words (e.g. "EventLog" -> "EVENT LOG").
   if content == cstring"BuildErrors":
     return cstring"PROBLEMS"
+  if content == cstring"VCS":
+    return cstring"VCS"
 
   var title: cstring = ""
   var label = content

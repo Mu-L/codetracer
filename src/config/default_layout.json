@@ -35,6 +35,16 @@
                                     "content": 9
                                 },
                                 "title": "genericUiComponent"
+                            },
+                            {
+                                "type": "component",
+                                "componentType": "genericUiComponent",
+                                "componentState": {
+                                    "id": 0,
+                                    "label": "vCSComponent-0",
+                                    "content": 41
+                                },
+                                "title": "genericUiComponent"
                             }
                         ]
                     }

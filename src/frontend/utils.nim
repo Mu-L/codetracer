@@ -450,6 +450,20 @@ proc makeFilesystemComponent*(data: Data, id: int): FilesystemComponent =
     forceRedraw: true,)
   data.registerComponent(result, Content.Filesystem)
 
+proc makeVCSComponent*(data: Data, id: int): VCSComponent =
+  result = VCSComponent(
+    id: id,
+    currentBranch: cstring"",
+    branches: @[],
+    commits: @[],
+    changedFiles: @[],
+    selectedCommitIndex: -1,
+    branchDropdownOpen: false,
+    initialized: false,
+    isGitRepo: false,
+    errorMessage: cstring"")
+  data.registerComponent(result, Content.VCS)
+
 proc makeScratchpadComponent*(data: Data, id: int, inExtension: bool = false): ScratchpadComponent =
   result = ScratchpadComponent(
     id: id,
@@ -856,6 +870,7 @@ proc makeComponent*(data: Data, content: Content, id: int, path: cstring = "", n
   of Content.CaptionBarProgress: data.makeCaptionBarProgressComponent(id)
   of Content.AgentActivityDeepReview: data.makeAgentActivityDeepReviewComponent(id)
   of Content.RequestPanel:    data.makeRequestPanelComponent(id)
+  of Content.VCS:             data.makeVCSComponent(id)
   # of Content.PointList:       data.makePointListComponent()
   else:
     raise newException(ValueError, &"Could not create a component. Unexpected content {content} type was given.")

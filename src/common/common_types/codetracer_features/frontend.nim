@@ -262,7 +262,8 @@ type
     AgentWorkspace = 37,
     CaptionBarProgress = 38,
     AgentActivityDeepReview = 39,
-    RequestPanel = 40
+    RequestPanel = 40,
+    VCS = 41
 
   ConnectionLossReason* = enum
     ConnectionLossNone,

@@ -707,6 +707,28 @@ type
     service*:       EditorService
     forceRedraw*:   bool
 
+  VCSCommit* = object
+    hash*: cstring
+    message*: cstring
+    relativeTime*: cstring
+
+  VCSChangedFile* = object
+    status*: cstring       ## "M", "A", "D", etc.
+    filename*: cstring
+    additions*: int
+    deletions*: int
+
+  VCSComponent* = ref object of Component
+    currentBranch*: cstring
+    branches*: seq[cstring]
+    commits*: seq[VCSCommit]
+    changedFiles*: seq[VCSChangedFile]
+    selectedCommitIndex*: int
+    branchDropdownOpen*: bool
+    initialized*: bool
+    isGitRepo*: bool
+    errorMessage*: cstring
+
   ViewKind* =       enum ViewTable, ViewLine, ViewPie
 
   StateComponent* = ref object of Component
