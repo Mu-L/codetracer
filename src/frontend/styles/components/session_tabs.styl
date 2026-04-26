@@ -29,24 +29,29 @@
   padding 0 10px
   height 26px
   cursor pointer
-  color INACTIVE_BASE
+  color #b0b0b0
+  opacity 0.7
   font-size 12px
   border-radius 4px
   margin-right 2px
   white-space nowrap
   user-select none
-  transition background-color 150ms ease, color 150ms ease
+  transition background-color 150ms ease, color 150ms ease, opacity 150ms ease
   -webkit-app-region no-drag
   &:hover
     color PRIMARY_TEXT_COLOR
+    opacity 1.0
     background-color ACTIVE_ROW
   &.active
-    background-color BACKGROUND_COLOR
-    color PRIMARY_TEXT_COLOR
+    background-color #3c3c3c
+    color #ffffff
+    opacity 1.0
 
 .session-tab-label
   overflow hidden
   text-overflow ellipsis
+  white-space nowrap
+  min-width 80px
   max-width 160px
 
 .session-tab-close
@@ -74,7 +79,7 @@
   width 26px
   height 26px
   cursor pointer
-  color INACTIVE_BASE
+  color #b0b0b0
   font-size 16px
   user-select none
   border-radius 4px
