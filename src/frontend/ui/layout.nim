@@ -560,7 +560,20 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig,
       else:
         # For panels pinned from GL, try the standard label format.
         convertComponentLabel(panel.content, panel.componentId)
-    if kxiMap.hasKey(label):
+    # For standalone auto-hide panels, Karax's setRenderer doesn't work
+    # reliably because the element starts in a hidden/offscreen host.
+    # Instead, render the component's VNode directly into the container
+    # using vnodeToDom, which bypasses Karax's diffing and produces fresh
+    # DOM nodes.
+    let component = data.ui.componentMapping[panel.content][0]
+    if not component.isNil:
+      let target = kdom.document.getElementById(label)
+      if not target.isNil:
+        target.innerHTML = cstring""
+        let vnode = component.render()
+        let dom = vnodeToDom(vnode, KaraxInstance())
+        target.appendChild(dom)
+    elif kxiMap.hasKey(label):
       redrawSync(kxiMap[label])
 
   autoHideState.onChanged = proc() =
@@ -605,7 +618,13 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig,
   if autoHideHost.isNil:
     autoHideHost = kdom.document.createElement("div")
     autoHideHost.id = cstring"auto-hide-standalone-host"
-    autoHideHost.style.display = cstring"none"
+    # Use offscreen positioning instead of display:none — Karax cannot
+    # render into elements with display:none (zero dimensions).
+    autoHideHost.style.position = cstring"absolute"
+    autoHideHost.style.left = cstring"-9999px"
+    autoHideHost.style.width = cstring"1px"
+    autoHideHost.style.height = cstring"1px"
+    autoHideHost.style.overflow = cstring"hidden"
     kdom.document.body.appendChild(autoHideHost)
 
   discard windowSetTimeout(proc() =
@@ -683,6 +702,30 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig,
         liveElement = wrapper,
         edge = AutoHideEdge.Bottom)
   , 500)  # 500ms delay lets GL finish its internal layout cycle
+
+  # Expose redrawAll on window so E2E tests can trigger Karax re-renders
+  # after injecting data into component state.
+  # Also expose a helper to re-render a specific auto-hide panel by content ID.
+  {.emit: """
+    window.__ctRedrawAll = function() {
+      `redrawAll`();
+    };
+    window.__ctRenderAutoHidePanel = function(contentId) {
+      var component = `data`.ui.componentMapping[contentId] && `data`.ui.componentMapping[contentId][0];
+      if (!component) return;
+      var label = "";
+      if (contentId === 11) label = "buildComponent-0";
+      else if (contentId === 21) label = "errorsComponent-0";
+      else if (contentId === 20) label = "searchResultsComponent-0";
+      var target = document.getElementById(label);
+      if (target) {
+        target.innerHTML = "";
+        var vnode = component.render();
+        var dom = `vnodeToDom`(vnode, `KaraxInstance`());
+        target.appendChild(dom);
+      }
+    };
+  """.}
 
   layout.on(cstring"stateChanged") do (event: js):
     cdebug "layout event: stateChanged"

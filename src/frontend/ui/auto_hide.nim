@@ -473,12 +473,34 @@ proc showOverlay*(panel: AutoHidePanel) =
   # Notify layout code so it can trigger a Karax redraw for the panel.
   # This ensures standalone panels (not backed by a GL container) show
   # up-to-date content when the overlay first appears.
+  #
+  # We fire the callback both immediately (so the content is available
+  # as soon as possible) and after a short delay. The delayed call
+  # ensures the browser has committed the reparented DOM element to
+  # the layout before Karax patches it — without this, the first
+  # redrawSync can target a zero-size element that the browser hasn't
+  # laid out yet, resulting in an empty overlay.
   if not autoHideState.onPanelShown.isNil:
     autoHideState.onPanelShown(panel)
+    let shownPanel = panel
+    discard windowSetTimeout(proc() =
+      if not autoHideState.isNil and autoHideState.activeOverlay == shownPanel:
+        if not autoHideState.onPanelShown.isNil:
+          autoHideState.onPanelShown(shownPanel)
+    , 50)
 
 # ---------------------------------------------------------------------------
 # Strip rendering (called from layout.nim or a dedicated Karax renderer)
 # ---------------------------------------------------------------------------
+
+proc makeStripTabClickHandler(panel: AutoHidePanel): proc(e: Event, tg: VNode) =
+  ## Create a click handler for a strip tab that captures the panel by value.
+  ## This is a separate proc to avoid the classic JS closure-in-a-loop bug:
+  ## Nim's `let` inside a for-loop body may compile to a hoisted `var` in JS,
+  ## causing all closures to reference the last iteration's value. Wrapping
+  ## the capture in a function call creates a proper scope boundary.
+  result = proc(e: Event, tg: VNode) =
+    showOverlay(panel)
 
 proc renderStripTabsInto*(edge: AutoHideEdge): seq[VNode] =
   ## Render the tab elements for a single edge strip as a sequence of VNodes.
@@ -491,12 +513,11 @@ proc renderStripTabsInto*(edge: AutoHideEdge): seq[VNode] =
 
   result = @[]
   for panel in panels:
-    let capturedPanel = panel
+    let handler = makeStripTabClickHandler(panel)
     let node = buildHtml(
       tdiv(
         class = "auto-hide-strip-tab",
-        onclick = proc(e: Event, tg: VNode) =
-          showOverlay(capturedPanel)
+        onclick = handler
       )
     ):
       text panel.title
