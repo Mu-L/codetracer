@@ -123,36 +123,6 @@
                                     "content": 24
                                 },
                                 "title": "genericUiComponent"
-                            },
-                            {
-                                "type": "component",
-                                "componentType": "genericUiComponent",
-                                "componentState": {
-                                    "id": 0,
-                                    "label": "buildComponent-0",
-                                    "content": 11
-                                },
-                                "title": "genericUiComponent"
-                            },
-                            {
-                                "type": "component",
-                                "componentType": "genericUiComponent",
-                                "componentState": {
-                                    "id": 0,
-                                    "label": "errorsComponent-0",
-                                    "content": 21
-                                },
-                                "title": "genericUiComponent"
-                            },
-                            {
-                                "type": "component",
-                                "componentType": "genericUiComponent",
-                                "componentState": {
-                                    "id": 0,
-                                    "label": "searchResultsComponent-0",
-                                    "content": 20
-                                },
-                                "title": "genericUiComponent"
                             }
                         ]
                     }

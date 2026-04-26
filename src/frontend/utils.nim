@@ -2,7 +2,8 @@ import
   async, strutils, strformat, sequtils, algorithm, jsffi, jsconsole,
   karax, vdom, kdom,
   types, lang,
-  lib / [ logging, monaco_lib, jslib ]
+  lib / [ logging, monaco_lib, jslib ],
+  ui / auto_hide
 
 proc jsHasKey(obj: JsObject; key: cstring): bool {.importjs: "#.hasOwnProperty(#)".}
 
@@ -978,6 +979,15 @@ proc openLayoutTab*(
   editorView: EditorView = ViewSource,
   noInfoMessage: cstring = ""
 ) =
+
+  # If this panel lives in the auto-hide state (e.g. BUILD, PROBLEMS,
+  # SEARCH RESULTS), show it via the auto-hide overlay instead of
+  # trying to activate or create a GL tab.
+  if not autoHideState.isNil:
+    let autoHidePanel = autoHideState.findPanelByContent(content)
+    if not autoHidePanel.isNil:
+      showOverlay(autoHidePanel)
+      return
 
   var parent: GoldenContentItem
   let similarComponents = data.ui.componentMapping[content]

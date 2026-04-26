@@ -75,6 +75,10 @@ type
     overlayVisible*: bool
     ## Callback to re-render strips after mutations.
     onChanged*: proc()
+    ## Callback fired after a panel's overlay is shown (with the panel
+    ## as argument). Used to trigger a Karax redraw so standalone panels
+    ## display up-to-date content when first revealed.
+    onPanelShown*: proc(panel: AutoHidePanel)
 
 # ---------------------------------------------------------------------------
 # Module-level state (one per window, like `data`)
@@ -239,6 +243,48 @@ proc pinPanel*(
   autoHideState.panels.add(panel)
 
   cdebug fmt"auto_hide: pinned panel '{title}' to edge {edge}"
+
+  if not autoHideState.onChanged.isNil:
+    autoHideState.onChanged()
+
+proc addStandaloneAutoHidePanel*(
+  title: cstring,
+  content: Content,
+  componentId: int,
+  liveElement: Element,
+  edge: AutoHideEdge = Bottom
+) =
+  ## Register a panel directly in the auto-hide state without ever
+  ## placing it in Golden Layout. Use this for panels that should
+  ## always live as auto-hide panes (BUILD, PROBLEMS, SEARCH RESULTS).
+  ##
+  ## `liveElement` is the DOM element that will be shown in the overlay.
+  ## The caller is responsible for creating this element, attaching a
+  ## Karax renderer to it, and keeping it alive (not attached to the
+  ## visible DOM tree — the overlay will reparent it on show).
+  if autoHideState.isNil:
+    initAutoHideState()
+
+  # Avoid duplicates: if a panel with this content is already registered,
+  # skip the add.
+  for existing in autoHideState.panels:
+    if existing.content == content:
+      cdebug fmt"auto_hide: standalone panel for content {content} already registered, skipping"
+      return
+
+  let panel = AutoHidePanel(
+    edge: edge,
+    title: title,
+    content: content,
+    componentId: componentId,
+    config: js{},  # No GL config — standalone panel
+    domTab: nil,
+    liveElement: liveElement,
+    containerElement: nil
+  )
+  autoHideState.panels.add(panel)
+
+  cdebug fmt"auto_hide: added standalone panel '{title}' to edge {edge}"
 
   if not autoHideState.onChanged.isNil:
     autoHideState.onChanged()
@@ -423,6 +469,12 @@ proc showOverlay*(panel: AutoHidePanel) =
 
   if not autoHideState.onChanged.isNil:
     autoHideState.onChanged()
+
+  # Notify layout code so it can trigger a Karax redraw for the panel.
+  # This ensures standalone panels (not backed by a GL container) show
+  # up-to-date content when the overlay first appears.
+  if not autoHideState.onPanelShown.isNil:
+    autoHideState.onPanelShown(panel)
 
 # ---------------------------------------------------------------------------
 # Strip rendering (called from layout.nim or a dedicated Karax renderer)

@@ -549,6 +549,20 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig,
   # Auto-hide panes: initialise state and set up the edge strip renderer
   # and overlay event handlers.
   initAutoHideState()
+  # When an auto-hide panel's overlay is shown, trigger a Karax redraw
+  # for that panel's renderer so standalone panels display current content.
+  autoHideState.onPanelShown = proc(panel: AutoHidePanel) =
+    # Map Content type to the kxiMap label used by standalone panels.
+    let label = case panel.content
+      of Content.Build:         cstring"buildComponent-0"
+      of Content.BuildErrors:   cstring"errorsComponent-0"
+      of Content.SearchResults: cstring"searchResultsComponent-0"
+      else:
+        # For panels pinned from GL, try the standard label format.
+        convertComponentLabel(panel.content, panel.componentId)
+    if kxiMap.hasKey(label):
+      redrawSync(kxiMap[label])
+
   autoHideState.onChanged = proc() =
     # Re-render the side strip tabs whenever the auto-hide state changes.
     # Left and right strips are separate Karax renderers in the layout row.
@@ -572,6 +586,103 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig,
 
   # Wire overlay header buttons and dismissal handlers.
   setupAutoHideOverlay(layout)
+
+  # Register BUILD, PROBLEMS, and SEARCH RESULTS as standalone auto-hide
+  # bottom panes. These panels are not part of the GL layout — they live
+  # exclusively in the auto-hide state and appear as clickable labels in
+  # the status bar footer.
+  #
+  # We use a short timeout to run after GL has finished creating all
+  # component containers from the layout config. This lets us detect
+  # whether these panels exist as GL tabs (from a saved layout that
+  # still includes them) and pin them from GL, or create standalone
+  # auto-hide panels if they were never in GL (the default layout).
+  # Create a hidden container in the DOM to host standalone auto-hide
+  # panel elements. Karax's setRenderer requires the target element to
+  # be in the DOM (it uses getElementById), so we keep a hidden host.
+  # The auto-hide overlay will reparent the wrapper elements when shown.
+  var autoHideHost = kdom.document.getElementById(cstring"auto-hide-standalone-host")
+  if autoHideHost.isNil:
+    autoHideHost = kdom.document.createElement("div")
+    autoHideHost.id = cstring"auto-hide-standalone-host"
+    autoHideHost.style.display = cstring"none"
+    kdom.document.body.appendChild(autoHideHost)
+
+  discard windowSetTimeout(proc() =
+    type AutoHidePanelDef = tuple
+      content: Content
+      title: cstring
+      label: cstring   ## The component label used as DOM id and kxiMap key
+
+    let standaloneAutoHidePanels: seq[AutoHidePanelDef] = @[
+      (content: Content.Build,         title: cstring"BUILD",          label: cstring"buildComponent-0"),
+      (content: Content.BuildErrors,   title: cstring"PROBLEMS",       label: cstring"errorsComponent-0"),
+      (content: Content.SearchResults, title: cstring"SEARCH RESULTS", label: cstring"searchResultsComponent-0"),
+    ]
+
+    let host = kdom.document.getElementById(cstring"auto-hide-standalone-host")
+
+    for panelDef in standaloneAutoHidePanels:
+      # Skip if this content is already in the auto-hide state (e.g.
+      # restored from a saved layout or previously pinned by the user).
+      if not autoHideState.isNil and
+         not autoHideState.findPanelByContent(panelDef.content).isNil:
+        continue
+
+      # Check if GL created a container for this component (from a saved
+      # layout that still includes it). If so, find the GL content item
+      # and pin it rather than creating a standalone panel.
+      let glContainerDiv = kdom.document.getElementById(panelDef.label)
+      if not glContainerDiv.isNil and not glContainerDiv.parentNode.isNil:
+        # The component exists in GL. Find its content item by walking
+        # up from the component mapping's layoutItem.
+        let component = data.ui.componentMapping[panelDef.content][0]
+        if not component.isNil and not component.layoutItem.isNil:
+          cdebug "auto_hide: pinning GL panel '" & $panelDef.title & "' to bottom auto-hide"
+          pinPanel(layout, component.layoutItem, AutoHideEdge.Bottom)
+          continue
+
+      # Panel is not in GL — create a standalone auto-hide panel with
+      # its own DOM container and Karax renderer.
+
+      # Create a wrapper element that the auto-hide overlay will
+      # reparent when the panel is shown. It lives inside the hidden
+      # host so that Karax's getElementById call succeeds during
+      # setRenderer.
+      let wrapper = kdom.document.createElement("div")
+      wrapper.id = cstring("auto-hide-standalone-" & $panelDef.label)
+      wrapper.class = cstring"auto-hide-standalone-container"
+      wrapper.style.width = cstring"100%"
+      wrapper.style.height = cstring"100%"
+
+      # Inner div matching the component label id that the Karax
+      # renderer expects (same as the GL container would create).
+      let innerDiv = kdom.document.createElement("div")
+      innerDiv.id = panelDef.label
+      innerDiv.class = cstring"component-container"
+      wrapper.appendChild(innerDiv)
+
+      # Attach to the hidden host so setRenderer can find the element.
+      if not host.isNil:
+        host.appendChild(wrapper)
+
+      # Look up the singleton component from the mapping and set up a
+      # Karax renderer only if GL did not already create one.
+      let component = data.ui.componentMapping[panelDef.content][0]
+      if not component.isNil and not kxiMap.hasKey(panelDef.label):
+        kxiMap[panelDef.label] = setRenderer(
+          (proc: VNode = component.render()),
+          panelDef.label,
+          proc = discard)
+        component.kxi = kxiMap[panelDef.label]
+
+      addStandaloneAutoHidePanel(
+        panelDef.title,
+        panelDef.content,
+        componentId = 0,
+        liveElement = wrapper,
+        edge = AutoHideEdge.Bottom)
+  , 500)  # 500ms delay lets GL finish its internal layout cycle
 
   layout.on(cstring"stateChanged") do (event: js):
     cdebug "layout event: stateChanged"
