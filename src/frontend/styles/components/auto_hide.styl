@@ -30,13 +30,16 @@
   background-color: HEADER_PANEL_BACKGROUND_COLOR
   flex-shrink: 0
   flex-grow: 0
+  flex-basis: 0
   width: 0
+  max-width: 0
   overflow: hidden
-  transition: width 150ms ease, padding 150ms ease
+  transition: width 150ms ease, max-width 150ms ease, padding 150ms ease
 
   // Expand to 28px when the strip has tabs (class toggled by auto_hide.nim).
   &.has-tabs
     width: 28px
+    max-width: 28px
     padding-top: 4px
 
 #auto-hide-strip-left.has-tabs

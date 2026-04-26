@@ -13,6 +13,11 @@
   overflow-x auto
   overflow-y hidden
 
+  // Hide the tab bar when there is only a single session — the lone tab
+  // just shows the trace path and wastes vertical space.
+  &.single-session
+    display none
+
 .session-tab
   display flex
   align-items center

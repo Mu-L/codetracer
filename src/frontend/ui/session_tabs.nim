@@ -97,7 +97,10 @@ proc renderSessionTabs*(data: Data): VNode =
   ## resolve to the *last* iteration's value (classic JS closure-in-loop
   ## bug).  As a belt-and-suspenders measure, ``attachTabClickHandlers``
   ## also adds native DOM click handlers after each render.
-  buildHtml(tdiv(id = "session-tab-bar", class = "session-tab-bar")):
+  let barClass: cstring =
+    if data.sessions.len <= 1: cstring"session-tab-bar single-session"
+    else:                      cstring"session-tab-bar"
+  buildHtml(tdiv(id = "session-tab-bar", class = barClass)):
     for i in 0 ..< data.sessions.len:
       let session = data.sessions[i]
       let isActive = i == data.activeSessionIndex

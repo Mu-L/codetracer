@@ -537,8 +537,8 @@ method render*(self: StatusComponent): VNode =
         tdiv(class="debug-notification"):
           notificationView(self, self.notifications[^1])
     tdiv(id = "status-base"):
-      renderBottomAutoHideTabs()
       fileInfoView(self)
+      renderBottomAutoHideTabs()
       # TODO: Find another place for these
       # toggleInlineValues(self)
       # toggleFlow(self)
