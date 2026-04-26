@@ -151,7 +151,7 @@ async function injectBuildOutput(
       // Trigger a full redraw via __ctRedrawAll and __ctRenderPanel.
       // component.kxi.redraw() does not work because Nim's redraw() is
       // a module-level proc, not a method on the KaraxInstance JS object.
-      if (data.redraw) {
+      if (true) {
         if ((window as any).__ctRedrawAll) (window as any).__ctRedrawAll();
         if ((window as any).__ctRenderPanel) (window as any).__ctRenderPanel(contentId);
       }
@@ -194,7 +194,7 @@ async function injectProblems(
       }
 
       // Trigger a full redraw via __ctRedrawAll and __ctRenderPanel.
-      if (data.redraw) {
+      if (true) {
         if ((window as any).__ctRedrawAll) (window as any).__ctRedrawAll();
         if ((window as any).__ctRenderPanel) (window as any).__ctRenderPanel(buildContentId);
       }
@@ -254,7 +254,7 @@ async function injectSearchResults(
       comp.active = true;
 
       // Trigger a full redraw via __ctRedrawAll and __ctRenderPanel.
-      if (data.redraw) {
+      if (true) {
         if ((window as any).__ctRedrawAll) (window as any).__ctRedrawAll();
         if ((window as any).__ctRenderPanel) (window as any).__ctRenderPanel(contentId);
       }
@@ -357,19 +357,18 @@ test.describe("Visual Audit v2 — Trace Mode Screens", () => {
     await layout.waitForTraceLoaded();
     await wait(1000);
 
-    // Inject successful build output BEFORE opening the overlay so
-    // onPanelShown renders with the data already present.
-    await injectBuildOutput(ctPage, BUILD_HAPPY_OUTPUT, 0, false);
-
     // Click the BUILD auto-hide bottom tab in the status bar.
     await clickBottomAutoHideTab(ctPage, "BUILD");
     await waitForOverlay(ctPage);
 
-    // Extra render call after overlay is visible to ensure content shows.
+    // Inject AFTER overlay opens (showOverlay clears content on open).
+    await injectBuildOutput(ctPage, BUILD_HAPPY_OUTPUT, 0, false);
+
+    // Re-render the panel content inside the now-visible overlay.
     await ctPage.evaluate((contentId) => {
       if ((window as any).__ctRenderPanel) (window as any).__ctRenderPanel(contentId);
     }, CONTENT_BUILD);
-    await wait(300);
+    await wait(500);
 
     await ctPage.screenshot({ path: `${DIR}/02-build-happy.png` });
     await dismissOverlay(ctPage);
@@ -381,18 +380,16 @@ test.describe("Visual Audit v2 — Trace Mode Screens", () => {
     await layout.waitForTraceLoaded();
     await wait(1000);
 
-    // Inject failed build output BEFORE opening the overlay.
-    await injectBuildOutput(ctPage, BUILD_UNHAPPY_OUTPUT, 1, false);
-
     // Click BUILD label.
     await clickBottomAutoHideTab(ctPage, "BUILD");
     await waitForOverlay(ctPage);
 
-    // Extra render call after overlay is visible to ensure content shows.
+    // Inject AFTER overlay opens.
+    await injectBuildOutput(ctPage, BUILD_UNHAPPY_OUTPUT, 1, false);
     await ctPage.evaluate((contentId) => {
       if ((window as any).__ctRenderPanel) (window as any).__ctRenderPanel(contentId);
     }, CONTENT_BUILD);
-    await wait(300);
+    await wait(500);
 
     await ctPage.screenshot({ path: `${DIR}/03-build-unhappy.png` });
     await dismissOverlay(ctPage);
