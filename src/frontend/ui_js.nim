@@ -1219,11 +1219,13 @@ proc onStartDeepReview*(sender: js, response: jsobject(config=Config, startOptio
     data.ui.welcomeScreen.welcomeScreen = false
     data.ui.welcomeScreen.newRecordScreen = false
 
-  # DeepReview GL layout: filesystem (left), unified diff via DeepReview
-  # component (center), calltrace (right). The filesystem panel detects
-  # deepReviewActive and shows the compact changed-files list. The
-  # DeepReview component renders the unified diff view in the main area.
-  # Editor tabs can still be opened by clicking files in the sidebar.
+  # DeepReview GL layout: VCS panel (left) showing changed files from the
+  # review data, DeepReview component (center) rendering the unified diff
+  # for the selected file, and calltrace (right).  The VCS panel detects
+  # ``data.deepReviewActive`` and populates its file list from
+  # ``data.deepReviewData.files``.  Clicking a file updates
+  # ``data.deepReviewSelectedFileIndex`` which the DeepReview component
+  # reads to decide which file's diff to render.
   let standardLayoutJson = cstring"""{
     "settings": {
       "constrainDragToContainer": true,
@@ -1257,8 +1259,8 @@ proc onStartDeepReview*(sender: js, response: jsobject(config=Config, startOptio
                   "componentType": "genericUiComponent",
                   "componentState": {
                     "id": 0,
-                    "label": "filesystemComponent",
-                    "content": 9
+                    "label": "vcsComponent-0",
+                    "content": 41
                   },
                   "title": "genericUiComponent"
                 }
@@ -1315,7 +1317,7 @@ proc onStartDeepReview*(sender: js, response: jsobject(config=Config, startOptio
   data.ui.resolvedConfig = cast[GoldenLayoutResolvedConfig](JSON.parse(standardLayoutJson))
 
   # Create UI components from the standard layout config.  This walks the GL
-  # config tree and instantiates each component.  The filesystem panel detects
+  # config tree and instantiates each component.  The VCS panel detects
   # deepReviewActive and shows changed files; editor tabs get diff decorations.
   data.createUIComponents()
 
@@ -1323,8 +1325,9 @@ proc onStartDeepReview*(sender: js, response: jsobject(config=Config, startOptio
   data.tryInitLayout()
 
   # The DeepReview component (content 36) in the GL layout renders the
-  # unified diff view automatically. Clicking a file in the filesystem
-  # sidebar opens it in an editor tab alongside the diff view.
+  # unified diff view automatically.  Clicking a file in the VCS panel
+  # updates ``data.deepReviewSelectedFileIndex``, which the DeepReview
+  # component reads to decide which file's diff to display.
 
 
 proc onFilenamesLoaded(

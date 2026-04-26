@@ -1740,6 +1740,11 @@ type
     # onStartDeepReview.
     deepReviewActive*:      bool
     deepReviewData*:        DeepReviewData
+    deepReviewSelectedFileIndex*: int
+      ## Index into ``deepReviewData.files`` shared between the VCS panel
+      ## (file list) and the DeepReview component (diff view).  Updated
+      ## by VCS clicks and read by the DeepReview component to determine
+      ## which file's diff to render.
 
     # Multi-replay-window architecture (M0): session management.
     # During the migration the first (and only) session mirrors the

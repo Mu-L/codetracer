@@ -7,6 +7,11 @@
 ## coverage decorations applied via Monaco's decoration API.  In Unified
 ## Diff mode, the DOM-based diff view is rendered within this panel.
 ##
+## When ``glEmbedded`` is true, the component runs alongside the VCS panel
+## which owns file selection via ``data.deepReviewSelectedFileIndex``.  The
+## component's own file-list sidebar is hidden and it renders only the
+## unified diff / editor area for the currently selected file.
+##
 ## The component is activated via the ``--deepreview <path>`` CLI argument.
 ## It operates in a read-only, offline mode without a debugger connection.
 
@@ -48,13 +53,22 @@ proc drCollectionSet(collection: js, decorations: js)
 # Helpers
 # ---------------------------------------------------------------------------
 
+proc effectiveFileIndex(self: DeepReviewComponent): int =
+  ## Return the effective selected file index.  In GL-embedded mode the
+  ## VCS panel owns file selection via ``data.deepReviewSelectedFileIndex``;
+  ## otherwise the component's own ``selectedFileIndex`` is used.
+  if self.glEmbedded:
+    return self.data.deepReviewSelectedFileIndex
+  return self.selectedFileIndex
+
 proc selectedFile(self: DeepReviewComponent): DeepReviewFileData =
   ## Return the currently selected file, or nil if no files are present.
   if self.drData.isNil or self.drData.files.len == 0:
     return nil
-  if self.selectedFileIndex >= self.drData.files.len:
+  let idx = self.effectiveFileIndex()
+  if idx >= self.drData.files.len:
     return self.drData.files[0]
-  return self.drData.files[self.selectedFileIndex]
+  return self.drData.files[idx]
 
 proc coverageSummary(file: DeepReviewFileData): cstring =
   ## Compute a human-readable coverage summary string like "42/60".
@@ -368,9 +382,13 @@ proc updateDecorations(self: DeepReviewComponent) =
 
 proc switchToFile(self: DeepReviewComponent, fileIndex: int) =
   ## Switch the editor to display a different file.
-  if fileIndex == self.selectedFileIndex and self.editorInitialized:
+  if fileIndex == self.effectiveFileIndex() and self.editorInitialized:
     return
   self.selectedFileIndex = fileIndex
+  # Keep the data-level index in sync so the VCS panel highlights
+  # the correct file when in GL-embedded mode.
+  if self.glEmbedded:
+    self.data.deepReviewSelectedFileIndex = fileIndex
   self.selectedExecutionIndex = 0
   self.selectedIteration = 0
 
@@ -977,6 +995,28 @@ proc exposeTestHelpers(self: DeepReviewComponent) =
 method render*(self: DeepReviewComponent): VNode =
   ## Render the full DeepReview view with sidebar, editor, and call trace.
   let drData = self.drData
+
+  # In GL-embedded mode the VCS panel owns file selection.  Sync the
+  # component's local index from the shared data-level index so that
+  # editor content, decorations and unified diff scroll position stay
+  # in sync when the user clicks a different file in the VCS panel.
+  if self.glEmbedded and not drData.isNil:
+    let sharedIdx = self.data.deepReviewSelectedFileIndex
+    if sharedIdx != self.selectedFileIndex and
+       sharedIdx >= 0 and sharedIdx < drData.files.len:
+      self.selectedFileIndex = sharedIdx
+      self.selectedExecutionIndex = 0
+      self.selectedIteration = 0
+      if self.editorInitialized and not self.editor.isNil:
+        let file = self.selectedFile()
+        if not file.isNil:
+          let content = buildSourcePlaceholder(file)
+          self.editor.drSetMonacoValue(content)
+          let lang = guessLanguageFromPath(file.path)
+          let model = self.editor.drGetMonacoModel()
+          if not model.isNil:
+            drSetModelLanguage(model, lang)
+        self.updateDecorations()
 
   # Expose test helpers on the window object for E2E tests.
   self.exposeTestHelpers()

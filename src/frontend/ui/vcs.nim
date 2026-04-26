@@ -4,6 +4,12 @@
 ## component. Displays: branch picker, commit history, and changed files for
 ## the selected commit.
 ##
+## In DeepReview mode (``data.deepReviewActive``), the panel switches to
+## showing the review's changed files from ``data.deepReviewData.files``
+## instead of git data.  Clicking a file updates
+## ``data.deepReviewSelectedFileIndex`` which the DeepReview component reads
+## to decide which file's diff to render.
+##
 ## Git data is fetched by shelling out to `git` via Node.js `child_process`
 ## (available in Electron's renderer process with nodeIntegration enabled).
 
@@ -172,7 +178,106 @@ proc refreshVCSData*(self: VCSComponent) =
     self.loadChangedFiles(cwd, self.commits[self.selectedCommitIndex].hash)
 
 # ---------------------------------------------------------------------------
-# Render
+# DeepReview mode helpers
+# ---------------------------------------------------------------------------
+
+proc isDeepReviewMode(self: VCSComponent): bool =
+  ## Return true when the VCS panel should show DeepReview changeset data
+  ## instead of normal git data.
+  self.data.deepReviewActive and not self.data.deepReviewData.isNil
+
+proc renderDeepReviewHeader(self: VCSComponent): VNode =
+  ## Render a header bar showing the review title or commit SHA in place of
+  ## the branch picker.
+  let drData = self.data.deepReviewData
+  let hasTitle = not drData.sessionTitle.isNil and ($drData.sessionTitle).len > 0
+  let commitDisplay = if drData.commitSha.len > 12:
+    cstring(($drData.commitSha)[0 ..< 12] & "...")
+  else:
+    drData.commitSha
+
+  buildHtml(tdiv(class = "vcs-branch-picker")):
+    tdiv(class = "vcs-branch-current"):
+      span(class = "vcs-branch-icon"):
+        text "\xEF\x84\xA6" # git branch icon
+      span(class = "vcs-branch-name"):
+        if hasTitle:
+          text drData.sessionTitle
+        else:
+          text cstring("Review: " & $commitDisplay)
+
+proc makeDeepReviewFileClickHandler(self: VCSComponent, idx: int): proc(ev: Event, n: VNode) =
+  ## Create a click handler for a file in the DeepReview file list.
+  ## Uses a separate proc to avoid Nim JS backend closure-in-loop capture bug.
+  let selfCapture = self
+  result = proc(ev: Event, n: VNode) =
+    selfCapture.data.deepReviewSelectedFileIndex = idx
+    # Use redrawAll so the DeepReview component in the center panel also
+    # picks up the new file index and re-renders its diff view.
+    redrawAll()
+
+proc renderDeepReviewChangedFiles(self: VCSComponent): VNode =
+  ## Render the changed files list populated from DeepReview data.
+  ## Each entry shows the diff status badge, file basename, full path,
+  ## and line addition/removal counts.  Clicking a file updates
+  ## ``data.deepReviewSelectedFileIndex`` so the DeepReview component
+  ## shows that file's diff.
+  let drData = self.data.deepReviewData
+  buildHtml(tdiv(class = "vcs-changed-files")):
+    tdiv(class = "vcs-section-header"):
+      text "Changed Files"
+      span(class = "vcs-changed-files-commit"):
+        text cstring(" (" & $drData.files.len & " files)")
+
+    tdiv(class = "vcs-file-list"):
+      if drData.files.len == 0:
+        tdiv(class = "vcs-no-files"):
+          text "No changed files"
+      else:
+        for i, file in drData.files:
+          let isSelected = (i == self.data.deepReviewSelectedFileIndex)
+          let selectedClass = if isSelected: " vcs-file-selected" else: ""
+
+          # Determine status from diff data.
+          let status = if not file.diff.isNil and ($file.diff.status).len > 0:
+            file.diff.status
+          else:
+            cstring"M"
+          let statusClass = case $status
+            of "A": "vcs-status-added"
+            of "D": "vcs-status-deleted"
+            of "M": "vcs-status-modified"
+            else: "vcs-status-other"
+
+          tdiv(class = cstring("vcs-file-item" & selectedClass),
+               onclick = self.makeDeepReviewFileClickHandler(i)):
+            span(class = cstring("vcs-file-status " & statusClass)):
+              text status
+            span(class = "vcs-file-name"):
+              # Show just the basename for compact display.
+              let pathStr = $file.path
+              let slashIdx = pathStr.rfind('/')
+              let baseName = if slashIdx >= 0: pathStr[slashIdx + 1 .. ^1] else: pathStr
+              text cstring(baseName)
+            if not file.diff.isNil and (file.diff.linesAdded > 0 or file.diff.linesRemoved > 0):
+              span(class = "vcs-file-stats"):
+                if file.diff.linesAdded > 0:
+                  span(class = "vcs-stat-added"):
+                    text cstring("+" & $file.diff.linesAdded)
+                if file.diff.linesRemoved > 0:
+                  span(class = "vcs-stat-deleted"):
+                    text cstring("-" & $file.diff.linesRemoved)
+            # Coverage badge: show executed/total line count.
+            if file.coverage.len > 0:
+              var executed = 0
+              for cov in file.coverage:
+                if cov.executed:
+                  executed += 1
+              span(class = "vcs-file-coverage"):
+                text cstring(fmt"{executed}/{file.coverage.len}")
+
+# ---------------------------------------------------------------------------
+# Normal git mode render helpers
 # ---------------------------------------------------------------------------
 
 proc renderBranchPicker(self: VCSComponent): VNode =
@@ -273,7 +378,13 @@ proc renderChangedFiles(self: VCSComponent): VNode =
                     text cstring("-" & $file.deletions)
 
 method render*(self: VCSComponent): VNode =
-  # Lazy initialization: load git data on first render.
+  # In DeepReview mode, show the review's changed files instead of git data.
+  if self.isDeepReviewMode():
+    return buildHtml(tdiv(class = componentContainerClass("vcs-container"))):
+      renderDeepReviewHeader(self)
+      renderDeepReviewChangedFiles(self)
+
+  # Normal git mode: lazy initialization on first render.
   if not self.initialized:
     self.initialized = true
     self.refreshVCSData()
