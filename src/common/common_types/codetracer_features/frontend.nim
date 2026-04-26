@@ -181,7 +181,8 @@ type
     aOpenTrace,          # Open existing trace file/folder
     aOpenTraceInNewTab,  # Open existing trace in a new session tab
     aRecordNewTrace,     # Show record new trace dialog
-    aRecordFromLaunch    # Record using launch.json configuration
+    aRecordFromLaunch,   # Record using launch.json configuration
+    aNewTraceTab         # Open a new empty session tab
 
   InputShortcutMap* = TableLike[langstring, langstring]
 

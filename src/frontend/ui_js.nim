@@ -254,6 +254,7 @@ proc webTechMenu(data: Data, program: cstring): MenuNode =
           element "Open Trace...", aOpenTrace
           element "Open Trace in New Tab...", aOpenTraceInNewTab
           element "Record New Trace...", aRecordNewTrace
+          element "New Trace Tab", aNewTraceTab
           # --sub
           # element "Save", aSave
           # element "Save As ...", saveAs
@@ -2537,6 +2538,7 @@ var actions*: array[ClientAction, ClientActionHandler] = [
     data.openTraceInNewTab(),
   proc(actionData: JsObject) = data.showRecordNewTraceDialog(),
   proc(actionData: JsObject) = data.recordFromLaunchConfig(actionData),
+  proc(actionData: JsObject) = createNewSession(data), # aNewTraceTab
 ]
 
 data.actions = actions
