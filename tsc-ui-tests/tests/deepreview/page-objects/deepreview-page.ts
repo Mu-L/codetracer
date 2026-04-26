@@ -6,23 +6,33 @@
  * argument. The component renders:
  *
  * - A header bar with commit info and statistics.
- * - A file list sidebar with per-file coverage badges.
- * - A Monaco editor with coverage decorations and inline variable values.
- * - An execution slider for navigating function executions.
- * - A loop iteration slider for navigating loop iterations.
+ * - A file list in the VCS panel (class ``vcs-file-item``) with per-file
+ *   coverage badges and diff status indicators.
+ * - A unified diff view with coverage overlays and omniscience values.
  * - A call trace tree panel.
  *
- * Selector names are derived from the CSS classes emitted by the Nim
- * component in ``src/frontend/ui/deepreview.nim``.
+ * In GL-embedded mode, the file list lives in the VCS panel rather than in
+ * the DeepReview component itself. Selectors for file items use the
+ * ``vcs-file-*`` CSS classes from ``src/frontend/ui/vcs.nim``.
+ *
+ * Full Files mode (Monaco editor, execution slider, loop slider, mode
+ * toggle) is not available in GL-embedded mode. The corresponding page
+ * object methods are retained for future use when VCS panel "Open File"
+ * mode is implemented.
  */
 
 import type { Locator, Page } from "@playwright/test";
 
 // ---------------------------------------------------------------------------
-// File list item
+// File list item (VCS panel)
 // ---------------------------------------------------------------------------
 
-/** Represents a single entry in the DeepReview file list sidebar. */
+/**
+ * Represents a single entry in the VCS panel file list.
+ *
+ * In GL-embedded mode the file list is rendered by the VCS panel
+ * (``src/frontend/ui/vcs.nim``) using ``vcs-file-*`` CSS classes.
+ */
 export class DeepReviewFileItem {
   readonly page: Page;
   readonly root: Locator;
@@ -32,55 +42,85 @@ export class DeepReviewFileItem {
     this.root = root;
   }
 
-  /** Get the displayed file basename. */
+  /** Get the displayed file basename (from ``vcs-file-name``). */
   async name(): Promise<string> {
-    return (await this.root.locator(".deepreview-file-name").textContent()) ?? "";
+    return (await this.root.locator(".vcs-file-name").textContent()) ?? "";
   }
 
-  /** Get the full file path shown below the basename. */
+  /**
+   * Get the full file path.
+   *
+   * The VCS panel only renders the basename, so this returns the same
+   * value as ``name()``. Retained for API compatibility.
+   */
   async fullPath(): Promise<string> {
-    return (await this.root.locator(".deepreview-file-path-full").textContent()) ?? "";
+    return this.name();
   }
 
-  /** Get the coverage badge text (e.g. "8/10"), or empty string if absent. */
+  /**
+   * Get the coverage badge text (e.g. "8/10"), or empty string if absent.
+   *
+   * The VCS panel renders coverage in a ``vcs-file-coverage`` span.
+   */
   async coverageBadge(): Promise<string> {
-    const badge = this.root.locator(".deepreview-coverage-badge");
+    const badge = this.root.locator(".vcs-file-coverage");
     const count = await badge.count();
     if (count === 0) return "";
     return (await badge.textContent()) ?? "";
   }
 
-  /** Get the diff status indicator text (e.g. "A", "M", "D"), or empty string if absent. */
+  /**
+   * Get the diff status indicator text (e.g. "A", "M", "D"), or empty
+   * string if absent.
+   *
+   * The VCS panel renders the status letter in a ``vcs-file-status`` span.
+   */
   async diffStatus(): Promise<string> {
-    const indicator = this.root.locator(".deepreview-diff-status");
+    const indicator = this.root.locator(".vcs-file-status");
     const count = await indicator.count();
     if (count === 0) return "";
-    return (await indicator.textContent()) ?? "";
+    return (await indicator.textContent())?.trim() ?? "";
   }
 
-  /** Get the diff lines summary text (e.g. "+8 / -3"), or empty string if absent. */
+  /**
+   * Get the diff lines summary text (e.g. "+8-3"), or empty string if
+   * absent.
+   *
+   * The VCS panel renders added/removed counts in separate
+   * ``vcs-stat-added`` / ``vcs-stat-deleted`` spans inside a
+   * ``vcs-file-stats`` container.
+   */
   async diffLines(): Promise<string> {
-    const lines = this.root.locator(".deepreview-diff-lines");
-    const count = await lines.count();
+    const stats = this.root.locator(".vcs-file-stats");
+    const count = await stats.count();
     if (count === 0) return "";
-    return (await lines.textContent()) ?? "";
+    return (await stats.textContent()) ?? "";
   }
 
-  /** Get the CSS classes on the diff status indicator element. */
+  /**
+   * Get the CSS classes on the diff status indicator element.
+   *
+   * The VCS panel uses ``vcs-status-added``, ``vcs-status-modified``,
+   * ``vcs-status-deleted`` classes on the ``vcs-file-status`` span.
+   */
   async diffStatusClasses(): Promise<string> {
-    const indicator = this.root.locator(".deepreview-diff-status");
+    const indicator = this.root.locator(".vcs-file-status");
     const count = await indicator.count();
     if (count === 0) return "";
     return (await indicator.getAttribute("class")) ?? "";
   }
 
-  /** Whether this file item has the ``selected`` class. */
+  /**
+   * Whether this file item is selected.
+   *
+   * The VCS panel adds a ``vcs-file-selected`` class to the selected item.
+   */
   async isSelected(): Promise<boolean> {
     const classes = (await this.root.getAttribute("class")) ?? "";
-    return classes.includes("selected");
+    return classes.includes("vcs-file-selected");
   }
 
-  /** Click this file item to switch the editor to this file. */
+  /** Click this file item to select it. */
   async click(): Promise<void> {
     await this.root.click();
   }
@@ -198,16 +238,21 @@ export class DeepReviewPage {
     );
   }
 
-  // -- File list sidebar ---------------------------------------------------
+  // -- File list (VCS panel) ------------------------------------------------
 
-  /** The file list sidebar container. */
+  /**
+   * The file list container in the VCS panel.
+   *
+   * In GL-embedded mode the file list is rendered by the VCS panel
+   * using the ``vcs-file-list`` class.
+   */
   fileList(): Locator {
-    return this.page.locator(".deepreview-file-list");
+    return this.page.locator(".vcs-file-list");
   }
 
-  /** All file items in the sidebar. */
+  /** All file items in the VCS panel. */
   async fileItems(): Promise<DeepReviewFileItem[]> {
-    const locators = await this.page.locator(".deepreview-file-item").all();
+    const locators = await this.page.locator(".vcs-file-item").all();
     return locators.map((loc) => new DeepReviewFileItem(this.page, loc));
   }
 
@@ -215,7 +260,7 @@ export class DeepReviewPage {
   fileItemByIndex(index: number): DeepReviewFileItem {
     return new DeepReviewFileItem(
       this.page,
-      this.page.locator(".deepreview-file-item").nth(index),
+      this.page.locator(".vcs-file-item").nth(index),
     );
   }
 
