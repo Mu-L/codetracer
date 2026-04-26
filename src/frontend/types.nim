@@ -728,6 +728,24 @@ type
     initialized*: bool
     isGitRepo*: bool
     errorMessage*: cstring
+    # File watching / auto-refresh state (Task #68).
+    refreshTimerId*: int
+      ## ID of the periodic ``windowSetTimeout`` timer. -1 when no timer
+      ## is active. Stored so it can be cancelled.
+    lastStatusSnapshot*: cstring
+      ## Concatenation of ``git status --porcelain`` and ``git log``
+      ## output from the most recent refresh.  Used to detect whether
+      ## anything actually changed before triggering a redraw.
+    debounceTimerId*: int
+      ## ID of the debounce ``windowSetTimeout``. -1 when idle.
+    debounceActive*: bool
+      ## True while the 1-second debounce window is open.
+    # Unified diff from git state (Task #69).
+    unifiedDiffActive*: bool
+      ## True when the "Unified Diff" toggle is active in normal git mode.
+    gitDiffData*: DeepReviewData
+      ## Populated on-demand with parsed ``git diff HEAD`` output so that
+      ## the DeepReview unified diff renderer can be reused.
 
   ViewKind* =       enum ViewTable, ViewLine, ViewPie
 

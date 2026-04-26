@@ -48,6 +48,16 @@ proc isGitRepository(cwd: cstring): bool =
   return result_str == cstring"true"
 
 # ---------------------------------------------------------------------------
+# File watching constants (Task #68)
+# ---------------------------------------------------------------------------
+
+const
+  refreshIntervalMs = 5000
+    ## Periodic auto-refresh interval in milliseconds.
+  debounceMs = 1000
+    ## Minimum interval between successive refreshes.
+
+# ---------------------------------------------------------------------------
 # Data loading helpers
 # ---------------------------------------------------------------------------
 
@@ -176,6 +186,256 @@ proc refreshVCSData*(self: VCSComponent) =
        self.selectedCommitIndex >= self.commits.len:
       self.selectedCommitIndex = 0
     self.loadChangedFiles(cwd, self.commits[self.selectedCommitIndex].hash)
+
+# ---------------------------------------------------------------------------
+# Git unified diff parsing (Task #69)
+# ---------------------------------------------------------------------------
+
+proc parseGitDiffHunks(diffOutput: string): seq[DeepReviewFileData] =
+  ## Parse the output of ``git diff HEAD`` into a sequence of
+  ## ``DeepReviewFileData`` structures, each containing diff hunks in the
+  ## same format used by the DeepReview unified diff renderer.
+  ##
+  ## The parser handles the standard unified diff format:
+  ##   diff --git a/<path> b/<path>
+  ##   --- a/<path>
+  ##   +++ b/<path>
+  ##   @@ -oldStart,oldCount +newStart,newCount @@ optional header
+  ##    context line
+  ##   -removed line
+  ##   +added line
+  result = @[]
+  if diffOutput.len == 0:
+    return
+
+  var currentFile: DeepReviewFileData = nil
+  var currentHunk: DeepReviewHunk = nil
+  var oldLineNum = 0
+  var newLineNum = 0
+
+  for rawLine in diffOutput.splitLines():
+    # New file header.
+    if rawLine.startsWith("diff --git "):
+      # Flush previous file.
+      if not currentHunk.isNil and not currentFile.isNil:
+        currentFile.diff.hunks.add(currentHunk)
+        currentHunk = nil
+      if not currentFile.isNil:
+        result.add(currentFile)
+
+      # Extract path from "diff --git a/<path> b/<path>".
+      let bIdx = rawLine.find(" b/")
+      let filePath = if bIdx >= 0: rawLine[bIdx + 3 .. ^1] else: ""
+
+      currentFile = DeepReviewFileData(
+        path: cstring(filePath),
+        diff: DeepReviewFileDiff(
+          status: cstring"M",
+          linesAdded: 0,
+          linesRemoved: 0,
+          hunks: @[]),
+        symbols: @[],
+        coverage: @[],
+        functions: @[],
+        loops: @[],
+        flow: @[])
+      continue
+
+    if currentFile.isNil:
+      continue
+
+    # Detect new / deleted file markers.
+    if rawLine.startsWith("new file mode"):
+      currentFile.diff.status = cstring"A"
+      continue
+    if rawLine.startsWith("deleted file mode"):
+      currentFile.diff.status = cstring"D"
+      continue
+
+    # Skip index, --- and +++ lines.
+    if rawLine.startsWith("index ") or rawLine.startsWith("--- ") or
+       rawLine.startsWith("+++ "):
+      continue
+
+    # Hunk header: @@ -oldStart,oldCount +newStart,newCount @@
+    if rawLine.startsWith("@@ "):
+      if not currentHunk.isNil:
+        currentFile.diff.hunks.add(currentHunk)
+
+      var hunkOldStart = 0
+      var hunkOldCount = 0
+      var hunkNewStart = 0
+      var hunkNewCount = 0
+
+      # Parse the @@ line. Format: @@ -A,B +C,D @@
+      let atEnd = rawLine.find(" @@", 3)
+      if atEnd > 0:
+        let hunkRange = rawLine[3 ..< atEnd]  # e.g. "-10,5 +10,8"
+        let parts = hunkRange.split(" ")
+        if parts.len >= 2:
+          # Parse old range (-A,B or -A).
+          var oldPart = parts[0]
+          if oldPart.startsWith("-"):
+            oldPart = oldPart[1 .. ^1]
+          let oldParts = oldPart.split(",")
+          try: hunkOldStart = parseInt(oldParts[0])
+          except ValueError: discard
+          if oldParts.len > 1:
+            try: hunkOldCount = parseInt(oldParts[1])
+            except ValueError: discard
+          else:
+            hunkOldCount = 1
+
+          # Parse new range (+C,D or +C).
+          var newPart = parts[1]
+          if newPart.startsWith("+"):
+            newPart = newPart[1 .. ^1]
+          let newParts = newPart.split(",")
+          try: hunkNewStart = parseInt(newParts[0])
+          except ValueError: discard
+          if newParts.len > 1:
+            try: hunkNewCount = parseInt(newParts[1])
+            except ValueError: discard
+          else:
+            hunkNewCount = 1
+
+      currentHunk = DeepReviewHunk(
+        oldStart: hunkOldStart,
+        oldCount: hunkOldCount,
+        newStart: hunkNewStart,
+        newCount: hunkNewCount,
+        lines: @[])
+      oldLineNum = hunkOldStart
+      newLineNum = hunkNewStart
+      continue
+
+    # Diff content lines (within a hunk).
+    if currentHunk.isNil:
+      continue
+
+    if rawLine.startsWith("+"):
+      let content = rawLine[1 .. ^1]
+      currentHunk.lines.add(DeepReviewHunkLine(
+        `type`: cstring"added",
+        content: cstring(content),
+        oldLine: 0,
+        newLine: newLineNum))
+      currentFile.diff.linesAdded += 1
+      newLineNum += 1
+    elif rawLine.startsWith("-"):
+      let content = rawLine[1 .. ^1]
+      currentHunk.lines.add(DeepReviewHunkLine(
+        `type`: cstring"removed",
+        content: cstring(content),
+        oldLine: oldLineNum,
+        newLine: 0))
+      currentFile.diff.linesRemoved += 1
+      oldLineNum += 1
+    elif rawLine.startsWith(" ") or rawLine.len == 0:
+      # Context line (starts with space) or empty line within a hunk.
+      let content = if rawLine.len > 0: rawLine[1 .. ^1] else: ""
+      currentHunk.lines.add(DeepReviewHunkLine(
+        `type`: cstring"context",
+        content: cstring(content),
+        oldLine: oldLineNum,
+        newLine: newLineNum))
+      oldLineNum += 1
+      newLineNum += 1
+
+  # Flush the last hunk and file.
+  if not currentHunk.isNil and not currentFile.isNil:
+    currentFile.diff.hunks.add(currentHunk)
+  if not currentFile.isNil:
+    result.add(currentFile)
+
+proc loadGitDiffForUnifiedView(self: VCSComponent) =
+  ## Run ``git diff HEAD`` and parse the output into ``self.gitDiffData``
+  ## so the DeepReview unified diff renderer can display it.
+  let cwd = self.getWorkingDirectory()
+  let raw = gitExec(cstring"git diff HEAD", cwd)
+  let files = parseGitDiffHunks($raw)
+
+  self.gitDiffData = DeepReviewData(
+    commitSha: cstring"HEAD",
+    baseCommitSha: cstring"",
+    collectionTimeMs: 0,
+    recordingCount: 0,
+    sessionTitle: cstring"Working Tree Changes",
+    files: files)
+
+# ---------------------------------------------------------------------------
+# File watching — auto-refresh & debounce (Task #68)
+# ---------------------------------------------------------------------------
+
+proc scheduleRefresh(self: VCSComponent)
+
+proc debouncedRefreshGitData(self: VCSComponent) =
+  ## Perform a git refresh if the debounce window is not active. After the
+  ## refresh, start a 1-second debounce window during which further refresh
+  ## requests are ignored.
+  if self.debounceActive:
+    return
+
+  let cwd = self.getWorkingDirectory()
+  # Build a lightweight snapshot of volatile git state to detect changes.
+  let statusRaw = gitExec(cstring"git status --porcelain", cwd)
+  let logRaw = gitExec(
+    cstring"git log --pretty=format:%H -30", cwd)
+  let snapshot = cstring($statusRaw & "\n---\n" & $logRaw)
+
+  if snapshot != self.lastStatusSnapshot:
+    self.lastStatusSnapshot = snapshot
+    self.refreshVCSData()
+    # Also refresh the unified diff data if the toggle is active.
+    if self.unifiedDiffActive:
+      self.loadGitDiffForUnifiedView()
+    data.redraw()
+
+  # Activate debounce window.
+  self.debounceActive = true
+  self.debounceTimerId = windowSetTimeout(
+    proc() =
+      self.debounceActive = false
+      self.debounceTimerId = -1,
+    debounceMs)
+
+proc scheduleRefresh(self: VCSComponent) =
+  ## Schedule the next periodic auto-refresh tick. Cancels any existing
+  ## timer first to avoid duplicate timers.
+  if self.refreshTimerId != -1:
+    windowClearTimeout(self.refreshTimerId)
+  self.refreshTimerId = windowSetTimeout(
+    proc() =
+      self.refreshTimerId = -1
+      self.debouncedRefreshGitData()
+      self.scheduleRefresh(),
+    refreshIntervalMs)
+
+proc startFileWatching(self: VCSComponent) =
+  ## Begin periodic auto-refresh and subscribe to window focus events.
+  ## Called once after the initial git data load.
+
+  # Store initial snapshot so the first tick can detect changes.
+  let cwd = self.getWorkingDirectory()
+  let statusRaw = gitExec(cstring"git status --porcelain", cwd)
+  let logRaw = gitExec(cstring"git log --pretty=format:%H -30", cwd)
+  self.lastStatusSnapshot = cstring($statusRaw & "\n---\n" & $logRaw)
+
+  # Initialize timer IDs.
+  self.refreshTimerId = -1
+  self.debounceTimerId = -1
+  self.debounceActive = false
+
+  # Start the periodic refresh cycle.
+  self.scheduleRefresh()
+
+  # Subscribe to focus events so returning to the CodeTracer window
+  # triggers an immediate refresh.
+  let refreshOnFocus = proc() =
+    self.debouncedRefreshGitData()
+  {.emit: """
+    window.addEventListener('focus', `refreshOnFocus`);
+  """.}
 
 # ---------------------------------------------------------------------------
 # DeepReview mode helpers
@@ -359,7 +619,13 @@ proc renderChangedFiles(self: VCSComponent): VNode =
             else: "vcs-status-other"
           tdiv(class = "vcs-file-item",
                onclick = proc(ev: Event, tg: VNode) =
-                 data.openTab(filePath, ViewSource)):
+                 # When unified diff toggle is active, switch to
+                 # diff view instead of opening the source file.
+                 if self.unifiedDiffActive:
+                   self.loadGitDiffForUnifiedView()
+                   data.redraw()
+                 else:
+                   data.openTab(filePath, ViewSource)):
             span(class = cstring("vcs-file-status " & statusClass)):
               text file.status
             span(class = "vcs-file-name"):
@@ -377,6 +643,74 @@ proc renderChangedFiles(self: VCSComponent): VNode =
                   span(class = "vcs-stat-deleted"):
                     text cstring("-" & $file.deletions)
 
+# ---------------------------------------------------------------------------
+# Git unified diff rendering (Task #69)
+# ---------------------------------------------------------------------------
+
+proc renderGitUnifiedDiff(self: VCSComponent): VNode =
+  ## Render the parsed ``git diff HEAD`` output as a unified diff view.
+  ## Reuses the DeepReview CSS classes so the styling is consistent.
+  let drData = self.gitDiffData
+  if drData.isNil or drData.files.len == 0:
+    return buildHtml(tdiv(class = "deepreview-unified-diff")):
+      tdiv(class = "deepreview-unified-empty"):
+        text "No working tree changes."
+
+  buildHtml(tdiv(class = "deepreview-unified-diff")):
+    for fileIdx, file in drData.files:
+      if file.diff.isNil or file.diff.hunks.len == 0:
+        continue
+
+      tdiv(class = "deepreview-unified-file"):
+        # File header with path, status badge, and line counts.
+        tdiv(class = "deepreview-unified-file-header"):
+          let statusStr = $file.diff.status
+          let statusCss = case statusStr
+            of "A": " deepreview-diff-status-added"
+            of "D": " deepreview-diff-status-deleted"
+            else: " deepreview-diff-status-modified"
+          if statusStr.len > 0:
+            span(class = cstring("deepreview-diff-status" & statusCss)):
+              text file.diff.status
+          span(class = "deepreview-unified-file-path"):
+            text file.path
+          if file.diff.linesAdded > 0 or file.diff.linesRemoved > 0:
+            span(class = "deepreview-unified-file-stats"):
+              span(class = "deepreview-unified-additions"):
+                text cstring(fmt"+{file.diff.linesAdded}")
+              span(class = "deepreview-unified-deletions"):
+                text cstring(fmt"-{file.diff.linesRemoved}")
+
+        # Render each hunk.
+        for hunkIdx, hunk in file.diff.hunks:
+          tdiv(class = "deepreview-unified-hunk"):
+            tdiv(class = "deepreview-unified-hunk-header"):
+              text cstring(fmt"@@ -{hunk.oldStart},{hunk.oldCount} +{hunk.newStart},{hunk.newCount} @@")
+
+            for lineItem in hunk.lines:
+              let lineType = $lineItem.`type`
+              let lineCssClass = case lineType
+                of "added": "deepreview-unified-line deepreview-line-added"
+                of "removed": "deepreview-unified-line deepreview-line-removed"
+                else: "deepreview-unified-line deepreview-line-context"
+
+              tdiv(class = cstring(lineCssClass)):
+                # Line number gutters.
+                span(class = "deepreview-unified-line-old"):
+                  if lineItem.oldLine > 0:
+                    text cstring($lineItem.oldLine)
+                span(class = "deepreview-unified-line-new"):
+                  if lineItem.newLine > 0:
+                    text cstring($lineItem.newLine)
+                # Line prefix (+/-/space).
+                span(class = "deepreview-unified-line-prefix"):
+                  case lineType
+                  of "added": text "+"
+                  of "removed": text "-"
+                  else: text " "
+                span(class = "deepreview-unified-line-content"):
+                  text lineItem.content
+
 method render*(self: VCSComponent): VNode =
   # In DeepReview mode, show the review's changed files instead of git data.
   if self.isDeepReviewMode():
@@ -388,6 +722,9 @@ method render*(self: VCSComponent): VNode =
   if not self.initialized:
     self.initialized = true
     self.refreshVCSData()
+    # Start file watching after the initial load (Task #68).
+    if self.isGitRepo:
+      self.startFileWatching()
 
   buildHtml(tdiv(class = componentContainerClass("vcs-container"))):
     if not self.isGitRepo:
@@ -398,10 +735,30 @@ method render*(self: VCSComponent): VNode =
           text self.errorMessage
     else:
       renderBranchPicker(self)
-      renderCommitHistory(self)
-      renderChangedFiles(self)
+
+      # Unified Diff toggle (Task #69).
+      tdiv(class = "vcs-diff-toggle"):
+        let toggleClass = if self.unifiedDiffActive: " vcs-toggle-active" else: ""
+        tdiv(class = cstring("vcs-toggle-button" & toggleClass),
+             onclick = proc(ev: Event, tg: VNode) =
+               self.unifiedDiffActive = not self.unifiedDiffActive
+               if self.unifiedDiffActive:
+                 self.loadGitDiffForUnifiedView()
+               data.redraw()):
+          text "Unified Diff"
+
+      if self.unifiedDiffActive and not self.gitDiffData.isNil:
+        # Show the unified diff view for working tree changes (Task #69).
+        # Reuses the DeepReview CSS classes for consistent rendering.
+        renderGitUnifiedDiff(self)
+      else:
+        renderCommitHistory(self)
+        renderChangedFiles(self)
+
       tdiv(class = "vcs-refresh",
            onclick = proc(ev: Event, tg: VNode) =
              self.refreshVCSData()
+             if self.unifiedDiffActive:
+               self.loadGitDiffForUnifiedView()
              data.redraw()):
         text "Refresh"
