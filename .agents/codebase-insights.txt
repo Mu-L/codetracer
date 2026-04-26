@@ -1,4 +1,5 @@
 # Codebase insights
+- When adding new UI component modules under `src/frontend/ui/`, they must be imported from `src/frontend/ui_js.nim` (the main entry point) so their `render` methods are compiled into the JS output. Without this import, the component's render falls back to the base `Component.render()` which returns an empty VNode.
 - Ruby loops were originally detected only for 'while' and 'until'.
 - 'each' loops can be recognized by handling 'call' nodes with a block whose method name is 'each'.
 - Added a regression test ensuring `ExprLoader` detects Ruby `each` loops correctly.

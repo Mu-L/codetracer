@@ -67,7 +67,7 @@ proc locationText(p: BuildProblem): string =
 proc renderProblemRow(self: ErrorsComponent, p: BuildProblem): VNode =
   ## Render a single problem row.  Clicking the row navigates the editor
   ## to the problem's source location.
-  let loc = Location(path: p.path, line: p.line)
+  let loc = types.Location(path: p.path, line: p.line)
   let sevClass = severityClass(p.severity)
 
   result = buildHtml(tdiv(

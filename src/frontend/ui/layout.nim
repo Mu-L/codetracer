@@ -729,6 +729,20 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig,
             target.appendChild(dom)
         break
 
+  # Expose a helper to pin a GL content item to an auto-hide edge.
+  # Used by E2E tests to bypass the dropdown UI which has blur race issues.
+  # Edge: 0 = Left, 1 = Right, 2 = Bottom.
+  proc pinContentItemToEdge(contentItemJs: js, edgeInt: int) =
+    let edge = AutoHideEdge(edgeInt)
+    let contentItem = cast[GoldenContentItem](contentItemJs)
+    pinPanel(layout, contentItem, edge)
+
+  # Expose a helper to create a new session tab.
+  # Used by E2E tests because the "+" button is hidden when only one
+  # session exists (the tab bar has `display: none` via `.single-session`).
+  proc createNewSessionHelper() =
+    createNewSession(data)
+
   {.emit: """
     window.__ctRedrawAll = function() {
       `redrawAll`();

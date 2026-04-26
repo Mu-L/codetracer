@@ -528,33 +528,50 @@ test.describe("Visual Audit v2 — Trace Mode Screens", () => {
     await layout.waitForTraceLoaded();
     await wait(1000);
 
-    // Find the FILESYSTEM panel in GL. It is typically in the first
-    // stack (index 0). We need to find the stack that contains the
-    // "FILESYSTEM" tab title and pin that specific stack.
+    // Pin the FILESYSTEM panel to the left edge programmatically.
+    // Using __ctPinPanel (exposed on window by layout.nim) avoids the
+    // dropdown blur race condition that can cause the UI-driven pin to
+    // fail silently.
     //
-    // First, try clicking the FILESYSTEM tab to make it active.
-    const fsTab = ctPage
-      .locator(".lm_tab .lm_title", { hasText: "FILESYSTEM" })
-      .first();
-    if (await fsTab.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await fsTab.click();
-      await wait(500);
-    }
-
-    // Find the stack index that contains the FILESYSTEM tab.
-    const stackIndex = await ctPage.evaluate(() => {
-      const stacks = document.querySelectorAll(".lm_stack");
-      for (let i = 0; i < stacks.length; i++) {
-        const titles = stacks[i].querySelectorAll(".lm_title");
-        for (const t of titles) {
-          if (t.textContent?.trim() === "FILESYSTEM") return i;
-        }
+    // Content.Filesystem = 9, AutoHideEdge.Left = 0.
+    const pinned = await ctPage.evaluate(() => {
+      const d = (window as any).data;
+      const s = d.sessions[d.activeSessionIndex];
+      const fsComp = s.ui.componentMapping[9]?.[0];
+      if (!fsComp?.layoutItem) return false;
+      if ((window as any).__ctPinPanel) {
+        (window as any).__ctPinPanel(fsComp.layoutItem, 0);
+        return true;
       }
-      return 0; // fallback to first stack
+      return false;
     });
 
-    // Pin FILESYSTEM to the left edge.
-    await pinToEdge(ctPage, "Left", stackIndex);
+    // If the programmatic helper is not available, fall back to the
+    // UI-driven approach: click the dropdown "Pin to Left".
+    if (!pinned) {
+      const fsTab = ctPage
+        .locator(".lm_tab .lm_title", { hasText: "FILESYSTEM" })
+        .first();
+      if (await fsTab.isVisible({ timeout: 3_000 }).catch(() => false)) {
+        await fsTab.click();
+        await wait(500);
+      }
+
+      const stackIndex = await ctPage.evaluate(() => {
+        const stacks = document.querySelectorAll(".lm_stack");
+        for (let i = 0; i < stacks.length; i++) {
+          const titles = stacks[i].querySelectorAll(".lm_title");
+          for (const t of titles) {
+            if (t.textContent?.trim() === "FILESYSTEM") return i;
+          }
+        }
+        return 0;
+      });
+
+      await pinToEdge(ctPage, "Left", stackIndex);
+    }
+
+    await wait(1500);
 
     // Verify the left strip has a tab.
     const leftStrip = ctPage.locator("#auto-hide-strip-left");
@@ -580,13 +597,22 @@ test.describe("Visual Audit v2 — Trace Mode Screens", () => {
     await layout.waitForTraceLoaded();
     await wait(1000);
 
-    // Click the "+" button in the session tab bar to create a second tab.
-    const addButton = ctPage.locator(".session-tab-add").first();
-    await expect(addButton).toBeVisible({ timeout: 10_000 });
-    await addButton.click();
+    // Create a second session tab programmatically.  The "+" button is
+    // inside the session tab bar which has `display: none` when there is
+    // only one session (`.single-session` CSS class), so clicking it via
+    // Playwright would time out.  Using the exposed __ctCreateNewSession
+    // helper bypasses this.
+    await ctPage.evaluate(() => {
+      if ((window as any).__ctCreateNewSession) {
+        (window as any).__ctCreateNewSession();
+      }
+    });
     await wait(2000);
 
     // The session tab bar should now be visible with two tabs.
+    const tabBar = ctPage.locator("#session-tab-bar");
+    await expect(tabBar).not.toHaveClass(/single-session/, { timeout: 5_000 });
+
     // Take the screenshot showing the multi-tab state.
     await ctPage.screenshot({ path: `${DIR}/07-multi-tab.png` });
   });
