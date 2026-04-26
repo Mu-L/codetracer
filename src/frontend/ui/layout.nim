@@ -706,9 +706,33 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig,
   # Expose redrawAll on window so E2E tests can trigger Karax re-renders
   # after injecting data into component state.
   # Also expose a helper to re-render a specific auto-hide panel by content ID.
+  # Expose helper functions on window for E2E tests.
+  proc renderAutoHidePanelById(contentId: int) =
+    ## Re-render a standalone auto-hide panel by content ID.
+    ## Uses vnodeToDom to bypass Karax's broken hidden-host rendering.
+    let labels = [
+      (11, cstring"buildComponent-0"),
+      (21, cstring"errorsComponent-0"),
+      (20, cstring"searchResultsComponent-0"),
+    ]
+    for (cid, label) in labels:
+      if contentId == cid:
+        let component = data.ui.componentMapping[Content(cid)][0]
+        if not component.isNil:
+          let target = kdom.document.getElementById(label)
+          if not target.isNil:
+            target.innerHTML = cstring""
+            let vnode = component.render()
+            let dom = vnodeToDom(vnode, KaraxInstance())
+            target.appendChild(dom)
+        break
+
   {.emit: """
     window.__ctRedrawAll = function() {
       `redrawAll`();
+    };
+    window.__ctRenderPanel = function(contentId) {
+      `renderAutoHidePanelById`(contentId);
     };
   """.}
 
