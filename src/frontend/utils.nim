@@ -698,6 +698,11 @@ proc makeStepListComponent*(data: Data, id: int): StepListComponent =
 proc makeDeepReviewComponent*(data: Data, id: int): DeepReviewComponent =
   ## Create a new DeepReviewComponent.
   ## The component is populated from ``data.startOptions.deepReview``.
+  ## When ``data.deepReviewActive`` is set (i.e. the standard GL layout
+  ## is used with separate filesystem/calltrace panels), the component
+  ## is marked as ``glEmbedded`` and defaults to Unified diff view so
+  ## it renders only the unified diff without duplicate sidebars.
+  let embedded = data.deepReviewActive
   result = DeepReviewComponent(
     id: id,
     drData: data.startOptions.deepReview,
@@ -707,7 +712,9 @@ proc makeDeepReviewComponent*(data: Data, id: int): DeepReviewComponent =
     editorInitialized: false,
     currentDecorationIds: jsNull,
     decorationCollection: jsNull,
-    fileContentCache: JsAssoc[cstring, cstring]{}
+    fileContentCache: JsAssoc[cstring, cstring]{},
+    glEmbedded: embedded,
+    viewMode: if embedded: Unified else: FullFiles
   )
   data.registerComponent(result, Content.DeepReview)
 

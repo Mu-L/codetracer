@@ -249,49 +249,51 @@ method render*(self: FilesystemComponent): VNode =
     )
   ):
     if self.data.deepReviewActive and not self.data.deepReviewData.isNil:
-      # DeepReview mode: show the changed files list from review data
-      # instead of the normal jstree filesystem tree. Each file entry
-      # shows a diff status badge (A/M/D), the filename, and a line
-      # count summary. Clicking a file opens it in the standard editor
-      # with diff decorations applied.
+      # DeepReview mode: compact one-line-per-file list.
+      # Format: [status] filename  +added/-removed  covered/total
       tdiv(class = "deepreview-file-list"):
         for i, file in self.data.deepReviewData.files:
           let isSelected = false  # TODO: track selected file index
           let selectedClass = if isSelected: " selected" else: ""
           tdiv(
-            class = cstring(fmt"deepreview-file-item{selectedClass}"),
-            onclick = makeDeepReviewFileClickHandler(file.path)
+            class = cstring(fmt"deepreview-file-item-compact{selectedClass}"),
+            onclick = makeDeepReviewFileClickHandler(file.path),
+            title = file.path
           ):
-            # Top row: diff status + file basename.
-            tdiv(class = "deepreview-file-name-row"):
-              if not file.diff.isNil and ($file.diff.status).len > 0:
-                let statusStr = $file.diff.status
-                let statusClass = case statusStr
-                  of "A": " deepreview-diff-added"
-                  of "M": " deepreview-diff-modified"
-                  of "D": " deepreview-diff-deleted"
-                  else: ""
-                span(class = cstring("deepreview-diff-status" & statusClass)):
-                  text cstring(statusStr)
-              tdiv(class = "deepreview-file-name"):
-                # Extract basename from path.
-                let pathStr = $file.path
-                let slashIdx = pathStr.rfind('/')
-                let baseName = if slashIdx >= 0: pathStr[slashIdx + 1 .. ^1] else: pathStr
-                text cstring(baseName)
-            tdiv(class = "deepreview-file-path-full"):
-              text $file.path
-            # Badge row: diff line count.
+            # Diff status badge (A/M/D).
+            if not file.diff.isNil and ($file.diff.status).len > 0:
+              let statusStr = $file.diff.status
+              let statusClass = case statusStr
+                of "A": " deepreview-diff-added"
+                of "M": " deepreview-diff-modified"
+                of "D": " deepreview-diff-deleted"
+                else: ""
+              span(class = cstring("deepreview-diff-status-compact" & statusClass)):
+                text cstring(statusStr)
+            # File basename.
+            span(class = "deepreview-file-name-compact"):
+              let pathStr = $file.path
+              let slashIdx = pathStr.rfind('/')
+              let baseName = if slashIdx >= 0: pathStr[slashIdx + 1 .. ^1] else: pathStr
+              text cstring(baseName)
+            # Diff line counts (+added/-removed).
             if not file.diff.isNil and (file.diff.linesAdded > 0 or file.diff.linesRemoved > 0):
-              tdiv(class = "deepreview-file-badges"):
-                let statusStr = $file.diff.status
-                let badgeClass = case statusStr
-                  of "A": " deepreview-diff-added"
-                  of "M": " deepreview-diff-modified"
-                  of "D": " deepreview-diff-deleted"
-                  else: ""
-                span(class = cstring("deepreview-diff-lines" & badgeClass)):
-                  text cstring(fmt"+{file.diff.linesAdded} / -{file.diff.linesRemoved}")
+              let statusStr = $file.diff.status
+              let badgeClass = case statusStr
+                of "A": " deepreview-diff-added"
+                of "M": " deepreview-diff-modified"
+                of "D": " deepreview-diff-deleted"
+                else: ""
+              span(class = cstring("deepreview-diff-lines-compact" & badgeClass)):
+                text cstring(fmt"+{file.diff.linesAdded}/-{file.diff.linesRemoved}")
+            # Coverage summary (executed/total lines).
+            if file.coverage.len > 0:
+              var executed = 0
+              var total = file.coverage.len
+              for lc in file.coverage:
+                if lc.executed: executed += 1
+              span(class = "deepreview-coverage-compact"):
+                text cstring(fmt"{executed}/{total}")
     else:
       # Normal mode: standard jstree filesystem.
       tdiv(class = "filesystem",

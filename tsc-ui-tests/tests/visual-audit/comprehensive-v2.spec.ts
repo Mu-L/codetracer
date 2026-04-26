@@ -361,13 +361,26 @@ test.describe("Visual Audit v2 — Trace Mode Screens", () => {
     await clickBottomAutoHideTab(ctPage, "BUILD");
     await waitForOverlay(ctPage);
 
-    // Inject AFTER overlay opens (showOverlay clears content on open).
-    await injectBuildOutput(ctPage, BUILD_HAPPY_OUTPUT, 0, false);
-
-    // Re-render the panel content inside the now-visible overlay.
-    await ctPage.evaluate((contentId) => {
-      if ((window as any).__ctRenderPanel) (window as any).__ctRenderPanel(contentId);
-    }, CONTENT_BUILD);
+    // Inject data AND render in a single evaluate to avoid serialization
+    // issues with Nim tuple format {Field0, Field1} across Playwright's
+    // argument passing boundary.
+    await ctPage.evaluate(() => {
+      const d = (window as any).data;
+      const s = d.sessions[d.activeSessionIndex];
+      const bc = s.ui.componentMapping[11]?.[0];
+      if (bc?.build) {
+        bc.build.output = [
+          {Field0: "$ nim c --sourcemap:on main.nim", Field1: false},
+          {Field0: "\x1b[32mHint:\x1b[0m used 42 lines of code", Field1: false},
+          {Field0: "\x1b[32mHint:\x1b[0m operation successful (0.8s)", Field1: false},
+          {Field0: "\x1b[32mHint: [SuccessX]\x1b[0m", Field1: false},
+        ];
+        bc.build.code = 0;
+        bc.build.running = false;
+        bc.build.command = "$ nim c --sourcemap:on main.nim";
+      }
+      if ((window as any).__ctRenderPanel) (window as any).__ctRenderPanel(11);
+    });
     await wait(500);
 
     await ctPage.screenshot({ path: `${DIR}/02-build-happy.png` });
@@ -384,11 +397,32 @@ test.describe("Visual Audit v2 — Trace Mode Screens", () => {
     await clickBottomAutoHideTab(ctPage, "BUILD");
     await waitForOverlay(ctPage);
 
-    // Inject AFTER overlay opens.
-    await injectBuildOutput(ctPage, BUILD_UNHAPPY_OUTPUT, 1, false);
-    await ctPage.evaluate((contentId) => {
-      if ((window as any).__ctRenderPanel) (window as any).__ctRenderPanel(contentId);
-    }, CONTENT_BUILD);
+    // Inject data AND render in a single evaluate to avoid serialization
+    // issues with Nim tuple format {Field0, Field1}.
+    await ctPage.evaluate(() => {
+      const d = (window as any).data;
+      const s = d.sessions[d.activeSessionIndex];
+      const bc = s.ui.componentMapping[11]?.[0];
+      if (bc?.build) {
+        bc.build.output = [
+          {Field0: "$ cargo build", Field1: false},
+          {Field0: "\x1b[31merror[E0308]\x1b[0m: mismatched types", Field1: true},
+          {Field0: " \x1b[34m-->\x1b[0m src/main.rs:42:5", Field1: false},
+          {Field0: "  |", Field1: false},
+          {Field0: "42 |     let x: bool = 42;", Field1: false},
+          {Field0: "  |                   \x1b[31m^^\x1b[0m expected `bool`, found integer", Field1: false},
+          {Field0: "", Field1: false},
+          {Field0: "\x1b[33mwarning\x1b[0m: unused variable: `y`", Field1: false},
+          {Field0: " \x1b[34m-->\x1b[0m src/main.rs:10:9", Field1: false},
+          {Field0: "", Field1: false},
+          {Field0: "\x1b[31merror\x1b[0m: aborting due to previous error", Field1: true},
+        ];
+        bc.build.code = 1;
+        bc.build.running = false;
+        bc.build.command = "$ cargo build";
+      }
+      if ((window as any).__ctRenderPanel) (window as any).__ctRenderPanel(11);
+    });
     await wait(500);
 
     await ctPage.screenshot({ path: `${DIR}/03-build-unhappy.png` });
@@ -401,40 +435,36 @@ test.describe("Visual Audit v2 — Trace Mode Screens", () => {
     await layout.waitForTraceLoaded();
     await wait(1000);
 
-    // First inject problems data so the panel has content when opened.
-    await injectProblems(ctPage, [
-      {
-        severity: 0, // ProbError
-        path: "src/main.rs",
-        line: 42,
-        col: 5,
-        message: "mismatched types: expected `bool`, found integer",
-      },
-      {
-        severity: 0, // ProbError
-        path: "src/main.rs",
-        line: 55,
-        col: 12,
-        message: "cannot find value `undefined_var` in this scope",
-      },
-      {
-        severity: 1, // ProbWarning
-        path: "src/main.rs",
-        line: 10,
-        col: 9,
-        message: "unused variable: `y`",
-      },
-    ]);
+    // Inject problems into the Build component directly, then open overlay.
+    // The ErrorsComponent reads from buildComponent(0).build.problems.
+    await ctPage.evaluate(() => {
+      const d = (window as any).data;
+      const s = d.sessions[d.activeSessionIndex];
+      const bc = s.ui.componentMapping[11]?.[0];
+      if (bc?.build) {
+        bc.build.problems = [
+          { severity: 0, path: "src/main.rs", line: 42, col: 5,
+            message: "mismatched types: expected `bool`, found integer" },
+          { severity: 0, path: "src/main.rs", line: 55, col: 12,
+            message: "cannot find value `undefined_var` in this scope" },
+          { severity: 1, path: "src/main.rs", line: 10, col: 9,
+            message: "unused variable: `y`" },
+        ];
+      }
+      if ((window as any).__ctRedrawAll) (window as any).__ctRedrawAll();
+      if ((window as any).__ctRenderPanel) (window as any).__ctRenderPanel(11);
+    });
+    await wait(300);
 
     // Click PROBLEMS auto-hide bottom tab.
     await clickBottomAutoHideTab(ctPage, "PROBLEMS");
     await waitForOverlay(ctPage);
 
-    // Extra render call after overlay is visible to ensure content shows.
-    await ctPage.evaluate((contentId) => {
-      if ((window as any).__ctRenderPanel) (window as any).__ctRenderPanel(contentId);
-    }, CONTENT_BUILD_ERRORS);
-    await wait(300);
+    // Re-render the errors panel now that the overlay is visible.
+    await ctPage.evaluate(() => {
+      if ((window as any).__ctRenderPanel) (window as any).__ctRenderPanel(21);
+    });
+    await wait(500);
 
     await ctPage.screenshot({ path: `${DIR}/04-problems.png` });
     await dismissOverlay(ctPage);
@@ -446,39 +476,45 @@ test.describe("Visual Audit v2 — Trace Mode Screens", () => {
     await layout.waitForTraceLoaded();
     await wait(1000);
 
-    // Inject search results data before opening.
-    await injectSearchResults(ctPage, "print", [
-      {
-        text: 'def print_to_stdout() -> None:',
-        path: "src/main.py",
-        line: 10,
-      },
-      {
-        text: '    print("hello world")',
-        path: "src/main.py",
-        line: 15,
-      },
-      {
-        text: '    print("1. print using print(\'text\')")',
-        path: "src/main.py",
-        line: 51,
-      },
-      {
-        text: "from io import print_function",
-        path: "src/utils.py",
-        line: 3,
-      },
-    ]);
+    // Inject search results directly into the component to avoid
+    // serialization issues across Playwright's evaluate boundary.
+    await ctPage.evaluate(() => {
+      const d = (window as any).data;
+      const s = d.sessions[d.activeSessionIndex];
+      const comp = s.ui.componentMapping[20]?.[0];
+      if (comp?.service) {
+        // SearchFixed is ordinal 2 in the SearchMode enum.
+        comp.service.results[2] = [
+          { text: 'def print_to_stdout() -> None:', path: "src/main.py",
+            line: 10, customFields: [] },
+          { text: '    print("hello world")', path: "src/main.py",
+            line: 15, customFields: [] },
+          { text: '    print("1. print using print(\'text\')")', path: "src/main.py",
+            line: 51, customFields: [] },
+          { text: "from io import print_function", path: "src/utils.py",
+            line: 3, customFields: [] },
+        ];
+        if (!comp.service.query) {
+          comp.service.query = { query: "print", value: "print" };
+        } else {
+          comp.service.query.query = "print";
+        }
+      }
+      if (comp) comp.active = true;
+      if ((window as any).__ctRedrawAll) (window as any).__ctRedrawAll();
+      if ((window as any).__ctRenderPanel) (window as any).__ctRenderPanel(20);
+    });
+    await wait(300);
 
     // Click SEARCH RESULTS auto-hide bottom tab.
     await clickBottomAutoHideTab(ctPage, "SEARCH RESULTS");
     await waitForOverlay(ctPage);
 
-    // Extra render call after overlay is visible to ensure content shows.
-    await ctPage.evaluate((contentId) => {
-      if ((window as any).__ctRenderPanel) (window as any).__ctRenderPanel(contentId);
-    }, CONTENT_SEARCH_RESULTS);
-    await wait(300);
+    // Re-render the search results panel now that the overlay is visible.
+    await ctPage.evaluate(() => {
+      if ((window as any).__ctRenderPanel) (window as any).__ctRenderPanel(20);
+    });
+    await wait(500);
 
     await ctPage.screenshot({ path: `${DIR}/05-search-results.png` });
     await dismissOverlay(ctPage);

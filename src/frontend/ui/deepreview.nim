@@ -1000,27 +1000,38 @@ method render*(self: DeepReviewComponent): VNode =
       span(class = "deepreview-commit"):
         text fmt"Commit: {commitDisplay}"
       renderTraceContextSelector(self)
-      renderViewModeToggle(self)
+      if not self.glEmbedded:
+        # Only show view mode toggle when the component owns both views.
+        # In GL-embedded mode, the unified diff is always shown and file
+        # browsing is handled by the separate filesystem panel.
+        renderViewModeToggle(self)
       span(class = "deepreview-stats"):
         text fmt"{drData.files.len} files | {drData.recordingCount} recordings | {drData.collectionTimeMs}ms"
 
-    tdiv(class = "deepreview-body"):
-      # Left sidebar: file list.
-      renderFileList(self)
+    if self.glEmbedded:
+      # GL-embedded mode: render only the unified diff view. The file
+      # list and calltrace are handled by separate GL panels (filesystem
+      # and calltrace components).
+      tdiv(class = "deepreview-editor-area"):
+        renderUnifiedDiff(self)
+    else:
+      tdiv(class = "deepreview-body"):
+        # Left sidebar: file list.
+        renderFileList(self)
 
-      if self.viewMode == Unified:
-        # Center: unified diff view with all files as scrollable hunks.
-        tdiv(class = "deepreview-editor-area"):
-          renderUnifiedDiff(self)
-      else:
-        # Center: single-file editor area with sliders (original Full Files mode).
-        tdiv(class = "deepreview-editor-area"):
-          renderExecutionSlider(self)
-          renderLoopSlider(self)
-          tdiv(
-            class = "deepreview-editor",
-            id = cstring(fmt"deepreview-editor-{self.id}")
-          )
+        if self.viewMode == Unified:
+          # Center: unified diff view with all files as scrollable hunks.
+          tdiv(class = "deepreview-editor-area"):
+            renderUnifiedDiff(self)
+        else:
+          # Center: single-file editor area with sliders (original Full Files mode).
+          tdiv(class = "deepreview-editor-area"):
+            renderExecutionSlider(self)
+            renderLoopSlider(self)
+            tdiv(
+              class = "deepreview-editor",
+              id = cstring(fmt"deepreview-editor-{self.id}")
+            )
 
-      # Right sidebar: call trace panel.
-      renderCallTrace(self)
+        # Right sidebar: call trace panel.
+        renderCallTrace(self)

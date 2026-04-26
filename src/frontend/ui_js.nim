@@ -1219,14 +1219,11 @@ proc onStartDeepReview*(sender: js, response: jsobject(config=Config, startOptio
     data.ui.welcomeScreen.welcomeScreen = false
     data.ui.welcomeScreen.newRecordScreen = false
 
-  # Use the standard GL layout (same as normal trace mode) so that
-  # DeepReview reuses the filesystem, editor, and calltrace panels.
-  # The filesystem panel will detect deepReviewActive and show the
-  # changed files list.  Editor tabs will apply diff decorations when
-  # the opened file has review data.
-  # Use the exact same layout as the default trace mode (from default_layout.json).
-  # No DeepReview panel -- the filesystem panel shows changed files when
-  # deepReviewActive is true, and editor tabs get diff decorations automatically.
+  # DeepReview GL layout: filesystem (left), unified diff via DeepReview
+  # component (center), calltrace (right). The filesystem panel detects
+  # deepReviewActive and shows the compact changed-files list. The
+  # DeepReview component renders the unified diff view in the main area.
+  # Editor tabs can still be opened by clicking files in the sidebar.
   let standardLayoutJson = cstring"""{
     "settings": {
       "constrainDragToContainer": true,
@@ -1271,65 +1268,8 @@ proc onStartDeepReview*(sender: js, response: jsobject(config=Config, startOptio
         },
         {
           "type": "column",
+          "size": "60%",
           "content": [
-            {
-              "type": "row",
-              "size": "50%",
-              "content": [
-                {
-                  "type": "stack",
-                  "size": "50%",
-                  "content": [
-                    {
-                      "type": "component",
-                      "componentType": "genericUiComponent",
-                      "componentState": {
-                        "id": 0,
-                        "label": "stateComponent-0",
-                        "content": 4
-                      },
-                      "title": "genericUiComponent"
-                    },
-                    {
-                      "type": "component",
-                      "componentType": "genericUiComponent",
-                      "componentState": {
-                        "id": 0,
-                        "label": "scratchpadComponent-0",
-                        "content": 17
-                      },
-                      "title": "genericUiComponent"
-                    }
-                  ]
-                },
-                {
-                  "type": "stack",
-                  "size": "50%",
-                  "content": [
-                    {
-                      "type": "component",
-                      "componentType": "genericUiComponent",
-                      "componentState": {
-                        "id": 0,
-                        "label": "calltraceComponent-0",
-                        "content": 6
-                      },
-                      "title": "genericUiComponent"
-                    },
-                    {
-                      "type": "component",
-                      "componentType": "genericUiComponent",
-                      "componentState": {
-                        "id": 0,
-                        "label": "agentActivityComponent-0",
-                        "content": 35
-                      },
-                      "title": "genericUiComponent"
-                    }
-                  ]
-                }
-              ]
-            },
             {
               "type": "stack",
               "content": [
@@ -1338,18 +1278,29 @@ proc onStartDeepReview*(sender: js, response: jsobject(config=Config, startOptio
                   "componentType": "genericUiComponent",
                   "componentState": {
                     "id": 0,
-                    "label": "eventLogComponent-0",
-                    "content": 8
+                    "label": "deepReviewComponent-0",
+                    "content": 36
                   },
                   "title": "genericUiComponent"
-                },
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "column",
+          "size": "20%",
+          "content": [
+            {
+              "type": "stack",
+              "content": [
                 {
                   "type": "component",
                   "componentType": "genericUiComponent",
                   "componentState": {
                     "id": 0,
-                    "label": "terminalComponent-0",
-                    "content": 24
+                    "label": "calltraceComponent-0",
+                    "content": 6
                   },
                   "title": "genericUiComponent"
                 }
@@ -1371,12 +1322,9 @@ proc onStartDeepReview*(sender: js, response: jsobject(config=Config, startOptio
   data.ui.initEventReceived = true
   data.tryInitLayout()
 
-  # After the layout is initialised, open the first changed file in an
-  # editor tab so the user sees something immediately.
-  if not data.deepReviewData.isNil and data.deepReviewData.files.len > 0:
-    let firstFile = data.deepReviewData.files[0]
-    if not firstFile.path.isNil and ($firstFile.path).len > 0:
-      data.openTab(firstFile.path, ViewSource)
+  # The DeepReview component (content 36) in the GL layout renders the
+  # unified diff view automatically. Clicking a file in the filesystem
+  # sidebar opens it in an editor tab alongside the diff view.
 
 
 proc onFilenamesLoaded(

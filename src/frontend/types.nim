@@ -894,6 +894,11 @@ type
     ## have been expanded above and below the hunk.
     expandAbove*: JsAssoc[cstring, JsAssoc[cstring, int]]
     expandBelow*: JsAssoc[cstring, JsAssoc[cstring, int]]
+    glEmbedded*: bool
+      ## When true, the component is embedded inside a Golden Layout
+      ## panel alongside separate filesystem and calltrace panels.
+      ## The render method skips its own file-list and calltrace
+      ## sidebars, showing only the unified diff / editor area.
 
   AgentWorkspaceComponent* = ref object of Component
     ## Agent workspace view showing the agent's working directory files
