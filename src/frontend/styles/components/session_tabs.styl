@@ -1,45 +1,48 @@
-// Session tab bar (M10) — sits above Golden Layout, one tab per replay session.
+// Session tab bar (M10) — rendered inside the caption/menu bar area,
+// next to the omnibox / command palette.  Visually sits in the title bar
+// like browser tabs.
 
 .session-tab-bar
   display flex
   align-items center
-  background-color SECONDARY_BASE
-  border-bottom 1px solid PRIMARY_BASE
-  height 28px
+  // Position the tab bar inside the menu/caption bar area.
+  // It is a sibling element in the DOM but overlaps the #menu visually.
+  position fixed
+  top 0
+  // Place tabs after the debug controls and omnibox area.
+  // The window-menu (min/max/close) is absolutely positioned at right ~5px
+  // and takes about 110px.  Leave room for it.
+  right 120px
+  height 38px
   padding 0 4px
-  flex-shrink 0
-  // Ensure the bar does not collapse when the layout resizes.
-  min-height 28px
-  overflow-x auto
-  overflow-y hidden
+  z-index 21  // Above #menu (z-index 20) so tabs are clickable
+  -webkit-app-region no-drag
+  overflow hidden
 
-  // Hide the tab bar when there is only a single session — the lone tab
-  // just shows the trace path and wastes vertical space.
+  // Hide the tab bar when there is only a single session.
   &.single-session
     display none
 
 .session-tab
   display flex
   align-items center
-  padding 0 12px
+  padding 0 10px
   height 26px
   cursor pointer
   color INACTIVE_BASE
   font-size 12px
-  border-radius 4px 4px 0 0
+  border-radius 4px
   margin-right 2px
   white-space nowrap
   user-select none
   transition background-color 150ms ease, color 150ms ease
+  -webkit-app-region no-drag
   &:hover
     color PRIMARY_TEXT_COLOR
     background-color ACTIVE_ROW
   &.active
     background-color BACKGROUND_COLOR
     color PRIMARY_TEXT_COLOR
-    // A subtle bottom highlight so the active tab visually "connects"
-    // to the layout area below.
-    border-bottom 1px solid BACKGROUND_COLOR
 
 .session-tab-label
   overflow hidden
@@ -65,11 +68,18 @@
   display none
 
 .session-tab-add
-  padding 0 8px
+  display flex
+  align-items center
+  justify-content center
+  width 26px
+  height 26px
   cursor pointer
   color INACTIVE_BASE
   font-size 16px
   user-select none
-  transition color 150ms ease
+  border-radius 4px
+  -webkit-app-region no-drag
+  transition color 150ms ease, background-color 150ms ease
   &:hover
     color PRIMARY_TEXT_COLOR
+    background-color ACTIVE_ROW

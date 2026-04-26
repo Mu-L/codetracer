@@ -739,7 +739,8 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig,
 
   # Expose a helper to create a new session tab.
   # Used by E2E tests because the "+" button is hidden when only one
-  # session exists (the tab bar has `display: none` via `.single-session`).
+  # session exists (the tab bar in the caption bar has `display: none`
+  # via `.single-session`).
   proc createNewSessionHelper() =
     createNewSession(data)
 

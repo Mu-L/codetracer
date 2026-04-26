@@ -1,10 +1,9 @@
 ## Session tab bar for multi-replay sessions (M10, M12).
 ##
-## Renders a horizontal tab bar above Golden Layout, one tab per
-## ``ReplaySession``.  The active session is visually highlighted.
-## With a single session (the current default) the bar shows one tab
-## so that the user has a discoverable surface for future multi-trace
-## workflows.
+## Renders a horizontal tab bar inside the caption/menu bar area (next
+## to the omnibox), one tab per ``ReplaySession``.  The active session
+## is visually highlighted.  With a single session (the current default)
+## the bar is hidden via the ``.single-session`` CSS class.
 ##
 ## M12: The "+" button creates a new empty ReplaySession and switches
 ## to it.  The new session inherits the current layout config so the
