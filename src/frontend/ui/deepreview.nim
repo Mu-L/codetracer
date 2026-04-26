@@ -705,6 +705,188 @@ proc makeExpandBelowHandler(self: DeepReviewComponent, fileIdx, hunkIdx: int): p
     self.expandBelow.setExpand(fileIdx, hunkIdx, current + EXPAND_STEP)
     redrawAll()
 
+# ---------------------------------------------------------------------------
+# Hunk editor helpers (DeepReview)
+# ---------------------------------------------------------------------------
+
+proc isDrHunkSelected(self: DeepReviewComponent, fileIdx, hunkIdx: int): bool =
+  ## Return true if the given (fileIndex, hunkIndex) pair is selected.
+  for pair in self.drSelectedHunks:
+    if pair[0] == fileIdx and pair[1] == hunkIdx:
+      return true
+  return false
+
+proc drFlatHunkOrdinal(drData: DeepReviewData, fileIdx, hunkIdx: int): int =
+  ## Compute a flat ordinal for a (fileIdx, hunkIdx) pair.
+  result = 0
+  for fi in 0 ..< drData.files.len:
+    if fi == fileIdx:
+      result += hunkIdx
+      return
+    let file = drData.files[fi]
+    if not file.diff.isNil:
+      result += file.diff.hunks.len
+
+proc drHunkPairFromOrdinal(drData: DeepReviewData, ordinal: int): (int, int) =
+  ## Reverse of ``drFlatHunkOrdinal``.
+  var remaining = ordinal
+  for fi in 0 ..< drData.files.len:
+    let file = drData.files[fi]
+    let hunkCount = if file.diff.isNil: 0 else: file.diff.hunks.len
+    if remaining < hunkCount:
+      return (fi, remaining)
+    remaining -= hunkCount
+  return (0, 0)
+
+proc toggleDrHunkSelection(self: DeepReviewComponent, fileIdx, hunkIdx: int) =
+  ## Toggle a single hunk in/out of the selection.
+  var found = -1
+  for i in 0 ..< self.drSelectedHunks.len:
+    if self.drSelectedHunks[i][0] == fileIdx and self.drSelectedHunks[i][1] == hunkIdx:
+      found = i
+      break
+  if found >= 0:
+    self.drSelectedHunks.delete(found)
+  else:
+    self.drSelectedHunks.add((fileIdx, hunkIdx))
+  self.drHunkToolbarVisible = self.drSelectedHunks.len > 0
+
+proc selectDrHunkRange(self: DeepReviewComponent, fromOrdinal, toOrdinal: int) =
+  ## Select all hunks between two flat ordinals (inclusive).
+  let lo = min(fromOrdinal, toOrdinal)
+  let hi = max(fromOrdinal, toOrdinal)
+  let drData = self.drData
+  if drData.isNil:
+    return
+  for ord in lo .. hi:
+    let pair = drHunkPairFromOrdinal(drData, ord)
+    if not self.isDrHunkSelected(pair[0], pair[1]):
+      self.drSelectedHunks.add(pair)
+  self.drHunkToolbarVisible = self.drSelectedHunks.len > 0
+
+proc clearDrHunkSelection(self: DeepReviewComponent) =
+  ## Clear all selected hunks.
+  self.drSelectedHunks = @[]
+  self.drHunkToolbarVisible = false
+
+proc buildDrPatchFromSelectedHunks(self: DeepReviewComponent): string =
+  ## Build a unified diff patch string from the currently selected hunks.
+  let drData = self.drData
+  if drData.isNil or self.drSelectedHunks.len == 0:
+    return ""
+
+  # Group selected hunks by file index.
+  var fileHunks: seq[(int, seq[int])] = @[]
+  var fileMap: seq[int] = @[]
+  for pair in self.drSelectedHunks:
+    let fi = pair[0]
+    let hi = pair[1]
+    var found = false
+    for j in 0 ..< fileMap.len:
+      if fileMap[j] == fi:
+        fileHunks[j][1].add(hi)
+        found = true
+        break
+    if not found:
+      fileMap.add(fi)
+      fileHunks.add((fi, @[hi]))
+
+  var parts: seq[string] = @[]
+  for entry in fileHunks:
+    let fi = entry[0]
+    let hunkIndices = entry[1]
+    if fi >= drData.files.len:
+      continue
+    let file = drData.files[fi]
+    let path = $file.path
+
+    parts.add("diff --git a/" & path & " b/" & path)
+    parts.add("--- a/" & path)
+    parts.add("+++ b/" & path)
+
+    for hi in hunkIndices:
+      if file.diff.isNil or hi >= file.diff.hunks.len:
+        continue
+      let hunk = file.diff.hunks[hi]
+      parts.add(fmt"@@ -{hunk.oldStart},{hunk.oldCount} +{hunk.newStart},{hunk.newCount} @@")
+      for line in hunk.lines:
+        let lineType = $line.`type`
+        let prefix = case lineType
+          of "added": "+"
+          of "removed": "-"
+          else: " "
+        parts.add(prefix & $line.content)
+
+  result = parts.join("\n") & "\n"
+
+proc copyDrSelectedHunksAsPatch(self: DeepReviewComponent) =
+  ## Copy the selected hunks to the clipboard as a unified diff patch.
+  let patch = self.buildDrPatchFromSelectedHunks()
+  if patch.len > 0:
+    clipboardCopy(cstring(patch))
+    self.drHunkCopyFeedback = true
+    discard windowSetTimeout(
+      proc() =
+        self.drHunkCopyFeedback = false
+        redrawAll(),
+      2000)
+
+proc makeDrHunkHeaderClickHandler(self: DeepReviewComponent, fileIdx, hunkIdx: int): proc(ev: Event, n: VNode) =
+  ## Create a click handler for a hunk header in the DeepReview diff view.
+  ## Supports plain click, Ctrl/Cmd-click (toggle), and Shift-click (range).
+  let selfCapture = self
+  let drData = self.drData
+  result = proc(ev: Event, n: VNode) =
+    let jsEv = cast[JsObject](ev)
+    let shiftKey = jsEv.shiftKey.to(bool)
+    let ctrlKey = jsEv.ctrlKey.to(bool) or jsEv.metaKey.to(bool)
+
+    if shiftKey and selfCapture.drLastHunkClickIndex >= 0 and not drData.isNil:
+      let currentOrd = drFlatHunkOrdinal(drData, fileIdx, hunkIdx)
+      selfCapture.selectDrHunkRange(selfCapture.drLastHunkClickIndex, currentOrd)
+    elif ctrlKey:
+      selfCapture.toggleDrHunkSelection(fileIdx, hunkIdx)
+    else:
+      if selfCapture.drSelectedHunks.len == 1 and
+         selfCapture.isDrHunkSelected(fileIdx, hunkIdx):
+        selfCapture.clearDrHunkSelection()
+      else:
+        selfCapture.clearDrHunkSelection()
+        selfCapture.drSelectedHunks.add((fileIdx, hunkIdx))
+        selfCapture.drHunkToolbarVisible = true
+
+    if not drData.isNil:
+      selfCapture.drLastHunkClickIndex = drFlatHunkOrdinal(drData, fileIdx, hunkIdx)
+
+    ev.preventDefault()
+    redrawAll()
+
+proc renderDrHunkToolbar(self: DeepReviewComponent): VNode =
+  ## Render the floating action toolbar for selected hunks in DeepReview.
+  if not self.drHunkToolbarVisible or self.drSelectedHunks.len == 0:
+    return buildHtml(tdiv())
+
+  buildHtml(tdiv(class = "hunk-toolbar")):
+    span(class = "hunk-toolbar-count"):
+      text cstring($self.drSelectedHunks.len & " hunk" &
+        (if self.drSelectedHunks.len > 1: "s" else: "") & " selected")
+
+    tdiv(class = "hunk-toolbar-actions"):
+      tdiv(class = "hunk-toolbar-button",
+           onclick = proc(ev: Event, n: VNode) =
+             self.copyDrSelectedHunksAsPatch()
+             redrawAll()):
+        if self.drHunkCopyFeedback:
+          text "Copied!"
+        else:
+          text "Copy as patch"
+
+      tdiv(class = "hunk-toolbar-button hunk-toolbar-button-subtle",
+           onclick = proc(ev: Event, n: VNode) =
+             self.clearDrHunkSelection()
+             redrawAll()):
+        text "Clear"
+
 proc renderUnifiedDiff(self: DeepReviewComponent): VNode =
   ## Render all modified files as a vertical scrollable list of diff hunks.
   ## Each file gets a header with path and diff metadata, followed by its
@@ -723,6 +905,9 @@ proc renderUnifiedDiff(self: DeepReviewComponent): VNode =
   self.ensureExpansionState()
 
   buildHtml(tdiv(class = "deepreview-unified-diff")):
+    # Floating hunk action toolbar (shown when hunks are selected).
+    renderDrHunkToolbar(self)
+
     for fileIdx, file in self.drData.files:
       if file.diff.isNil:
         continue
@@ -752,9 +937,19 @@ proc renderUnifiedDiff(self: DeepReviewComponent): VNode =
 
         # Render each hunk with optional expansion buttons.
         for hunkIdx, hunk in file.diff.hunks:
-          tdiv(class = "deepreview-unified-hunk"):
-            # Hunk header (like @@ -40,6 +40,12 @@).
-            tdiv(class = "deepreview-unified-hunk-header"):
+          let isSelected = self.isDrHunkSelected(fileIdx, hunkIdx)
+          let hunkClass = if isSelected:
+            "deepreview-unified-hunk hunk-selected"
+          else:
+            "deepreview-unified-hunk"
+
+          tdiv(class = cstring(hunkClass)):
+            # Hunk header (like @@ -40,6 +40,12 @@). Clickable for selection.
+            tdiv(class = "deepreview-unified-hunk-header hunk-header-selectable",
+                 onclick = self.makeDrHunkHeaderClickHandler(fileIdx, hunkIdx)):
+              if isSelected:
+                span(class = "hunk-selection-indicator"):
+                  text "\xE2\x9C\x93" # checkmark
               text cstring(fmt"@@ -{hunk.oldStart},{hunk.oldCount} +{hunk.newStart},{hunk.newCount} @@")
 
             # --- "Expand above" button and expanded lines ---

@@ -254,3 +254,75 @@
   &:hover
     background: #3c3c3c
     color: #ccc
+
+// ---------------------------------------------------------------------------
+// Hunk editor: selection, toolbar, and visual indicators
+// ---------------------------------------------------------------------------
+
+.hunk-header-selectable
+  cursor: pointer
+  user-select: none
+  transition: background 0.1s ease
+
+  &:hover
+    background: #3a3d41
+
+.hunk-selected
+  border-left: 3px solid #569cd6
+  background: rgba(86, 156, 214, 0.08)
+
+  .deepreview-unified-hunk-header
+    background: rgba(86, 156, 214, 0.15)
+
+.hunk-selection-indicator
+  display: inline-block
+  margin-right: 6px
+  color: #569cd6
+  font-size: 12px
+  font-weight: bold
+
+// Floating toolbar shown when hunks are selected.
+.hunk-toolbar
+  position: sticky
+  top: 0
+  z-index: 50
+  display: flex
+  align-items: center
+  justify-content: space-between
+  padding: 4px 10px
+  background: #1e1e1e
+  border: 1px solid #3c3c3c
+  border-radius: 4px
+  margin: 4px 0 6px 0
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3)
+  font-size: 12px
+
+.hunk-toolbar-count
+  color: #ccc
+  white-space: nowrap
+
+.hunk-toolbar-actions
+  display: flex
+  gap: 6px
+
+.hunk-toolbar-button
+  padding: 2px 10px
+  border-radius: 3px
+  cursor: pointer
+  background: #0e639c
+  color: #fff
+  font-size: 11px
+  white-space: nowrap
+  user-select: none
+
+  &:hover
+    background: #1177bb
+
+.hunk-toolbar-button-subtle
+  background: transparent
+  color: #888
+  border: 1px solid #3c3c3c
+
+  &:hover
+    background: #3c3c3c
+    color: #ccc

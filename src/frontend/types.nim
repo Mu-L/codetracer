@@ -746,6 +746,18 @@ type
     gitDiffData*: DeepReviewData
       ## Populated on-demand with parsed ``git diff HEAD`` output so that
       ## the DeepReview unified diff renderer can be reused.
+    # Hunk editor state (hunk selection + actions).
+    selectedHunks*: seq[(int, int)]
+      ## Selected (fileIndex, hunkIndex) pairs for hunk operations.
+    hunkToolbarVisible*: bool
+      ## True when at least one hunk is selected and the action toolbar
+      ## should be displayed.
+    lastHunkClickIndex*: int
+      ## Index into ``selectedHunks``-eligible list used for Shift-click
+      ## range selection. Stores the flat hunk ordinal of the last
+      ## single-clicked hunk header.
+    hunkCopyFeedback*: bool
+      ## Briefly true after a successful "Copy as patch" to show feedback.
 
   ViewKind* =       enum ViewTable, ViewLine, ViewPie
 
@@ -939,6 +951,17 @@ type
       ## panel alongside separate filesystem and calltrace panels.
       ## The render method skips its own file-list and calltrace
       ## sidebars, showing only the unified diff / editor area.
+    # Hunk editor state (hunk selection + actions).
+    drSelectedHunks*: seq[(int, int)]
+      ## Selected (fileIndex, hunkIndex) pairs for hunk operations.
+    drHunkToolbarVisible*: bool
+      ## True when at least one hunk is selected and the action toolbar
+      ## should be displayed.
+    drLastHunkClickIndex*: int
+      ## Flat ordinal of the last single-clicked hunk header, used for
+      ## Shift-click range selection.
+    drHunkCopyFeedback*: bool
+      ## Briefly true after "Copy as patch" to show feedback.
 
   AgentWorkspaceComponent* = ref object of Component
     ## Agent workspace view showing the agent's working directory files

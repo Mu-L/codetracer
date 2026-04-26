@@ -363,6 +363,11 @@ proc loadGitDiffForUnifiedView(self: VCSComponent) =
     sessionTitle: cstring"Working Tree Changes",
     files: files)
 
+  # Clear hunk selection when diff data is refreshed to avoid stale
+  # references to old hunk indices.
+  self.selectedHunks = @[]
+  self.hunkToolbarVisible = false
+
 # ---------------------------------------------------------------------------
 # File watching — auto-refresh & debounce (Task #68)
 # ---------------------------------------------------------------------------
@@ -644,6 +649,242 @@ proc renderChangedFiles(self: VCSComponent): VNode =
                     text cstring("-" & $file.deletions)
 
 # ---------------------------------------------------------------------------
+# Hunk editor helpers
+# ---------------------------------------------------------------------------
+
+proc isHunkSelected(self: VCSComponent, fileIdx, hunkIdx: int): bool =
+  ## Return true if the given (fileIndex, hunkIndex) pair is in the
+  ## selected hunks list.
+  for pair in self.selectedHunks:
+    if pair[0] == fileIdx and pair[1] == hunkIdx:
+      return true
+  return false
+
+proc flatHunkOrdinal(drData: DeepReviewData, fileIdx, hunkIdx: int): int =
+  ## Compute a flat ordinal for a (fileIdx, hunkIdx) pair by counting
+  ## all hunks in files before ``fileIdx`` plus ``hunkIdx``. Used for
+  ## Shift-click range selection.
+  result = 0
+  for fi in 0 ..< drData.files.len:
+    if fi == fileIdx:
+      result += hunkIdx
+      return
+    let file = drData.files[fi]
+    if not file.diff.isNil:
+      result += file.diff.hunks.len
+
+proc hunkPairFromOrdinal(drData: DeepReviewData, ordinal: int): (int, int) =
+  ## Reverse of ``flatHunkOrdinal``: convert a flat ordinal back to
+  ## a (fileIndex, hunkIndex) pair.
+  var remaining = ordinal
+  for fi in 0 ..< drData.files.len:
+    let file = drData.files[fi]
+    let hunkCount = if file.diff.isNil: 0 else: file.diff.hunks.len
+    if remaining < hunkCount:
+      return (fi, remaining)
+    remaining -= hunkCount
+  # Fallback (should not happen with valid input).
+  return (0, 0)
+
+proc toggleHunkSelection(self: VCSComponent, fileIdx, hunkIdx: int) =
+  ## Toggle a single hunk in/out of the selection.
+  var found = -1
+  for i in 0 ..< self.selectedHunks.len:
+    if self.selectedHunks[i][0] == fileIdx and self.selectedHunks[i][1] == hunkIdx:
+      found = i
+      break
+  if found >= 0:
+    self.selectedHunks.delete(found)
+  else:
+    self.selectedHunks.add((fileIdx, hunkIdx))
+  self.hunkToolbarVisible = self.selectedHunks.len > 0
+
+proc selectHunkRange(self: VCSComponent, fromOrdinal, toOrdinal: int) =
+  ## Select all hunks between two flat ordinals (inclusive), adding
+  ## any that are not already selected.
+  let lo = min(fromOrdinal, toOrdinal)
+  let hi = max(fromOrdinal, toOrdinal)
+  let drData = self.gitDiffData
+  if drData.isNil:
+    return
+  for ord in lo .. hi:
+    let pair = hunkPairFromOrdinal(drData, ord)
+    if not self.isHunkSelected(pair[0], pair[1]):
+      self.selectedHunks.add(pair)
+  self.hunkToolbarVisible = self.selectedHunks.len > 0
+
+proc clearHunkSelection(self: VCSComponent) =
+  ## Clear all selected hunks.
+  self.selectedHunks = @[]
+  self.hunkToolbarVisible = false
+
+proc buildPatchFromSelectedHunks(self: VCSComponent): string =
+  ## Build a unified diff patch string from the currently selected hunks.
+  ## Groups hunks by file and emits proper ``diff --git`` / ``---`` /
+  ## ``+++`` headers so the output is a valid patch.
+  let drData = self.gitDiffData
+  if drData.isNil or self.selectedHunks.len == 0:
+    return ""
+
+  # Group selected hunks by file index, preserving order.
+  var fileHunks: seq[(int, seq[int])] = @[]
+  var fileMap: seq[int] = @[]  # fileIdx values in order of first appearance
+  for pair in self.selectedHunks:
+    let fi = pair[0]
+    let hi = pair[1]
+    var found = false
+    for j in 0 ..< fileMap.len:
+      if fileMap[j] == fi:
+        fileHunks[j][1].add(hi)
+        found = true
+        break
+    if not found:
+      fileMap.add(fi)
+      fileHunks.add((fi, @[hi]))
+
+  var parts: seq[string] = @[]
+  for entry in fileHunks:
+    let fi = entry[0]
+    let hunkIndices = entry[1]
+    if fi >= drData.files.len:
+      continue
+    let file = drData.files[fi]
+    let path = $file.path
+
+    parts.add("diff --git a/" & path & " b/" & path)
+    parts.add("--- a/" & path)
+    parts.add("+++ b/" & path)
+
+    for hi in hunkIndices:
+      if file.diff.isNil or hi >= file.diff.hunks.len:
+        continue
+      let hunk = file.diff.hunks[hi]
+      parts.add(fmt"@@ -{hunk.oldStart},{hunk.oldCount} +{hunk.newStart},{hunk.newCount} @@")
+      for line in hunk.lines:
+        let lineType = $line.`type`
+        let prefix = case lineType
+          of "added": "+"
+          of "removed": "-"
+          else: " "
+        parts.add(prefix & $line.content)
+
+  result = parts.join("\n") & "\n"
+
+proc copySelectedHunksAsPatch(self: VCSComponent) =
+  ## Copy the selected hunks to the clipboard as a unified diff patch.
+  let patch = self.buildPatchFromSelectedHunks()
+  if patch.len > 0:
+    clipboardCopy(cstring(patch))
+    self.hunkCopyFeedback = true
+    discard windowSetTimeout(
+      proc() =
+        self.hunkCopyFeedback = false
+        data.redraw(),
+      2000)
+
+proc stageSelectedHunks(self: VCSComponent) =
+  ## Stage selected hunks by writing them to a temp file and applying
+  ## with ``git apply --cached``.
+  let patch = self.buildPatchFromSelectedHunks()
+  if patch.len == 0:
+    return
+  let cwd = self.getWorkingDirectory()
+  # Write patch to a temporary file and apply it to the index.
+  # Use Node.js fs and os modules (available in Electron renderer).
+  {.emit: """
+  var fs = require('fs');
+  var os = require('os');
+  var path = require('path');
+  var tmpDir = os.tmpdir();
+  var tmpFile = path.join(tmpDir, 'ct-hunk-stage-' + Date.now() + '.patch');
+  fs.writeFileSync(tmpFile, `patch`);
+  try {
+    require('child_process').execSync('git apply --cached ' + tmpFile, {
+      cwd: `cwd`,
+      encoding: 'utf8',
+      timeout: 5000
+    });
+  } catch(e) {
+    console.error('Failed to stage hunks:', e.message);
+  } finally {
+    try { fs.unlinkSync(tmpFile); } catch(e2) {}
+  }
+  """.}
+  # Refresh data after staging.
+  self.refreshVCSData()
+  self.loadGitDiffForUnifiedView()
+  self.clearHunkSelection()
+
+proc makeHunkHeaderClickHandler(self: VCSComponent, fileIdx, hunkIdx: int): proc(ev: Event, n: VNode) =
+  ## Create a click handler for a hunk header that supports:
+  ## - Plain click: toggle single hunk selection
+  ## - Ctrl/Cmd-click: toggle without clearing others
+  ## - Shift-click: range select from last clicked hunk
+  let selfCapture = self
+  let drData = self.gitDiffData
+  result = proc(ev: Event, n: VNode) =
+    let jsEv = cast[JsObject](ev)
+    let shiftKey = jsEv.shiftKey.to(bool)
+    let ctrlKey = jsEv.ctrlKey.to(bool) or jsEv.metaKey.to(bool)
+
+    if shiftKey and selfCapture.lastHunkClickIndex >= 0 and not drData.isNil:
+      # Range select from last click to current.
+      let currentOrd = flatHunkOrdinal(drData, fileIdx, hunkIdx)
+      selfCapture.selectHunkRange(selfCapture.lastHunkClickIndex, currentOrd)
+    elif ctrlKey:
+      # Toggle this hunk without clearing others.
+      selfCapture.toggleHunkSelection(fileIdx, hunkIdx)
+    else:
+      # Plain click: if this hunk is the only selected one, deselect it;
+      # otherwise clear all and select only this one.
+      if selfCapture.selectedHunks.len == 1 and
+         selfCapture.isHunkSelected(fileIdx, hunkIdx):
+        selfCapture.clearHunkSelection()
+      else:
+        selfCapture.clearHunkSelection()
+        selfCapture.selectedHunks.add((fileIdx, hunkIdx))
+        selfCapture.hunkToolbarVisible = true
+
+    # Track last click ordinal for Shift-click ranges.
+    if not drData.isNil:
+      selfCapture.lastHunkClickIndex = flatHunkOrdinal(drData, fileIdx, hunkIdx)
+
+    ev.preventDefault()
+    data.redraw()
+
+proc renderHunkToolbar(self: VCSComponent): VNode =
+  ## Render the floating action toolbar for selected hunks.
+  if not self.hunkToolbarVisible or self.selectedHunks.len == 0:
+    return buildHtml(tdiv())
+
+  buildHtml(tdiv(class = "hunk-toolbar")):
+    span(class = "hunk-toolbar-count"):
+      text cstring($self.selectedHunks.len & " hunk" &
+        (if self.selectedHunks.len > 1: "s" else: "") & " selected")
+
+    tdiv(class = "hunk-toolbar-actions"):
+      tdiv(class = "hunk-toolbar-button",
+           onclick = proc(ev: Event, tg: VNode) =
+             self.copySelectedHunksAsPatch()
+             data.redraw()):
+        if self.hunkCopyFeedback:
+          text "Copied!"
+        else:
+          text "Copy as patch"
+
+      tdiv(class = "hunk-toolbar-button",
+           onclick = proc(ev: Event, tg: VNode) =
+             self.stageSelectedHunks()
+             data.redraw()):
+        text "Stage hunks"
+
+      tdiv(class = "hunk-toolbar-button hunk-toolbar-button-subtle",
+           onclick = proc(ev: Event, tg: VNode) =
+             self.clearHunkSelection()
+             data.redraw()):
+        text "Clear"
+
+# ---------------------------------------------------------------------------
 # Git unified diff rendering (Task #69)
 # ---------------------------------------------------------------------------
 
@@ -657,6 +898,9 @@ proc renderGitUnifiedDiff(self: VCSComponent): VNode =
         text "No working tree changes."
 
   buildHtml(tdiv(class = "deepreview-unified-diff")):
+    # Floating hunk action toolbar (shown when hunks are selected).
+    renderHunkToolbar(self)
+
     for fileIdx, file in drData.files:
       if file.diff.isNil or file.diff.hunks.len == 0:
         continue
@@ -683,8 +927,18 @@ proc renderGitUnifiedDiff(self: VCSComponent): VNode =
 
         # Render each hunk.
         for hunkIdx, hunk in file.diff.hunks:
-          tdiv(class = "deepreview-unified-hunk"):
-            tdiv(class = "deepreview-unified-hunk-header"):
+          let isSelected = self.isHunkSelected(fileIdx, hunkIdx)
+          let hunkClass = if isSelected:
+            "deepreview-unified-hunk hunk-selected"
+          else:
+            "deepreview-unified-hunk"
+
+          tdiv(class = cstring(hunkClass)):
+            tdiv(class = "deepreview-unified-hunk-header hunk-header-selectable",
+                 onclick = self.makeHunkHeaderClickHandler(fileIdx, hunkIdx)):
+              if isSelected:
+                span(class = "hunk-selection-indicator"):
+                  text "\xE2\x9C\x93" # checkmark
               text cstring(fmt"@@ -{hunk.oldStart},{hunk.oldCount} +{hunk.newStart},{hunk.newCount} @@")
 
             for lineItem in hunk.lines:
