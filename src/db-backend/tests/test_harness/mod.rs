@@ -293,6 +293,105 @@ impl TestRecording {
             version_label: version_label.to_string(),
         })
     }
+
+    /// Create a new test recording using the MCR backend.
+    ///
+    /// This builds the program with `ct-native-replay build` and then records
+    /// it with `ct-native-replay record --backend mcr`, producing a `.ct` trace
+    /// file instead of an rr trace directory.
+    pub fn create_mcr(
+        source_path: &Path,
+        language: Language,
+        version_label: &str,
+        ct_rr_support: &Path,
+    ) -> Result<Self, String> {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "mcr_flow_test_{}_{}_{}",
+            language.extension(),
+            version_label.replace('.', "_"),
+            std::process::id()
+        ));
+
+        if temp_dir.exists() && fs::remove_dir_all(&temp_dir).is_err() {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            let _ = fs::remove_dir_all(&temp_dir);
+        }
+        fs::create_dir_all(&temp_dir).map_err(|e| format!("failed to create temp dir: {}", e))?;
+
+        let binary_name = source_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("test_program");
+        let binary_path = temp_dir.join(format!("{}{}", binary_name, std::env::consts::EXE_SUFFIX));
+
+        // Build the program
+        let build_output = Command::new(ct_rr_support)
+            .args(["build", source_path.to_str().unwrap(), binary_path.to_str().unwrap()])
+            .output()
+            .map_err(|e| format!("failed to run ct-native-replay build: {}", e))?;
+
+        if !build_output.status.success() {
+            return Err(format!(
+                "MCR build failed:\nstdout: {}\nstderr: {}",
+                String::from_utf8_lossy(&build_output.stdout),
+                String::from_utf8_lossy(&build_output.stderr)
+            ));
+        }
+
+        // Record with MCR backend — produces a .ct file
+        let trace_output = temp_dir.join("trace");
+        let record_output = Command::new(ct_rr_support)
+            .args([
+                "record",
+                "--backend",
+                "mcr",
+                "-o",
+                trace_output.to_str().unwrap(),
+                binary_path.to_str().unwrap(),
+            ])
+            .output()
+            .map_err(|e| format!("failed to run ct-native-replay record --backend mcr: {}", e))?;
+
+        if !record_output.status.success() {
+            return Err(format!(
+                "MCR record failed:\nstdout: {}\nstderr: {}",
+                String::from_utf8_lossy(&record_output.stdout),
+                String::from_utf8_lossy(&record_output.stderr)
+            ));
+        }
+
+        // MCR produces a .ct file — find it in the temp directory
+        let trace_ct = trace_output.with_extension("ct");
+        let trace_dir = if trace_ct.exists() {
+            trace_ct
+        } else {
+            // Fallback: look for any .ct file in the temp directory
+            let mut found = None;
+            if let Ok(entries) = fs::read_dir(&temp_dir) {
+                for entry in entries.flatten() {
+                    if entry.path().extension().and_then(|e| e.to_str()) == Some("ct") {
+                        found = Some(entry.path());
+                        break;
+                    }
+                }
+            }
+            found.ok_or_else(|| {
+                format!(
+                    "MCR record did not produce a .ct trace file in {}",
+                    temp_dir.display()
+                )
+            })?
+        };
+
+        Ok(TestRecording {
+            trace_dir,
+            source_path: source_path.to_path_buf(),
+            binary_path,
+            temp_dir,
+            language,
+            version_label: version_label.to_string(),
+        })
+    }
 }
 
 impl Drop for TestRecording {
@@ -1096,6 +1195,16 @@ fn is_elevated() -> bool {
 #[cfg(not(windows))]
 pub fn is_ttd_available() -> bool {
     false
+}
+
+/// Check if the MCR recording backend is available.
+///
+/// MCR requires both `ct-native-replay` and `ct-mcr` to be on PATH.
+pub fn is_mcr_available() -> bool {
+    if find_ct_rr_support().is_none() {
+        return false;
+    }
+    find_on_path("ct-mcr").is_some()
 }
 
 /// Check if a replay backend is available (rr on Unix, TTD on Windows).
