@@ -10,7 +10,7 @@ pub fn iterate_asteroids(initial_shield: Field, shield_base_regen: Field, masses
     }
 
     // We need to have at least 1 unit of shields left in order to survive the cosmic radiation.
-    let result = remaining_shield as i32 > 0;
+    let result = remaining_shield as u32 > 0;
     result
 }
 
@@ -30,7 +30,7 @@ fn calculate_shield_regeneration(initial_shield:Field, shield_regen_percentage: 
 }
 
 fn calculate_remaining_shield_pct(initial_shield: Field, remaining_shield: Field) -> Field {
-    let result = (remaining_shield * 100) as i32 / initial_shield as i32;
+    let result = (remaining_shield * 100) as u32 / initial_shield as u32;
     result as Field
 }
 
@@ -38,14 +38,14 @@ fn status_report(iteration: u32 ,initial_shield: Field, remaining_shield: Field,
     println(f"----- iteration {iteration} -----");
 
     // in noir, fields can't be printed directly so we convert them to an integer type first
-    let damage_as_i32 = damage as i32;
-    println(f"Damage: {damage_as_i32}");
+    let damage_as_u32 = damage as u32;
+    println(f"Damage: {damage_as_u32}");
 
-    let regenerated_shield_as_i32 = regenerated_shield as i32;
-    println(f"Regenerated {regenerated_shield_as_i32} energy");
+    let regenerated_shield_as_u32 = regenerated_shield as u32;
+    println(f"Regenerated {regenerated_shield_as_u32} energy");
 
-    let remaining_shield_as_i32 = remaining_shield as i32;
+    let remaining_shield_as_u32 = remaining_shield as u32;
     let remaining_shield_pct = calculate_remaining_shield_pct(initial_shield, remaining_shield);
-    let remaining_shield_pct_as_i32 = remaining_shield_pct as i32;
-    println(f"Shield status {remaining_shield_pct_as_i32}% {remaining_shield_as_i32}");
+    let remaining_shield_pct_as_u32 = remaining_shield_pct as u32;
+    println(f"Shield status {remaining_shield_pct_as_u32}% {remaining_shield_as_u32}");
 }
