@@ -751,6 +751,12 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig,
     window.__ctRenderPanel = function(contentId) {
       `renderAutoHidePanelById`(contentId);
     };
+    window.__ctPinPanel = function(contentItemJs, edgeInt) {
+      `pinContentItemToEdge`(contentItemJs, edgeInt);
+    };
+    window.__ctCreateNewSession = function() {
+      `createNewSessionHelper`();
+    };
   """.}
 
   layout.on(cstring"stateChanged") do (event: js):
