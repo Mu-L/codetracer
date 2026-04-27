@@ -61,6 +61,13 @@
 
         forc = inputs.nix-blockchain-development.outputs.legacyPackages.${system}.metacraft-labs.forc;
 
+        miden = inputs.nix-blockchain-development.outputs.legacyPackages.${system}.metacraft-labs.miden;
+
+        cargo-build-sbf =
+          inputs.nix-blockchain-development.outputs.legacyPackages.${system}.metacraft-labs.cargo-build-sbf;
+
+        sui = inputs.nix-blockchain-development.outputs.legacyPackages.${system}.metacraft-labs.sui;
+
         codex-acp =
           let
             # Pick a recent nightly (post-1.88) so dependencies like `home`

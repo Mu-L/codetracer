@@ -64,6 +64,9 @@ mkShell {
     # blockchain recorder runtime dependencies
     ourPkgs.circom # Circom compiler (needed by codetracer-circom-recorder)
     ourPkgs.forc # Sway/Fuel compiler (needed by codetracer-fuel-recorder)
+    ourPkgs.miden # Miden compiler (needed by codetracer-miden-recorder)
+    ourPkgs.cargo-build-sbf # Solana BPF compiler (needed by codetracer-solana-recorder)
+    ourPkgs.sui # Sui compiler (needed by codetracer-move-recorder)
 
     # codex acp agent client
     ourPkgs.codex-acp
