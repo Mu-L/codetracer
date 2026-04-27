@@ -272,6 +272,40 @@
   flex: 1
   overflow: auto
   padding: 0
+  position: relative  // Anchor for the floating pin button
+
+// ---------------------------------------------------------------------------
+// Collapsed-mode overlay: hide the full header row and show a small
+// floating pin/unpin button in the upper-right corner instead.
+// The panel title is already visible in the side-edge tab bar.
+// ---------------------------------------------------------------------------
+
+#auto-hide-overlay.collapsed-overlay #auto-hide-overlay-header
+  display: none
+
+// Floating pin button — appears only in collapsed-overlay mode.
+.overlay-floating-pin
+  position: absolute
+  top: 4px
+  right: 4px
+  z-index: 5
+  cursor: pointer
+  font-size: 14px
+  width: 24px
+  height: 24px
+  display: flex
+  align-items: center
+  justify-content: center
+  border-radius: 3px
+  color: HEADER_PANEL_COLOR
+  background-color: rgba(40, 40, 40, 0.7)
+  border: 1px solid PRIMARY_BASE
+  transition: background-color 150ms ease
+  opacity: 0.6
+
+  &:hover
+    background-color: ACTIVE_ROW
+    opacity: 1.0
 
 // ---------------------------------------------------------------------------
 // Collapsed-mode icon zone — rendered in the status bar.
@@ -281,16 +315,20 @@
 .collapsed-icon-zone
   display: none
 
+// The icon zone sits at the very left of the status bar, flush with the
+// left edge so it visually connects with the collapsed side strip above.
+// No margin-left, no border-radius on the left side.
 .collapsed-icon-zone.has-icons
   display: flex
   flex-direction: row
   align-items: center
   gap: 2px
-  margin-left: 4px
+  margin: 0
   padding: 0 6px
   background-color: #3a5070  // Same accent as collapsed strip
-  border-radius: 3px
-  height: 22px
+  border-radius: 0 3px 3px 0  // Rounded only on the right
+  height: 100%  // Full status bar height for seamless connection
+  align-self: stretch
 
 .collapsed-icon
   font-size: 14px
@@ -321,11 +359,13 @@
     display: none
 
 // Left-edge tabs: between screen left edge and overlay content.
+// Background matches the overlay, border only on the content side.
 .overlay-side-tabs.side-tabs-left
   width: 28px
   min-width: 28px
   border-right: 1px solid PRIMARY_BASE
   order: -1  // Place before overlay content in flex row
+  background-color: SECONDARY_BASE  // Match overlay background
 
 // Right-edge tabs: between overlay content and screen right edge.
 .overlay-side-tabs.side-tabs-right
@@ -333,6 +373,7 @@
   min-width: 28px
   border-left: 1px solid PRIMARY_BASE
   order: 1  // Place after overlay content in flex row
+  background-color: SECONDARY_BASE
 
 .overlay-side-tab
   writing-mode: vertical-lr

@@ -375,6 +375,15 @@ proc unpinPanel*(layout: GoldenLayout, panel: AutoHidePanel) =
 # Overlay show / hide
 # ---------------------------------------------------------------------------
 
+proc isEdgeCollapsed*(edge: AutoHideEdge): bool =
+  ## Returns true when the given edge should render in collapsed (1px) mode.
+  if autoHideState.isNil or not autoHideState.collapsedMode:
+    return false
+  case edge
+  of Left:   autoHideState.leftBounded
+  of Right:  autoHideState.rightBounded
+  of Bottom: false  # Bottom uses status bar icons, not 1px strip
+
 proc hideOverlay*() =
   ## Hide the currently visible auto-hide overlay.
   ## The live DOM element is detached from the overlay but NOT destroyed —
@@ -406,6 +415,7 @@ proc hideOverlay*() =
     overlayEl.classList.remove(cstring"auto-hide-overlay-left")
     overlayEl.classList.remove(cstring"auto-hide-overlay-right")
     overlayEl.classList.remove(cstring"auto-hide-overlay-bottom")
+    overlayEl.classList.remove(cstring"collapsed-overlay")
 
   if not autoHideState.onChanged.isNil:
     autoHideState.onChanged()
@@ -450,6 +460,13 @@ proc showOverlay*(panel: AutoHidePanel) =
   overlayEl.classList.add(edgeOverlayCssClass(panel.edge))
   overlayEl.classList.add(cstring"visible")
 
+  # In collapsed mode, add "collapsed-overlay" class to hide the header
+  # row and show the floating pin button instead.
+  if isEdgeCollapsed(panel.edge):
+    overlayEl.classList.add(cstring"collapsed-overlay")
+  else:
+    overlayEl.classList.remove(cstring"collapsed-overlay")
+
   # Reparent the live DOM element into the overlay content area.
   # This preserves all component state (scroll position, Monaco editor
   # content, Karax tree state, event listeners, etc.).
@@ -475,6 +492,28 @@ proc showOverlay*(panel: AutoHidePanel) =
       cdebug fmt"auto_hide: reparented live DOM element into overlay for '{panel.title}'"
     else:
       console.warn cstring"auto_hide: no live DOM element for panel — overlay will be empty"
+
+    # In collapsed mode, inject a floating pin button in the content area.
+    # This replaces the full header row (hidden via CSS).
+    if isEdgeCollapsed(panel.edge):
+      var pinBtn = document.getElementById(cstring"overlay-floating-pin-btn")
+      if pinBtn.isNil:
+        pinBtn = kdom.document.createElement("div")
+        pinBtn.id = cstring"overlay-floating-pin-btn"
+        pinBtn.class = cstring"overlay-floating-pin"
+        pinBtn.setAttribute(cstring"title", cstring"Unpin (restore to layout)")
+        pinBtn.innerHTML = cstring"&#x2715;"  # X close/dismiss icon
+        pinBtn.addEventListener(cstring"click", proc(ev: Event) =
+          # Trigger the same unpin logic as the header button.
+          let unpinTarget = if not autoHideState.isNil and not autoHideState.activeOverlay.isNil:
+              autoHideState.activeOverlay
+            elif not autoHideState.isNil:
+              autoHideState.lastActivePanel
+            else:
+              nil
+          if not unpinTarget.isNil:
+            hideOverlay())
+      contentEl.appendChild(pinBtn)
 
   if not autoHideState.onChanged.isNil:
     autoHideState.onChanged()
@@ -524,14 +563,6 @@ proc contentIcon*(content: Content): cstring =
   ## status bar icon zone when strips are in collapsed mode.
   contentIconJs(content)
 
-proc isEdgeCollapsed*(edge: AutoHideEdge): bool =
-  ## Returns true when the given edge should render in collapsed (1px) mode.
-  if autoHideState.isNil or not autoHideState.collapsedMode:
-    return false
-  case edge
-  of Left:   autoHideState.leftBounded
-  of Right:  autoHideState.rightBounded
-  of Bottom: false  # Bottom uses status bar icons, not 1px strip
 
 proc makeStripTabClickHandler(panel: AutoHidePanel): proc(e: Event, tg: VNode) =
   ## Create a click handler for a strip tab that captures the panel by value.

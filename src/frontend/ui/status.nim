@@ -537,8 +537,10 @@ method render*(self: StatusComponent): VNode =
         tdiv(class="debug-notification"):
           notificationView(self, self.notifications[^1])
     tdiv(id = "status-base"):
-      fileInfoView(self)
+      # Icon zone FIRST so it sits at the leftmost position, physically
+      # connecting with the collapsed side strip line above it.
       renderCollapsedIconZone()
+      fileInfoView(self)
       renderBottomAutoHideTabs()
       # TODO: Find another place for these
       # toggleInlineValues(self)
