@@ -2,11 +2,11 @@
  * E2E tests for the search results panel.
  *
  * Verifies:
- * - The search results panel renders when its GL tab is clicked
+ * - The search results panel renders when its auto-hide bottom tab is clicked
  * - The empty state is shown when no search has been performed
  */
 
-import { test, expect, codetracerInstallDir } from "../../lib/fixtures";
+import { test, expect, wait, codetracerInstallDir } from "../../lib/fixtures";
 import { retry } from "../../lib/retry-helpers";
 import { ensureDefaultLayout, restoreUserLayout } from "../../lib/layout-reset";
 
@@ -18,25 +18,31 @@ test.describe("Search Results Panel", () => {
   test.afterAll(() => restoreUserLayout());
 
   test("Search results panel renders", async ({ ctPage }) => {
-    await ctPage.waitForSelector(".lm_goldenlayout", { timeout: 15_000 });
+    const layout = new (await import("../../page-objects/layout-page")).LayoutPage(ctPage);
+    await layout.waitForBaseComponentsLoaded();
+    await layout.waitForTraceLoaded();
 
-    // Click the SEARCH RESULTS tab to activate the panel.
-    const searchTab = ctPage.locator(".lm_tab .lm_title", {
+    // Wait for auto-hide bottom tabs to appear.
+    await ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab").first().waitFor({ timeout: 10_000 });
+
+    // Click the SEARCH RESULTS auto-hide tab to open the overlay.
+    const searchTab = ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab", {
       hasText: "SEARCH RESULTS",
     });
-    await retry(
-      async () => (await searchTab.count()) > 0,
-      { maxAttempts: 30, delayMs: 1_000 },
-    );
-    await searchTab.first().click();
+    await searchTab.click();
+    await wait(500);
+
+    // The overlay should become visible.
+    const overlay = ctPage.locator("#auto-hide-overlay");
+    await expect(overlay).toHaveClass(/visible/, { timeout: 5_000 });
 
     // The search results panel renders `.search-results` inside
     // `#searchResultsComponent-0`. Due to Karax renderer timing (the
     // component DOM element may not be fully attached when the initial
     // setTimeout fires), we also accept the container element being
     // visible as proof the tab was activated.
-    const searchPanel = ctPage.locator(".search-results");
-    const searchContainer = ctPage.locator("#searchResultsComponent-0");
+    const searchPanel = ctPage.locator("#auto-hide-overlay-content .search-results");
+    const searchContainer = ctPage.locator("#auto-hide-overlay-content #searchResultsComponent-0");
     const visible = await retry(
       async () => {
         if ((await searchPanel.count()) > 0) {
@@ -54,21 +60,27 @@ test.describe("Search Results Panel", () => {
   });
 
   test("Empty state when no search performed", async ({ ctPage }) => {
-    await ctPage.waitForSelector(".lm_goldenlayout", { timeout: 15_000 });
+    const layout = new (await import("../../page-objects/layout-page")).LayoutPage(ctPage);
+    await layout.waitForBaseComponentsLoaded();
+    await layout.waitForTraceLoaded();
 
-    // Activate the SEARCH RESULTS tab.
-    const searchTab = ctPage.locator(".lm_tab .lm_title", {
+    // Wait for auto-hide bottom tabs to appear.
+    await ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab").first().waitFor({ timeout: 10_000 });
+
+    // Click the SEARCH RESULTS auto-hide tab to open the overlay.
+    const searchTab = ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab", {
       hasText: "SEARCH RESULTS",
     });
-    await retry(
-      async () => (await searchTab.count()) > 0,
-      { maxAttempts: 30, delayMs: 1_000 },
-    );
-    await searchTab.first().click();
+    await searchTab.click();
+    await wait(500);
 
-    // Wait for the panel container to be visible.
-    const searchPanel = ctPage.locator(".search-results");
-    const searchContainer = ctPage.locator("#searchResultsComponent-0");
+    // The overlay should become visible.
+    const overlay = ctPage.locator("#auto-hide-overlay");
+    await expect(overlay).toHaveClass(/visible/, { timeout: 5_000 });
+
+    // Wait for the panel container to be visible inside the overlay.
+    const searchPanel = ctPage.locator("#auto-hide-overlay-content .search-results");
+    const searchContainer = ctPage.locator("#auto-hide-overlay-content #searchResultsComponent-0");
     const containerVisible = await retry(
       async () => {
         if ((await searchPanel.count()) > 0) {

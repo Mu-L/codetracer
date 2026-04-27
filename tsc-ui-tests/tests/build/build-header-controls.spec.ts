@@ -6,7 +6,7 @@
  * - Stop, clear, and auto-scroll toggle buttons are visible
  */
 
-import { test, expect, codetracerInstallDir } from "../../lib/fixtures";
+import { test, expect, wait, codetracerInstallDir } from "../../lib/fixtures";
 import { retry } from "../../lib/retry-helpers";
 import { BuildPane } from "../../page-objects/panes/build/build-pane";
 import { ensureDefaultLayout, restoreUserLayout } from "../../lib/layout-reset";
@@ -20,12 +20,27 @@ test.describe("Build Header Controls", () => {
   test.afterAll(() => restoreUserLayout());
 
   test("header controls container is present in the build panel", async ({ ctPage }) => {
-    const buildPane = new BuildPane(ctPage);
+    const layout = new (await import("../../page-objects/layout-page")).LayoutPage(ctPage);
+    await layout.waitForBaseComponentsLoaded();
+    await layout.waitForTraceLoaded();
 
-    // Wait for the build panel to appear in the DOM.
+    // Wait for auto-hide bottom tabs to appear.
+    await ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab").first().waitFor({ timeout: 10_000 });
+
+    // Click the BUILD auto-hide tab to open the overlay.
+    const buildTab = ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab", {
+      hasText: "BUILD",
+    });
+    await buildTab.click();
+    await wait(500);
+
+    const overlay = ctPage.locator("#auto-hide-overlay");
+    await expect(overlay).toHaveClass(/visible/, { timeout: 5_000 });
+
+    // Wait for the build panel to appear inside the overlay.
     const buildExists = await retry(
       async () => {
-        const count = await ctPage.locator(".build-panel").count();
+        const count = await ctPage.locator("#auto-hide-overlay-content .build-panel").count();
         return count > 0;
       },
       { maxAttempts: 30, delayMs: 1000 },
@@ -37,21 +52,39 @@ test.describe("Build Header Controls", () => {
     }
 
     // The header controls row should always be rendered inside the build panel.
+    const buildPane = new BuildPane(ctPage);
     const controlsCount = await buildPane.headerControls().count();
     expect(controlsCount).toBeGreaterThan(0);
   });
 
   test("stop, clear, and scroll toggle buttons are visible", async ({ ctPage }) => {
-    const buildPane = new BuildPane(ctPage);
+    const layout = new (await import("../../page-objects/layout-page")).LayoutPage(ctPage);
+    await layout.waitForBaseComponentsLoaded();
+    await layout.waitForTraceLoaded();
+
+    // Wait for auto-hide bottom tabs to appear.
+    await ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab").first().waitFor({ timeout: 10_000 });
+
+    // Click the BUILD auto-hide tab to open the overlay.
+    const buildTab = ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab", {
+      hasText: "BUILD",
+    });
+    await buildTab.click();
+    await wait(500);
+
+    const overlay = ctPage.locator("#auto-hide-overlay");
+    await expect(overlay).toHaveClass(/visible/, { timeout: 5_000 });
 
     // Wait for the build panel to appear.
     await retry(
       async () => {
-        const count = await ctPage.locator(".build-panel").count();
+        const count = await ctPage.locator("#auto-hide-overlay-content .build-panel").count();
         return count > 0;
       },
       { maxAttempts: 30, delayMs: 1000 },
     );
+
+    const buildPane = new BuildPane(ctPage);
 
     // Stop button should exist (may be disabled when build is not running).
     const stopCount = await buildPane.stopButton().count();

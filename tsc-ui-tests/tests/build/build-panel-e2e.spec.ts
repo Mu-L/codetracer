@@ -2,102 +2,95 @@
  * E2E tests for the build-related tabs in the bottom panel row.
  *
  * Verifies:
- * - BUILD, PROBLEMS, and SEARCH RESULTS tabs are present in the GL layout
- * - Clicking the BUILD tab reveals the build panel with its header
+ * - BUILD, PROBLEMS, and SEARCH RESULTS tabs are present as auto-hide bottom tabs
+ * - Clicking the BUILD tab opens the overlay with the build panel and its header
  * - Clicking the PROBLEMS tab shows the problems panel (empty state)
  */
 
-import { test, expect, codetracerInstallDir } from "../../lib/fixtures";
+import { test, expect, wait, codetracerInstallDir } from "../../lib/fixtures";
 import { retry } from "../../lib/retry-helpers";
 import { LayoutPage } from "../../page-objects/layout-page";
 import { ensureDefaultLayout, restoreUserLayout } from "../../lib/layout-reset";
 
-test.describe("Build panel tabs in GL layout", () => {
+test.describe("Build panel tabs as auto-hide bottom tabs", () => {
   test.setTimeout(120_000);
   test.use({ sourcePath: "py_console_logs/main.py", launchMode: "trace" });
 
   test.beforeAll(() => ensureDefaultLayout(codetracerInstallDir));
   test.afterAll(() => restoreUserLayout());
 
-  test("BUILD tab present in bottom panel row", async ({ ctPage }) => {
-    // Wait for the Golden Layout to initialise.
-    await ctPage.waitForSelector(".lm_goldenlayout", { timeout: 15_000 });
+  test("BUILD tab present in bottom auto-hide strip", async ({ ctPage }) => {
+    const layout = new LayoutPage(ctPage);
+    await layout.waitForBaseComponentsLoaded();
+    await layout.waitForTraceLoaded();
 
-    // The BUILD tab should exist among the GL tab titles alongside
-    // EVENT LOG and TERMINAL OUTPUT.
-    const buildTab = ctPage.locator(".lm_tab .lm_title", {
+    // Wait for auto-hide bottom tabs to appear (they load after a delay).
+    await ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab").first().waitFor({ timeout: 10_000 });
+
+    // The BUILD tab should exist among the auto-hide bottom tabs.
+    const buildTab = ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab", {
       hasText: "BUILD",
     });
-    const present = await retry(
-      async () => {
-        const count = await buildTab.count();
-        return count > 0;
-      },
-      { maxAttempts: 30, delayMs: 1_000 },
-    ).then(() => true as const).catch(() => false);
+    await expect(buildTab).toHaveCount(1);
 
-    expect(present).toBe(true);
-
-    // Verify the sibling tabs are also present in the layout.
-    const eventLogTab = ctPage.locator(".lm_tab .lm_title", {
-      hasText: "EVENT LOG",
+    // Verify the sibling tabs are also present as auto-hide bottom tabs.
+    const problemsTab = ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab", {
+      hasText: "PROBLEMS",
     });
-    const terminalTab = ctPage.locator(".lm_tab .lm_title", {
-      hasText: "TERMINAL OUTPUT",
+    const searchTab = ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab", {
+      hasText: "SEARCH RESULTS",
     });
-    expect(await eventLogTab.count()).toBeGreaterThan(0);
-    expect(await terminalTab.count()).toBeGreaterThan(0);
+    await expect(problemsTab).toHaveCount(1);
+    await expect(searchTab).toHaveCount(1);
   });
 
   test("PROBLEMS tab present", async ({ ctPage }) => {
-    await ctPage.waitForSelector(".lm_goldenlayout", { timeout: 15_000 });
+    const layout = new LayoutPage(ctPage);
+    await layout.waitForBaseComponentsLoaded();
+    await layout.waitForTraceLoaded();
 
-    const problemsTab = ctPage.locator(".lm_tab .lm_title", {
+    await ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab").first().waitFor({ timeout: 10_000 });
+
+    const problemsTab = ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab", {
       hasText: "PROBLEMS",
     });
-    const present = await retry(
-      async () => {
-        const count = await problemsTab.count();
-        return count > 0;
-      },
-      { maxAttempts: 30, delayMs: 1_000 },
-    ).then(() => true as const).catch(() => false);
-
-    expect(present).toBe(true);
+    await expect(problemsTab).toHaveCount(1);
   });
 
   test("SEARCH RESULTS tab present", async ({ ctPage }) => {
-    await ctPage.waitForSelector(".lm_goldenlayout", { timeout: 15_000 });
+    const layout = new LayoutPage(ctPage);
+    await layout.waitForBaseComponentsLoaded();
+    await layout.waitForTraceLoaded();
 
-    const searchTab = ctPage.locator(".lm_tab .lm_title", {
+    await ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab").first().waitFor({ timeout: 10_000 });
+
+    const searchTab = ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab", {
       hasText: "SEARCH RESULTS",
     });
-    const present = await retry(
-      async () => {
-        const count = await searchTab.count();
-        return count > 0;
-      },
-      { maxAttempts: 30, delayMs: 1_000 },
-    ).then(() => true as const).catch(() => false);
-
-    expect(present).toBe(true);
+    await expect(searchTab).toHaveCount(1);
   });
 
   test("Build panel renders with header", async ({ ctPage }) => {
-    await ctPage.waitForSelector(".lm_goldenlayout", { timeout: 15_000 });
+    const layout = new LayoutPage(ctPage);
+    await layout.waitForBaseComponentsLoaded();
+    await layout.waitForTraceLoaded();
 
-    // Click the BUILD tab to make it the active panel.
-    const buildTab = ctPage.locator(".lm_tab .lm_title", {
+    // Wait for auto-hide bottom tabs to appear.
+    await ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab").first().waitFor({ timeout: 10_000 });
+
+    // Click the BUILD auto-hide tab to open the overlay.
+    const buildTab = ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab", {
       hasText: "BUILD",
     });
-    await retry(
-      async () => (await buildTab.count()) > 0,
-      { maxAttempts: 30, delayMs: 1_000 },
-    );
-    await buildTab.first().click();
+    await buildTab.click();
+    await wait(500);
 
-    // After clicking, the build panel (#build) should be visible.
-    const buildPanel = ctPage.locator("#build");
+    // The overlay should become visible.
+    const overlay = ctPage.locator("#auto-hide-overlay");
+    await expect(overlay).toHaveClass(/visible/, { timeout: 5_000 });
+
+    // After clicking, the build panel (#build) should be visible inside the overlay.
+    const buildPanel = ctPage.locator("#auto-hide-overlay-content #build");
     const visible = await retry(
       async () => {
         if ((await buildPanel.count()) === 0) return false;
@@ -109,31 +102,32 @@ test.describe("Build panel tabs in GL layout", () => {
     expect(visible).toBe(true);
 
     // The build panel should contain the header controls area.
-    const header = ctPage.locator(".build-header-controls");
+    const header = ctPage.locator("#auto-hide-overlay-content .build-header-controls");
     const headerPresent = (await header.count()) > 0;
     expect(headerPresent).toBe(true);
   });
 
   test("Problems panel renders empty state", async ({ ctPage }) => {
-    await ctPage.waitForSelector(".lm_goldenlayout", { timeout: 15_000 });
+    const layout = new LayoutPage(ctPage);
+    await layout.waitForBaseComponentsLoaded();
+    await layout.waitForTraceLoaded();
 
-    // Click the PROBLEMS tab to activate it.
-    const problemsTab = ctPage.locator(".lm_tab .lm_title", {
+    // Wait for auto-hide bottom tabs to appear.
+    await ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab").first().waitFor({ timeout: 10_000 });
+
+    // Click the PROBLEMS auto-hide tab to open the overlay.
+    const problemsTab = ctPage.locator(".auto-hide-bottom-tabs .auto-hide-strip-tab", {
       hasText: "PROBLEMS",
     });
-    await retry(
-      async () => (await problemsTab.count()) > 0,
-      { maxAttempts: 30, delayMs: 1_000 },
-    );
-    await problemsTab.first().click();
+    await problemsTab.click();
+    await wait(500);
 
-    // The problems panel should become visible.
-    // The ErrorsComponent renders `.problems-panel` inside `#errorsComponent-0`.
-    // Due to a timing issue with Karax renderer setup (the component's DOM
-    // element may not be attached when the initial windowSetTimeout fires),
-    // clicking the PROBLEMS tab may not immediately render the component.
-    // We verify the container is present and visible after the tab click.
-    const errorsContainer = ctPage.locator("#errorsComponent-0");
+    // The overlay should become visible.
+    const overlay = ctPage.locator("#auto-hide-overlay");
+    await expect(overlay).toHaveClass(/visible/, { timeout: 5_000 });
+
+    // The problems panel should become visible inside the overlay.
+    const errorsContainer = ctPage.locator("#auto-hide-overlay-content #errorsComponent-0");
     const containerVisible = await retry(
       async () => {
         if ((await errorsContainer.count()) === 0) return false;
@@ -148,7 +142,7 @@ test.describe("Build panel tabs in GL layout", () => {
     // build errors. If the Karax renderer has populated the container,
     // verify the empty state; otherwise the container being visible is
     // sufficient since the component initialises lazily.
-    const problemsPanel = ctPage.locator(".problems-panel");
+    const problemsPanel = ctPage.locator("#auto-hide-overlay-content .problems-panel");
     if ((await problemsPanel.count()) > 0) {
       const rows = problemsPanel.locator(".problems-row");
       const rowCount = await rows.count();
