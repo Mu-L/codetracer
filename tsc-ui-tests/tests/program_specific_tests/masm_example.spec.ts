@@ -31,6 +31,7 @@ import { StatusBar } from "../../page-objects/status_bar";
 import { StatePanel } from "../../page-objects/state";
 import { LayoutPage } from "../../page-objects/layout-page";
 import { retry } from "../../lib/retry-helpers";
+import { hasToolOnPath } from "../../lib/sibling-test-programs";
 
 // ---------------------------------------------------------------------------
 // Tool-availability guards
@@ -56,24 +57,22 @@ function hasMidenRecorder(): boolean {
 
 // Evaluated at collection time so skip decisions are instant.
 const midenRecorderAvailable = hasMidenRecorder();
-const midenPipelineAvailable = midenRecorderAvailable;
+// The Miden recorder bundles miden-assembly as a Rust library for MASM files,
+// but the full pipeline (especially Rust-via-midenc) needs the `miden` CLI.
+// Check for `miden` as the toolchain availability indicator.
+const midenToolchainAvailable = hasToolOnPath("miden");
+const midenPipelineAvailable = midenRecorderAvailable && midenToolchainAvailable;
 
 // ---------------------------------------------------------------------------
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
-// TODO(failing): All 8 UI tests fail with "Unexpected last line of ct record: error: recorder exited with 2 for LangMasm".
-//   The recorder binary (codetracer-miden-recorder) is on PATH and detected correctly, so the skip guard passes,
-//   but `ct record` fails because the Miden toolchain is not in the codetracer dev shell --
-//   it is only available in codetracer-miden-recorder's own dev shell.
-//   Hypothesis: The test fixture needs to run `ct record` inside `direnv exec ../codetracer-miden-recorder`
-//   so the Miden assembler is on PATH, or the recorder binary should be self-contained (bundling its toolchain).
 test.describe("masm_example — basic layout", () => {
   // Skip the entire suite when the Miden recorder pipeline is absent.
   // Remove this guard once `ct record <path>.masm` is integrated.
   test.skip(
     !midenPipelineAvailable,
-    "Miden recorder pipeline not available (need codetracer-miden-recorder)",
+    "Miden recorder pipeline not available (need codetracer-miden-recorder and miden on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -105,7 +104,7 @@ test.describe("masm_example — basic layout", () => {
 test.describe("masm_example — event log", () => {
   test.skip(
     !midenPipelineAvailable,
-    "Miden recorder pipeline not available (need codetracer-miden-recorder)",
+    "Miden recorder pipeline not available (need codetracer-miden-recorder and miden on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -133,7 +132,7 @@ test.describe("masm_example — event log", () => {
 test.describe("masm_example — state panel", () => {
   test.skip(
     !midenPipelineAvailable,
-    "Miden recorder pipeline not available (need codetracer-miden-recorder)",
+    "Miden recorder pipeline not available (need codetracer-miden-recorder and miden on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -171,7 +170,7 @@ test.describe("masm_example — state panel", () => {
 test.describe("masm_example — call trace", () => {
   test.skip(
     !midenPipelineAvailable,
-    "Miden recorder pipeline not available (need codetracer-miden-recorder)",
+    "Miden recorder pipeline not available (need codetracer-miden-recorder and miden on PATH)",
   );
 
   test.setTimeout(90_000);

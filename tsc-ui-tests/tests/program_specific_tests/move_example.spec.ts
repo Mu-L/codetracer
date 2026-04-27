@@ -31,6 +31,7 @@ import { StatusBar } from "../../page-objects/status_bar";
 import { StatePanel } from "../../page-objects/state";
 import { LayoutPage } from "../../page-objects/layout-page";
 import { retry } from "../../lib/retry-helpers";
+import { hasToolOnPath } from "../../lib/sibling-test-programs";
 
 // ---------------------------------------------------------------------------
 // Tool-availability guards
@@ -56,24 +57,21 @@ function hasMoveRecorder(): boolean {
 
 // Evaluated at collection time so skip decisions are instant.
 const moveRecorderAvailable = hasMoveRecorder();
-const movePipelineAvailable = moveRecorderAvailable;
+// The Move pipeline requires both the recorder binary and the `aptos` CLI
+// (or `sui` CLI) for compiling/replaying Move programs.
+const moveToolchainAvailable = hasToolOnPath("aptos") || hasToolOnPath("sui");
+const movePipelineAvailable = moveRecorderAvailable && moveToolchainAvailable;
 
 // ---------------------------------------------------------------------------
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
-// TODO(failing): All 8 UI tests fail with "Unexpected last line of ct record: error: recorder exited with 2 for LangMove".
-//   The recorder binary (codetracer-move-recorder) is on PATH and detected correctly, so the skip guard passes,
-//   but `ct record` fails because the Move toolchain is not in the codetracer dev shell --
-//   it is only available in codetracer-move-recorder's own dev shell.
-//   Hypothesis: The test fixture needs to run `ct record` inside `direnv exec ../codetracer-move-recorder`
-//   so the Move compiler is on PATH, or the recorder binary should be self-contained (bundling its toolchain).
 test.describe("move_example — basic layout", () => {
   // Skip the entire suite when the Move recorder pipeline is absent.
   // Remove this guard once `ct record <path>.move` is integrated.
   test.skip(
     !movePipelineAvailable,
-    "Move recorder pipeline not available (need codetracer-move-recorder)",
+    "Move recorder pipeline not available (need codetracer-move-recorder and aptos/sui on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -105,7 +103,7 @@ test.describe("move_example — basic layout", () => {
 test.describe("move_example — event log", () => {
   test.skip(
     !movePipelineAvailable,
-    "Move recorder pipeline not available (need codetracer-move-recorder)",
+    "Move recorder pipeline not available (need codetracer-move-recorder and aptos/sui on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -133,7 +131,7 @@ test.describe("move_example — event log", () => {
 test.describe("move_example — state panel", () => {
   test.skip(
     !movePipelineAvailable,
-    "Move recorder pipeline not available (need codetracer-move-recorder)",
+    "Move recorder pipeline not available (need codetracer-move-recorder and aptos/sui on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -170,7 +168,7 @@ test.describe("move_example — state panel", () => {
 test.describe("move_example — call trace", () => {
   test.skip(
     !movePipelineAvailable,
-    "Move recorder pipeline not available (need codetracer-move-recorder)",
+    "Move recorder pipeline not available (need codetracer-move-recorder and aptos/sui on PATH)",
   );
 
   test.setTimeout(90_000);

@@ -12,6 +12,7 @@
  * See: codetracer-specs/Testing/Test-Program-Layout.md
  */
 
+import * as childProcess from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -130,4 +131,23 @@ export function hasRecorderTestProgram(
   programPath: string,
 ): boolean {
   return resolveRecorderTestProgram(recorderName, programPath) !== null;
+}
+
+/**
+ * Returns true if the given tool is available on PATH.
+ *
+ * Uses `which` to locate the binary. Returns false when the tool is not
+ * found or `which` exits with a non-zero status.
+ */
+export function hasToolOnPath(tool: string): boolean {
+  try {
+    const result = childProcess.spawnSync("which", [tool], {
+      encoding: "utf-8",
+      timeout: 5_000,
+      stdio: "pipe",
+    });
+    return result.status === 0 && result.stdout.trim().length > 0;
+  } catch {
+    return false;
+  }
 }

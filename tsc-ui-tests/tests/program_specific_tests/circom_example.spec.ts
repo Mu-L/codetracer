@@ -31,7 +31,7 @@ import { StatusBar } from "../../page-objects/status_bar";
 import { StatePanel } from "../../page-objects/state";
 import { LayoutPage } from "../../page-objects/layout-page";
 import { retry } from "../../lib/retry-helpers";
-import { resolveRecorderTestProgram } from "../../lib/sibling-test-programs";
+import { resolveRecorderTestProgram, hasToolOnPath } from "../../lib/sibling-test-programs";
 
 // ---------------------------------------------------------------------------
 // Tool-availability guards
@@ -59,22 +59,19 @@ function hasCircomRecorder(): boolean {
 const circomRecorderAvailable = hasCircomRecorder();
 // Test program lives in the codetracer-circom-recorder sibling repo.
 const circomTestProgram = resolveRecorderTestProgram("circom", "circom/flow_test.circom");
-const circomPipelineAvailable = circomRecorderAvailable && circomTestProgram !== null;
+// The Circom pipeline requires the `circom` compiler in addition to the
+// recorder binary and test program.
+const circomToolchainAvailable = hasToolOnPath("circom");
+const circomPipelineAvailable = circomRecorderAvailable && circomTestProgram !== null && circomToolchainAvailable;
 
 // ---------------------------------------------------------------------------
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
-// TODO(failing): All 8 UI tests fail — recording succeeds but flow variable extraction finds nothing.
-//   The recorder binary (codetracer-circom-recorder) is on PATH and detected correctly, so the skip guard passes,
-//   but `ct record` fails because the Circom toolchain (circom compiler) is not in the codetracer dev shell --
-//   it is only available in codetracer-circom-recorder's own dev shell.
-//   Hypothesis: The test fixture needs to run `ct record` inside `direnv exec ../codetracer-circom-recorder`
-//   so the Circom compiler is on PATH, or the recorder binary should be self-contained (bundling its toolchain).
 test.describe("circom_example — basic layout", () => {
   test.skip(
     !circomPipelineAvailable,
-    "Circom recorder pipeline not available (need codetracer-circom-recorder)",
+    "Circom recorder pipeline not available (need codetracer-circom-recorder and circom on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -103,7 +100,7 @@ test.describe("circom_example — basic layout", () => {
 test.describe("circom_example — event log", () => {
   test.skip(
     !circomPipelineAvailable,
-    "Circom recorder pipeline not available (need codetracer-circom-recorder)",
+    "Circom recorder pipeline not available (need codetracer-circom-recorder and circom on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -130,7 +127,7 @@ test.describe("circom_example — event log", () => {
 test.describe("circom_example — state panel", () => {
   test.skip(
     !circomPipelineAvailable,
-    "Circom recorder pipeline not available (need codetracer-circom-recorder)",
+    "Circom recorder pipeline not available (need codetracer-circom-recorder and circom on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -164,7 +161,7 @@ test.describe("circom_example — state panel", () => {
 test.describe("circom_example — call trace", () => {
   test.skip(
     !circomPipelineAvailable,
-    "Circom recorder pipeline not available (need codetracer-circom-recorder)",
+    "Circom recorder pipeline not available (need codetracer-circom-recorder and circom on PATH)",
   );
 
   test.setTimeout(90_000);

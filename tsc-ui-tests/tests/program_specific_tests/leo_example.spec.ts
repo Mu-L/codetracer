@@ -31,7 +31,7 @@ import { StatusBar } from "../../page-objects/status_bar";
 import { StatePanel } from "../../page-objects/state";
 import { LayoutPage } from "../../page-objects/layout-page";
 import { retry } from "../../lib/retry-helpers";
-import { resolveRecorderTestProgram } from "../../lib/sibling-test-programs";
+import { resolveRecorderTestProgram, hasToolOnPath } from "../../lib/sibling-test-programs";
 
 // ---------------------------------------------------------------------------
 // Tool-availability guards
@@ -59,22 +59,19 @@ function hasLeoRecorder(): boolean {
 const leoRecorderAvailable = hasLeoRecorder();
 // Test program lives in the codetracer-leo-recorder sibling repo.
 const leoTestProgram = resolveRecorderTestProgram("leo", "leo/flow_test.leo");
-const leoPipelineAvailable = leoRecorderAvailable && leoTestProgram !== null;
+// The Leo pipeline requires the `leo` compiler in addition to the recorder
+// binary and test program.
+const leoToolchainAvailable = hasToolOnPath("leo");
+const leoPipelineAvailable = leoRecorderAvailable && leoTestProgram !== null && leoToolchainAvailable;
 
 // ---------------------------------------------------------------------------
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
-// TODO(failing): All 8 UI tests fail — recording succeeds but flow variable extraction finds nothing.
-//   The recorder binary (codetracer-leo-recorder) is on PATH and detected correctly, so the skip guard passes,
-//   but `ct record` fails because the Leo toolchain (leo compiler) is not in the codetracer dev shell --
-//   it is only available in codetracer-leo-recorder's own dev shell.
-//   Hypothesis: The test fixture needs to run `ct record` inside `direnv exec ../codetracer-leo-recorder`
-//   so the Leo compiler is on PATH, or the recorder binary should be self-contained (bundling its toolchain).
 test.describe("leo_example — basic layout", () => {
   test.skip(
     !leoPipelineAvailable,
-    "Leo recorder pipeline not available (need codetracer-leo-recorder)",
+    "Leo recorder pipeline not available (need codetracer-leo-recorder and leo on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -103,7 +100,7 @@ test.describe("leo_example — basic layout", () => {
 test.describe("leo_example — event log", () => {
   test.skip(
     !leoPipelineAvailable,
-    "Leo recorder pipeline not available (need codetracer-leo-recorder)",
+    "Leo recorder pipeline not available (need codetracer-leo-recorder and leo on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -130,7 +127,7 @@ test.describe("leo_example — event log", () => {
 test.describe("leo_example — state panel", () => {
   test.skip(
     !leoPipelineAvailable,
-    "Leo recorder pipeline not available (need codetracer-leo-recorder)",
+    "Leo recorder pipeline not available (need codetracer-leo-recorder and leo on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -164,7 +161,7 @@ test.describe("leo_example — state panel", () => {
 test.describe("leo_example — call trace", () => {
   test.skip(
     !leoPipelineAvailable,
-    "Leo recorder pipeline not available (need codetracer-leo-recorder)",
+    "Leo recorder pipeline not available (need codetracer-leo-recorder and leo on PATH)",
   );
 
   test.setTimeout(90_000);

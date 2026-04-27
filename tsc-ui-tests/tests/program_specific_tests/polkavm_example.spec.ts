@@ -31,7 +31,7 @@ import { StatusBar } from "../../page-objects/status_bar";
 import { StatePanel } from "../../page-objects/state";
 import { LayoutPage } from "../../page-objects/layout-page";
 import { retry } from "../../lib/retry-helpers";
-import { resolveRecorderTestProgram } from "../../lib/sibling-test-programs";
+import { resolveRecorderTestProgram, hasToolOnPath } from "../../lib/sibling-test-programs";
 
 // ---------------------------------------------------------------------------
 // Tool-availability guards
@@ -59,24 +59,20 @@ function hasPolkavmRecorder(): boolean {
 const polkavmRecorderAvailable = hasPolkavmRecorder();
 // Test program lives in the codetracer-polkavm-recorder sibling repo.
 const polkavmTestProgram = resolveRecorderTestProgram("polkavm", "rust/flow_test.rs");
-const polkavmPipelineAvailable = polkavmRecorderAvailable && polkavmTestProgram !== null;
+// The PolkaVM recorder bundles polkavm-linker as a Rust library, but compiling
+// Rust source to a PolkaVM blob requires the PolkaVM toolchain (`polkatool` or
+// a RISC-V cross-compilation target). Check for `polkatool` as the indicator.
+const polkavmToolchainAvailable = hasToolOnPath("polkatool");
+const polkavmPipelineAvailable = polkavmRecorderAvailable && polkavmTestProgram !== null && polkavmToolchainAvailable;
 
 // ---------------------------------------------------------------------------
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
-// TODO(failing): All 8 UI tests fail with "ct record failed".
-//   HEADLESS DAP FINDING: The PolkaVM recorder expects a pre-compiled program blob, not
-//   a .rs source file. Error: "failed to parse program blob: blob doesn't start with the
-//   expected magic bytes". The test harness passes test-programs/rust/flow_test.rs but the
-//   recorder's tracer.rs:45 expects a compiled PolkaVM binary blob.
-//   Hypothesis: The test harness needs a compilation step to build the .rs into a PolkaVM
-//   blob before recording. The recorder should either include a build step or the test
-//   program should be pre-compiled. Similar to the Solana issue (needs pre-built artifact).
 test.describe("polkavm_example — basic layout", () => {
   test.skip(
     !polkavmPipelineAvailable,
-    "PolkaVM recorder pipeline not available (need codetracer-polkavm-recorder)",
+    "PolkaVM recorder pipeline not available (need codetracer-polkavm-recorder and polkatool on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -105,7 +101,7 @@ test.describe("polkavm_example — basic layout", () => {
 test.describe("polkavm_example — event log", () => {
   test.skip(
     !polkavmPipelineAvailable,
-    "PolkaVM recorder pipeline not available (need codetracer-polkavm-recorder)",
+    "PolkaVM recorder pipeline not available (need codetracer-polkavm-recorder and polkatool on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -132,7 +128,7 @@ test.describe("polkavm_example — event log", () => {
 test.describe("polkavm_example — state panel", () => {
   test.skip(
     !polkavmPipelineAvailable,
-    "PolkaVM recorder pipeline not available (need codetracer-polkavm-recorder)",
+    "PolkaVM recorder pipeline not available (need codetracer-polkavm-recorder and polkatool on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -166,7 +162,7 @@ test.describe("polkavm_example — state panel", () => {
 test.describe("polkavm_example — call trace", () => {
   test.skip(
     !polkavmPipelineAvailable,
-    "PolkaVM recorder pipeline not available (need codetracer-polkavm-recorder)",
+    "PolkaVM recorder pipeline not available (need codetracer-polkavm-recorder and polkatool on PATH)",
   );
 
   test.setTimeout(90_000);

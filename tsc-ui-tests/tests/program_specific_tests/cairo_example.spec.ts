@@ -31,7 +31,7 @@ import { StatusBar } from "../../page-objects/status_bar";
 import { StatePanel } from "../../page-objects/state";
 import { LayoutPage } from "../../page-objects/layout-page";
 import { retry } from "../../lib/retry-helpers";
-import { resolveRecorderTestProgram } from "../../lib/sibling-test-programs";
+import { resolveRecorderTestProgram, hasToolOnPath } from "../../lib/sibling-test-programs";
 
 // ---------------------------------------------------------------------------
 // Tool-availability guards
@@ -59,24 +59,19 @@ function hasCairoRecorder(): boolean {
 const cairoRecorderAvailable = hasCairoRecorder();
 // Test program lives in the codetracer-cairo-recorder sibling repo.
 const cairoTestProgram = resolveRecorderTestProgram("cairo", "cairo/flow_test.cairo");
-const cairoPipelineAvailable = cairoRecorderAvailable && cairoTestProgram !== null;
+// The Cairo pipeline requires the `scarb` build tool (Cairo's package manager
+// and compiler frontend) in addition to the recorder binary and test program.
+const cairoToolchainAvailable = hasToolOnPath("scarb");
+const cairoPipelineAvailable = cairoRecorderAvailable && cairoTestProgram !== null && cairoToolchainAvailable;
 
 // ---------------------------------------------------------------------------
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
-// TODO(failing): All 8 UI tests fail — recording succeeds but flow variable extraction finds nothing.
-//   HEADLESS DAP FINDING: The cairo_flow_dap_variables test records a trace successfully from
-//   the cairo recorder's dev shell, but finds 0 of the expected variables (a, b, sum_val, doubled,
-//   final_result). The recording pipeline works but the flow data extraction fails.
-//   Hypothesis: The expr_loader (tree-sitter-based variable extraction) likely lacks a Cairo
-//   grammar. Without tree-sitter-cairo, it cannot parse .cairo files to identify variable names.
-//   Fix: add tree-sitter-cairo to the db-backend dependencies and add Cairo handling in
-//   expr_loader.rs, or use the trace's own variable data if the recorder emits it.
 test.describe("cairo_example — basic layout", () => {
   test.skip(
     !cairoPipelineAvailable,
-    "Cairo recorder pipeline not available (need codetracer-cairo-recorder)",
+    "Cairo recorder pipeline not available (need codetracer-cairo-recorder and scarb on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -105,7 +100,7 @@ test.describe("cairo_example — basic layout", () => {
 test.describe("cairo_example — event log", () => {
   test.skip(
     !cairoPipelineAvailable,
-    "Cairo recorder pipeline not available (need codetracer-cairo-recorder)",
+    "Cairo recorder pipeline not available (need codetracer-cairo-recorder and scarb on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -132,7 +127,7 @@ test.describe("cairo_example — event log", () => {
 test.describe("cairo_example — state panel", () => {
   test.skip(
     !cairoPipelineAvailable,
-    "Cairo recorder pipeline not available (need codetracer-cairo-recorder)",
+    "Cairo recorder pipeline not available (need codetracer-cairo-recorder and scarb on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -166,7 +161,7 @@ test.describe("cairo_example — state panel", () => {
 test.describe("cairo_example — call trace", () => {
   test.skip(
     !cairoPipelineAvailable,
-    "Cairo recorder pipeline not available (need codetracer-cairo-recorder)",
+    "Cairo recorder pipeline not available (need codetracer-cairo-recorder and scarb on PATH)",
   );
 
   test.setTimeout(90_000);

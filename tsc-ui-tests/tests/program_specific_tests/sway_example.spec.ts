@@ -31,6 +31,7 @@ import { StatusBar } from "../../page-objects/status_bar";
 import { StatePanel } from "../../page-objects/state";
 import { LayoutPage } from "../../page-objects/layout-page";
 import { retry } from "../../lib/retry-helpers";
+import { hasToolOnPath } from "../../lib/sibling-test-programs";
 
 // ---------------------------------------------------------------------------
 // Tool-availability guards
@@ -56,24 +57,22 @@ function hasFuelRecorder(): boolean {
 
 // Evaluated at collection time so skip decisions are instant.
 const fuelRecorderAvailable = hasFuelRecorder();
-const fuelPipelineAvailable = fuelRecorderAvailable;
+// The Sway/Fuel pipeline requires both the recorder binary and the `forc`
+// compiler. The recorder is typically built from the sibling repo, but `forc`
+// lives in that repo's dev shell and is not available in codetracer's shell.
+const fuelToolchainAvailable = hasToolOnPath("forc");
+const fuelPipelineAvailable = fuelRecorderAvailable && fuelToolchainAvailable;
 
 // ---------------------------------------------------------------------------
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
-// TODO(failing): All 8 UI tests fail with "Unexpected last line of ct record: error: recorder exited with 2 for LangSway".
-//   The recorder binary (codetracer-fuel-recorder) is on PATH and detected correctly, so the skip guard passes,
-//   but `ct record` fails because the Sway/Fuel toolchain (forc compiler) is not in the codetracer dev shell --
-//   it is only available in codetracer-fuel-recorder's own dev shell.
-//   Hypothesis: The test fixture needs to run `ct record` inside `direnv exec ../codetracer-fuel-recorder`
-//   so the Sway compiler is on PATH, or the recorder binary should be self-contained (bundling its toolchain).
 test.describe("sway_example — basic layout", () => {
   // Skip the entire suite when the Fuel recorder pipeline is absent.
   // Remove this guard once `ct record <path>.sw` is integrated.
   test.skip(
     !fuelPipelineAvailable,
-    "Fuel recorder pipeline not available (need codetracer-fuel-recorder)",
+    "Fuel recorder pipeline not available (need codetracer-fuel-recorder and forc on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -105,7 +104,7 @@ test.describe("sway_example — basic layout", () => {
 test.describe("sway_example — event log", () => {
   test.skip(
     !fuelPipelineAvailable,
-    "Fuel recorder pipeline not available (need codetracer-fuel-recorder)",
+    "Fuel recorder pipeline not available (need codetracer-fuel-recorder and forc on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -133,7 +132,7 @@ test.describe("sway_example — event log", () => {
 test.describe("sway_example — state panel", () => {
   test.skip(
     !fuelPipelineAvailable,
-    "Fuel recorder pipeline not available (need codetracer-fuel-recorder)",
+    "Fuel recorder pipeline not available (need codetracer-fuel-recorder and forc on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -170,7 +169,7 @@ test.describe("sway_example — state panel", () => {
 test.describe("sway_example — call trace", () => {
   test.skip(
     !fuelPipelineAvailable,
-    "Fuel recorder pipeline not available (need codetracer-fuel-recorder)",
+    "Fuel recorder pipeline not available (need codetracer-fuel-recorder and forc on PATH)",
   );
 
   test.setTimeout(90_000);

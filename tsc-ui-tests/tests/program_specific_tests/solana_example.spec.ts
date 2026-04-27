@@ -31,6 +31,7 @@ import { StatusBar } from "../../page-objects/status_bar";
 import { StatePanel } from "../../page-objects/state";
 import { LayoutPage } from "../../page-objects/layout-page";
 import { retry } from "../../lib/retry-helpers";
+import { hasToolOnPath } from "../../lib/sibling-test-programs";
 
 // ---------------------------------------------------------------------------
 // Tool-availability guards
@@ -56,26 +57,21 @@ function hasSolanaRecorder(): boolean {
 
 // Evaluated at collection time so skip decisions are instant.
 const solanaRecorderAvailable = hasSolanaRecorder();
-const solanaPipelineAvailable = solanaRecorderAvailable;
+// The Solana pipeline requires both the recorder binary and `cargo-build-sbf`
+// to compile Solana programs into the SBF ELF format the recorder expects.
+const solanaToolchainAvailable = hasToolOnPath("cargo-build-sbf");
+const solanaPipelineAvailable = solanaRecorderAvailable && solanaToolchainAvailable;
 
 // ---------------------------------------------------------------------------
 // Test suite: basic layout (title, entry status)
 // ---------------------------------------------------------------------------
 
-// TODO(failing): All 8 UI tests fail with "ct record failed".
-//   HEADLESS DAP FINDING: The Solana recorder expects a pre-compiled ELF binary (.so),
-//   not a .rs source file. Error: "invalid ELF file: ...solana_flow_test.rs — file does
-//   not start with the ELF magic number (\x7fELF)". The test harness passes the .rs source
-//   but the recorder's tracer.rs:171 expects an ELF program blob to execute in the SBF VM.
-//   Hypothesis: The test harness needs a compilation step (cargo-build-sbf) before recording,
-//   or the recorder itself should compile the source. The test program needs to be pre-built
-//   into an .so file and the harness should pass that path instead of the .rs source.
 test.describe("solana_example — basic layout", () => {
   // Skip the entire suite when the Solana recorder pipeline is absent.
   // Remove this guard once `ct record <path>.rs` (Solana) is integrated.
   test.skip(
     !solanaPipelineAvailable,
-    "Solana recorder pipeline not available (need codetracer-solana-recorder)",
+    "Solana recorder pipeline not available (need codetracer-solana-recorder and cargo-build-sbf on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -107,7 +103,7 @@ test.describe("solana_example — basic layout", () => {
 test.describe("solana_example — event log", () => {
   test.skip(
     !solanaPipelineAvailable,
-    "Solana recorder pipeline not available (need codetracer-solana-recorder)",
+    "Solana recorder pipeline not available (need codetracer-solana-recorder and cargo-build-sbf on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -135,7 +131,7 @@ test.describe("solana_example — event log", () => {
 test.describe("solana_example — state panel", () => {
   test.skip(
     !solanaPipelineAvailable,
-    "Solana recorder pipeline not available (need codetracer-solana-recorder)",
+    "Solana recorder pipeline not available (need codetracer-solana-recorder and cargo-build-sbf on PATH)",
   );
 
   test.setTimeout(90_000);
@@ -172,7 +168,7 @@ test.describe("solana_example — state panel", () => {
 test.describe("solana_example — call trace", () => {
   test.skip(
     !solanaPipelineAvailable,
-    "Solana recorder pipeline not available (need codetracer-solana-recorder)",
+    "Solana recorder pipeline not available (need codetracer-solana-recorder and cargo-build-sbf on PATH)",
   );
 
   test.setTimeout(90_000);
