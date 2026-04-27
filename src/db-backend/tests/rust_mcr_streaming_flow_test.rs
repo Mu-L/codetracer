@@ -41,8 +41,7 @@ fn rust_mcr_streaming_flow_variables_and_values() {
     let db_backend = find_db_backend();
 
     // --- locate the Rust test program ---
-    let source_path =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test-programs/rust/rust_flow_test.rs");
+    let source_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test-programs/rust/rust_flow_test.rs");
     assert!(
         source_path.exists(),
         "Rust test program not found at {}",
@@ -51,13 +50,9 @@ fn rust_mcr_streaming_flow_variables_and_values() {
 
     // --- record under MCR ---
     let recording =
-        TestRecording::create_mcr(&source_path, Language::Rust, "mcr", &ct_rr_support)
-            .expect("MCR recording failed");
+        TestRecording::create_mcr(&source_path, Language::Rust, "mcr", &ct_rr_support).expect("MCR recording failed");
 
-    println!(
-        "MCR trace recorded at: {}",
-        recording.trace_dir.display()
-    );
+    println!("MCR trace recorded at: {}", recording.trace_dir.display());
 
     // --- configure expected flow data ---
     // Breakpoint at line 12 (`final_result`) inside calculate_sum().
@@ -82,8 +77,7 @@ fn rust_mcr_streaming_flow_variables_and_values() {
     };
 
     // --- run the DAP flow test ---
-    let mut runner = FlowTestRunner::new(&db_backend, &recording.trace_dir)
-        .expect("DAP init failed for MCR trace");
+    let mut runner = FlowTestRunner::new(&db_backend, &recording.trace_dir).expect("DAP init failed for MCR trace");
     runner
         .run_and_verify(&config)
         .expect("Rust MCR streaming flow test failed");

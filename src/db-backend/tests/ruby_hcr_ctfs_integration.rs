@@ -16,10 +16,7 @@
 mod test_harness;
 
 use std::path::PathBuf;
-use test_harness::{
-    find_ruby_recorder, DapStdioTestClient, FlowData,
-    Language, TestRecording,
-};
+use test_harness::{find_ruby_recorder, DapStdioTestClient, FlowData, Language, TestRecording};
 
 /// Line number in main.rb where `value = compute(counter)` lives.
 const COMPUTE_CALL_LINE: u32 = 20;
@@ -48,24 +45,17 @@ fn prepare_hcr_workdir() -> Result<(PathBuf, PathBuf), String> {
         src_dir.display()
     );
 
-    let temp_dir = std::env::temp_dir().join(format!(
-        "hcr_flow_test_rb_{}",
-        std::process::id()
-    ));
+    let temp_dir = std::env::temp_dir().join(format!("hcr_flow_test_rb_{}", std::process::id()));
     if temp_dir.exists() {
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
-    std::fs::create_dir_all(&temp_dir)
-        .map_err(|e| format!("failed to create temp dir: {}", e))?;
+    std::fs::create_dir_all(&temp_dir).map_err(|e| format!("failed to create temp dir: {}", e))?;
 
     // Copy all files from the source directory
-    for entry in std::fs::read_dir(&src_dir)
-        .map_err(|e| format!("failed to read source dir: {}", e))?
-    {
+    for entry in std::fs::read_dir(&src_dir).map_err(|e| format!("failed to read source dir: {}", e))? {
         let entry = entry.map_err(|e| format!("dir entry error: {}", e))?;
         let dest = temp_dir.join(entry.file_name());
-        std::fs::copy(entry.path(), &dest)
-            .map_err(|e| format!("failed to copy {}: {}", entry.path().display(), e))?;
+        std::fs::copy(entry.path(), &dest).map_err(|e| format!("failed to copy {}: {}", entry.path().display(), e))?;
     }
 
     let main_rb = temp_dir.join("main.rb");
@@ -82,12 +72,10 @@ fn record_hcr_trace(
     workdir: &std::path::Path,
     version_label: &str,
 ) -> Result<TestRecording, String> {
-    let recorder = find_ruby_recorder()
-        .ok_or("Ruby recorder not found")?;
+    let recorder = find_ruby_recorder().ok_or("Ruby recorder not found")?;
 
     let trace_dir = workdir.join("trace");
-    std::fs::create_dir_all(&trace_dir)
-        .map_err(|e| format!("failed to create trace dir: {}", e))?;
+    std::fs::create_dir_all(&trace_dir).map_err(|e| format!("failed to create trace dir: {}", e))?;
 
     let trace_path = trace_dir.join("trace.json");
     let output = std::process::Command::new("ruby")
@@ -114,8 +102,7 @@ fn record_hcr_trace(
     // Copy main.rb into trace_dir so the DAP server can resolve it
     let dest = trace_dir.join("main.rb");
     if !dest.exists() {
-        std::fs::copy(main_rb, &dest)
-            .map_err(|e| format!("failed to copy main.rb to trace dir: {}", e))?;
+        std::fs::copy(main_rb, &dest).map_err(|e| format!("failed to copy main.rb to trace dir: {}", e))?;
     }
 
     // Verify trace files were produced
@@ -129,10 +116,7 @@ fn record_hcr_trace(
     let trace_json = trace_dir.join("trace.json");
     let trace_bin = trace_dir.join("trace.bin");
     if !trace_json.exists() && !trace_bin.exists() && !has_ct {
-        return Err(format!(
-            "no trace file produced in {}",
-            trace_dir.display()
-        ));
+        return Err(format!("no trace file produced in {}", trace_dir.display()));
     }
 
     let trace_metadata = trace_dir.join("trace_metadata.json");
@@ -159,7 +143,7 @@ fn extract_var_value(flow: &FlowData, var_name: &str) -> Option<i64> {
     flow.values
         .get(var_name)
         .filter(|v| FlowData::is_value_loaded(v))
-        .and_then(|v| FlowData::extract_int_value(v))
+        .and_then(FlowData::extract_int_value)
 }
 
 #[test]
@@ -179,9 +163,7 @@ fn test_ruby_hcr_ctfs_integration() {
         .output()
         .ok()
         .and_then(|o| String::from_utf8(o.stdout).ok())
-        .and_then(|s| {
-            s.split_whitespace().nth(1).map(|v| v.to_string())
-        })
+        .and_then(|s| s.split_whitespace().nth(1).map(|v| v.to_string()))
         .unwrap_or_else(|| "unknown".to_string());
 
     // -- Prepare workdir and record --
@@ -189,8 +171,7 @@ fn test_ruby_hcr_ctfs_integration() {
     println!("HCR workdir: {}", workdir.display());
 
     println!("Recording HCR trace (ctfs)...");
-    let recording =
-        record_hcr_trace(&main_rb, &workdir, &version_label).expect("failed to record HCR trace");
+    let recording = record_hcr_trace(&main_rb, &workdir, &version_label).expect("failed to record HCR trace");
     println!("Trace dir: {}", recording.trace_dir.display());
 
     // -- Start DAP session --
@@ -206,11 +187,7 @@ fn test_ruby_hcr_ctfs_integration() {
     // server's path lookup matches the relative path stored in the trace.
     let bp_source = recording.trace_dir.join("main.rb");
 
-    println!(
-        "Setting breakpoint at {}:{}...",
-        bp_source.display(),
-        COMPUTE_CALL_LINE
-    );
+    println!("Setting breakpoint at {}:{}...", bp_source.display(), COMPUTE_CALL_LINE);
     client
         .set_breakpoint(&bp_source, COMPUTE_CALL_LINE)
         .expect("failed to set breakpoint");
@@ -224,19 +201,14 @@ fn test_ruby_hcr_ctfs_integration() {
             .continue_to_breakpoint()
             .expect("failed to continue to breakpoint");
         if hit == 3 {
-            println!(
-                "Pre-reload stop at {}:{} (step 3)",
-                location.path, location.line
-            );
+            println!("Pre-reload stop at {}:{} (step 3)", location.path, location.line);
             pre_reload_location = Some(location);
         }
     }
 
     let pre_loc = pre_reload_location.unwrap();
     println!("Requesting pre-reload flow data...");
-    let pre_flow = client
-        .request_flow(pre_loc)
-        .expect("failed to request pre-reload flow");
+    let pre_flow = client.request_flow(pre_loc).expect("failed to request pre-reload flow");
 
     // Verify pre-reload value: compute(3) = 6 (v1: n*2)
     println!("Pre-reload flow has {} steps", pre_flow.steps.len());
@@ -246,10 +218,7 @@ fn test_ruby_hcr_ctfs_integration() {
             "pre-reload: expected value={} (v1: 3*2), got {}",
             PRE_RELOAD_EXPECTED_VALUE, actual
         );
-        println!(
-            "Pre-reload check PASSED: value = {} (v1: 3*2)",
-            actual
-        );
+        println!("Pre-reload check PASSED: value = {} (v1: 3*2)", actual);
     } else {
         println!(
             "Pre-reload: 'value' not found in flow data (variables: {:?}). \
@@ -257,11 +226,7 @@ fn test_ruby_hcr_ctfs_integration() {
             pre_flow.all_variables
         );
         if let Some(counter_val) = extract_var_value(&pre_flow, "counter") {
-            assert_eq!(
-                counter_val, 3,
-                "pre-reload: expected counter=3, got {}",
-                counter_val
-            );
+            assert_eq!(counter_val, 3, "pre-reload: expected counter=3, got {}", counter_val);
             println!("Pre-reload fallback PASSED: counter = 3");
         }
     }
@@ -269,18 +234,12 @@ fn test_ruby_hcr_ctfs_integration() {
     // -- Post-reload: continue to step 9 (hit #9 total, so 6 more hits) --
     let mut post_reload_location = None;
     for hit in 4..=9 {
-        println!(
-            "Continuing to breakpoint (hit {}/9 for post-reload)...",
-            hit
-        );
+        println!("Continuing to breakpoint (hit {}/9 for post-reload)...", hit);
         let location = client
             .continue_to_breakpoint()
             .expect("failed to continue to breakpoint");
         if hit == 9 {
-            println!(
-                "Post-reload stop at {}:{} (step 9)",
-                location.path, location.line
-            );
+            println!("Post-reload stop at {}:{} (step 9)", location.path, location.line);
             post_reload_location = Some(location);
         }
     }
@@ -299,10 +258,7 @@ fn test_ruby_hcr_ctfs_integration() {
             "post-reload: expected value={} (v2: 9*3), got {}",
             POST_RELOAD_EXPECTED_VALUE, actual
         );
-        println!(
-            "Post-reload check PASSED: value = {} (v2: 9*3)",
-            actual
-        );
+        println!("Post-reload check PASSED: value = {} (v2: 9*3)", actual);
     } else {
         println!(
             "Post-reload: 'value' not found in flow data (variables: {:?}). \
@@ -310,11 +266,7 @@ fn test_ruby_hcr_ctfs_integration() {
             post_flow.all_variables
         );
         if let Some(counter_val) = extract_var_value(&post_flow, "counter") {
-            assert_eq!(
-                counter_val, 9,
-                "post-reload: expected counter=9, got {}",
-                counter_val
-            );
+            assert_eq!(counter_val, 9, "post-reload: expected counter=9, got {}", counter_val);
             println!("Post-reload fallback PASSED: counter = 9");
         }
     }

@@ -375,12 +375,7 @@ impl TestRecording {
                     }
                 }
             }
-            found.ok_or_else(|| {
-                format!(
-                    "MCR record did not produce a .ct trace file in {}",
-                    temp_dir.display()
-                )
-            })?
+            found.ok_or_else(|| format!("MCR record did not produce a .ct trace file in {}", temp_dir.display()))?
         };
 
         Ok(TestRecording {

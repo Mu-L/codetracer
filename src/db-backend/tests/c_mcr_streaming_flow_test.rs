@@ -41,8 +41,7 @@ fn c_mcr_streaming_flow_variables_and_values() {
     let db_backend = find_db_backend();
 
     // --- locate the C test program ---
-    let source_path =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test-programs/c/c_flow_test.c");
+    let source_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test-programs/c/c_flow_test.c");
     assert!(
         source_path.exists(),
         "C test program not found at {}",
@@ -50,13 +49,10 @@ fn c_mcr_streaming_flow_variables_and_values() {
     );
 
     // --- record under MCR ---
-    let recording = TestRecording::create_mcr(&source_path, Language::C, "mcr", &ct_rr_support)
-        .expect("MCR recording failed");
+    let recording =
+        TestRecording::create_mcr(&source_path, Language::C, "mcr", &ct_rr_support).expect("MCR recording failed");
 
-    println!(
-        "MCR trace recorded at: {}",
-        recording.trace_dir.display()
-    );
+    println!("MCR trace recorded at: {}", recording.trace_dir.display());
 
     // --- configure expected flow data ---
     // Breakpoint at line 31 (`return final_result;`) inside calculate_sum().
@@ -88,8 +84,7 @@ fn c_mcr_streaming_flow_variables_and_values() {
     // FlowTestRunner::new() calls prepare_trace_folder which detects the .ct
     // extension and passes it directly to db-backend. db-backend then routes
     // the MCR trace to ct-native-replay's replay-worker.
-    let mut runner = FlowTestRunner::new(&db_backend, &recording.trace_dir)
-        .expect("DAP init failed for MCR trace");
+    let mut runner = FlowTestRunner::new(&db_backend, &recording.trace_dir).expect("DAP init failed for MCR trace");
     runner
         .run_and_verify(&config)
         .expect("C MCR streaming flow test failed");

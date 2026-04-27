@@ -41,8 +41,7 @@ fn nim_mcr_streaming_flow_variables_and_values() {
     let db_backend = find_db_backend();
 
     // --- locate the Nim test program ---
-    let source_path =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test-programs/nim/nim_flow_test.nim");
+    let source_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test-programs/nim/nim_flow_test.nim");
     assert!(
         source_path.exists(),
         "Nim test program not found at {}",
@@ -51,13 +50,9 @@ fn nim_mcr_streaming_flow_variables_and_values() {
 
     // --- record under MCR ---
     let recording =
-        TestRecording::create_mcr(&source_path, Language::Nim, "mcr", &ct_rr_support)
-            .expect("MCR recording failed");
+        TestRecording::create_mcr(&source_path, Language::Nim, "mcr", &ct_rr_support).expect("MCR recording failed");
 
-    println!(
-        "MCR trace recorded at: {}",
-        recording.trace_dir.display()
-    );
+    println!("MCR trace recorded at: {}", recording.trace_dir.display());
 
     // --- configure expected flow data ---
     // Breakpoint at line 13 (`return final`) inside calculateSum().
@@ -82,8 +77,7 @@ fn nim_mcr_streaming_flow_variables_and_values() {
     };
 
     // --- run the DAP flow test ---
-    let mut runner = FlowTestRunner::new(&db_backend, &recording.trace_dir)
-        .expect("DAP init failed for MCR trace");
+    let mut runner = FlowTestRunner::new(&db_backend, &recording.trace_dir).expect("DAP init failed for MCR trace");
     runner
         .run_and_verify(&config)
         .expect("Nim MCR streaming flow test failed");

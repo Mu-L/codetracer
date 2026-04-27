@@ -164,10 +164,25 @@ fn check_equal_values(actual: &Value, expected: &Value) {
 }
 
 fn load_db_for_trace(path: &Path) -> Db {
-    let trace_file = path.join("trace.json");
+    // Auto-detect the trace file format: binary (trace.bin) takes priority
+    // over JSON (trace.json), matching the convention used elsewhere in the
+    // codebase (see lib.rs, diff.rs, dap_server.rs).
+    let (trace_file, file_format) = if path.join("trace.bin").exists() {
+        (
+            path.join("trace.bin"),
+            codetracer_trace_reader::TraceEventsFileFormat::Binary,
+        )
+    } else if path.join("trace.json").exists() {
+        (
+            path.join("trace.json"),
+            codetracer_trace_reader::TraceEventsFileFormat::Json,
+        )
+    } else {
+        panic!("neither trace.bin nor trace.json found in {}", path.display());
+    };
+
     let trace_metadata_file = path.join("trace_metadata.json");
-    let trace = load_trace_data(&trace_file, codetracer_trace_reader::TraceEventsFileFormat::Json)
-        .expect("expected that it can load the trace file");
+    let trace = load_trace_data(&trace_file, file_format).expect("expected that it can load the trace file");
     let trace_metadata =
         load_trace_metadata(&trace_metadata_file).expect("expected that it can load the trace metadata file");
     let mut db = Db::new(&trace_metadata.workdir);
