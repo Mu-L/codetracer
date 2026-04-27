@@ -137,13 +137,38 @@ fn record_hcr_trace(
     })
 }
 
-/// Extract the integer value of a variable named `var_name` from flow data.
-/// Returns `None` if the variable is not found or its value is not loaded.
-fn extract_var_value(flow: &FlowData, var_name: &str) -> Option<i64> {
-    flow.values
-        .get(var_name)
-        .filter(|v| FlowData::is_value_loaded(v))
-        .and_then(FlowData::extract_int_value)
+/// Extract the integer value of a variable named `var_name` from a specific
+/// iteration of a flow line.
+///
+/// Flow data returns ALL executions of the requested line across the entire
+/// trace. The variable may appear in `before_values` at multiple lines per
+/// iteration (e.g., before the assignment line, on the assignment line, and on
+/// subsequent lines in the same block).
+///
+/// To get the value at a specific iteration we:
+///   1. Filter steps to the target `line_number` (the breakpoint line).
+///   2. Take the `occurrence`-th step (1-indexed) on that line.
+///   3. Read `var_name` from its `before_values`.
+fn extract_var_value_at_line_occurrence(
+    flow: &FlowData,
+    var_name: &str,
+    line_number: i64,
+    occurrence: usize,
+) -> Option<i64> {
+    let mut count = 0;
+    for step in &flow.steps {
+        if step.line == line_number {
+            if let Some(val) = step.before_values.get(var_name) {
+                if FlowData::is_value_loaded(val) {
+                    count += 1;
+                    if count == occurrence {
+                        return FlowData::extract_int_value(val);
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 #[test]
@@ -211,8 +236,12 @@ fn test_ruby_hcr_ctfs_integration() {
     let pre_flow = client.request_flow(pre_loc).expect("failed to request pre-reload flow");
 
     // Verify pre-reload value: compute(3) = 6 (v1: n*2)
+    //
+    // Flow data returns ALL executions of this line (all 12 iterations).
+    // We need to find the step where value=6 (the 3rd iteration).
     println!("Pre-reload flow has {} steps", pre_flow.steps.len());
-    if let Some(actual) = extract_var_value(&pre_flow, "value") {
+    let bp_line = COMPUTE_CALL_LINE as i64;
+    if let Some(actual) = extract_var_value_at_line_occurrence(&pre_flow, "value", bp_line, 3) {
         assert_eq!(
             actual, PRE_RELOAD_EXPECTED_VALUE,
             "pre-reload: expected value={} (v1: 3*2), got {}",
@@ -221,11 +250,11 @@ fn test_ruby_hcr_ctfs_integration() {
         println!("Pre-reload check PASSED: value = {} (v1: 3*2)", actual);
     } else {
         println!(
-            "Pre-reload: 'value' not found in flow data (variables: {:?}). \
+            "Pre-reload: 'value' not found at line {} occurrence 3 (variables: {:?}). \
              Checking 'counter' as fallback...",
-            pre_flow.all_variables
+            bp_line, pre_flow.all_variables
         );
-        if let Some(counter_val) = extract_var_value(&pre_flow, "counter") {
+        if let Some(counter_val) = extract_var_value_at_line_occurrence(&pre_flow, "counter", bp_line, 3) {
             assert_eq!(counter_val, 3, "pre-reload: expected counter=3, got {}", counter_val);
             println!("Pre-reload fallback PASSED: counter = 3");
         }
@@ -251,8 +280,11 @@ fn test_ruby_hcr_ctfs_integration() {
         .expect("failed to request post-reload flow");
 
     // Verify post-reload value: compute(9) = 27 (v2: n*3)
+    //
+    // The 9th occurrence of `value` in the flow steps corresponds to
+    // breakpoint hit #9 (counter=9, post-reload).
     println!("Post-reload flow has {} steps", post_flow.steps.len());
-    if let Some(actual) = extract_var_value(&post_flow, "value") {
+    if let Some(actual) = extract_var_value_at_line_occurrence(&post_flow, "value", bp_line, 9) {
         assert_eq!(
             actual, POST_RELOAD_EXPECTED_VALUE,
             "post-reload: expected value={} (v2: 9*3), got {}",
@@ -261,11 +293,11 @@ fn test_ruby_hcr_ctfs_integration() {
         println!("Post-reload check PASSED: value = {} (v2: 9*3)", actual);
     } else {
         println!(
-            "Post-reload: 'value' not found in flow data (variables: {:?}). \
+            "Post-reload: 'value' not found at line {} occurrence 9 (variables: {:?}). \
              Checking 'counter' as fallback...",
-            post_flow.all_variables
+            bp_line, post_flow.all_variables
         );
-        if let Some(counter_val) = extract_var_value(&post_flow, "counter") {
+        if let Some(counter_val) = extract_var_value_at_line_occurrence(&post_flow, "counter", bp_line, 9) {
             assert_eq!(counter_val, 9, "post-reload: expected counter=9, got {}", counter_val);
             println!("Post-reload fallback PASSED: counter = 9");
         }
