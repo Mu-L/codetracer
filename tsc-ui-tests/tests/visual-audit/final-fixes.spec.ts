@@ -520,6 +520,117 @@ test.describe("Visual Review — All Components", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Collapsed mode screens (11-13)
+// ---------------------------------------------------------------------------
+
+test.describe("Visual Review — Collapsed Mode", () => {
+  test.setTimeout(180_000);
+  test.use({ sourcePath: "py_console_logs/main.py", launchMode: "trace" });
+
+  test.beforeAll(() => {
+    ensureDefaultLayout(codetracerInstallDir);
+  });
+  test.afterAll(() => {
+    restoreUserLayout();
+  });
+
+  test("11-13 Collapsed strip, icon zone, and side-edge tabs", async ({
+    ctPage,
+  }) => {
+    const layout = new LayoutPage(ctPage);
+    await layout.waitForBaseComponentsLoaded();
+    await layout.waitForTraceLoaded();
+    await wait(1000);
+
+    // Pin FILESYSTEM and VCS to the left edge.
+    await ctPage.evaluate(() => {
+      const d = (window as any).data;
+      const s = d.sessions[d.activeSessionIndex];
+      // Pin FILESYSTEM (Content=9) to Left (edge=0)
+      const fsComp = s.ui.componentMapping[9]?.[0];
+      if (fsComp?.layoutItem && (window as any).__ctPinPanel) {
+        (window as any).__ctPinPanel(fsComp.layoutItem, 0);
+      }
+    });
+    await wait(1000);
+    await ctPage.evaluate(() => {
+      const d = (window as any).data;
+      const s = d.sessions[d.activeSessionIndex];
+      // Pin VCS (Content=41) to Left (edge=0)
+      const vcsComp = s.ui.componentMapping[41]?.[0];
+      if (vcsComp?.layoutItem && (window as any).__ctPinPanel) {
+        (window as any).__ctPinPanel(vcsComp.layoutItem, 0);
+      }
+    });
+    await wait(1000);
+
+    // Force collapsed mode on (bypasses maximize detection).
+    await ctPage.evaluate(() => {
+      if ((window as any).__ctForceCollapsedMode) {
+        (window as any).__ctForceCollapsedMode(true);
+      }
+    });
+    await wait(1000);
+
+    // Screenshot 11: Collapsed 1px strip with accent color.
+    const leftStrip = ctPage.locator("#auto-hide-strip-left");
+    const hasCollapsed = await leftStrip
+      .evaluate((el) => el.classList.contains("collapsed-mode"))
+      .catch(() => false);
+    console.log(`Left strip has collapsed-mode class: ${hasCollapsed}`);
+
+    await ctPage.screenshot({ path: `${DIR}/11-collapsed-strip.png` });
+
+    // Screenshot 12: Status bar with icon zone.
+    // The icon zone should appear with panel icons for FILESYSTEM and VCS.
+    const iconZone = ctPage.locator(".collapsed-icon-zone.has-icons");
+    const iconCount = await iconZone.locator(".collapsed-icon").count()
+      .catch(() => 0);
+    console.log(`Collapsed icon zone: ${iconCount} icons`);
+
+    // Take a focused screenshot of just the status bar area.
+    await ctPage.screenshot({ path: `${DIR}/12-collapsed-icon-zone.png` });
+
+    // Screenshot 13: Open overlay via clicking a status bar icon.
+    // The icon has a Karax click handler that calls showOverlay.
+    const firstIcon = ctPage.locator(".collapsed-icon").first();
+    if ((await firstIcon.count()) > 0) {
+      await firstIcon.click({ force: true });
+      await wait(OVERLAY_SETTLE_MS);
+    }
+
+    // Check overlay state.
+    const overlayIsVisible = await ctPage
+      .locator("#auto-hide-overlay")
+      .evaluate((el) => el.classList.contains("visible"))
+      .catch(() => false);
+    console.log(`Overlay visible: ${overlayIsVisible}`);
+
+    // Check for side-edge tabs in the overlay.
+    const sideTabCount = await ctPage.evaluate(() => {
+      const container = document.getElementById("auto-hide-overlay-side-tabs");
+      return {
+        count: container?.querySelectorAll(".overlay-side-tab").length ?? 0,
+        html: (container?.innerHTML ?? "").slice(0, 500),
+      };
+    });
+    console.log(`Side-edge tabs:`, JSON.stringify(sideTabCount));
+
+    await ctPage.screenshot({ path: `${DIR}/13-collapsed-overlay-side-tabs.png` });
+
+    // Clean up: dismiss overlay and disable collapsed mode.
+    await ctPage.keyboard.press("Escape");
+    await wait(500);
+    await ctPage.evaluate(() => {
+      if ((window as any).__ctForceCollapsedMode) {
+        (window as any).__ctForceCollapsedMode(false);
+      }
+    });
+    await wait(500);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // DeepReview mode (screen 10)
 // ---------------------------------------------------------------------------
 
