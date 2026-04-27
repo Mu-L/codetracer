@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import * as path from "node:path";
 import { defineConfig } from "@playwright/test";
 
 /**
@@ -6,7 +7,10 @@ import { defineConfig } from "@playwright/test";
  *
  * Priority:
  *   1. PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH env var (explicit override)
- *   2. PLAYWRIGHT_BROWSERS_PATH env var (Playwright's own bundled browser dir)
+ *   2. PLAYWRIGHT_BROWSERS_PATH env var — dynamically scan for the
+ *      installed chromium revision rather than relying on Playwright's
+ *      hard-coded revision number (which can drift from the nix-provided
+ *      browser package).
  *   3. System chromium at /run/current-system/sw/bin/chromium (NixOS)
  *   4. undefined — let Playwright use its default discovery
  */
@@ -14,10 +18,43 @@ function resolveChromiumExecutable(): string | undefined {
   if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
     return process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
   }
-  // If Playwright's bundled browsers are configured, let it handle discovery.
-  if (process.env.PLAYWRIGHT_BROWSERS_PATH) {
-    return undefined;
+
+  // Dynamically discover the chromium binary inside PLAYWRIGHT_BROWSERS_PATH.
+  // Playwright's built-in discovery hard-codes a browser revision number that
+  // may not match the revision provided by the nix dev shell. By scanning the
+  // directory ourselves we are resilient to version drift.
+  const browsersDir = process.env.PLAYWRIGHT_BROWSERS_PATH;
+  if (browsersDir && fs.existsSync(browsersDir)) {
+    const chromiumDir = fs
+      .readdirSync(browsersDir)
+      .filter(
+        (d: string) => d.startsWith("chromium-") && !d.includes("headless"),
+      )
+      .sort()
+      .pop();
+    if (chromiumDir) {
+      const chromiumBase = path.join(browsersDir, chromiumDir);
+      if (process.platform === "win32") {
+        const chromeSubdir = fs
+          .readdirSync(chromiumBase)
+          .find((d: string) => d.startsWith("chrome-win"));
+        if (chromeSubdir) {
+          return path.join(chromiumBase, chromeSubdir, "chrome.exe");
+        }
+      } else {
+        // Linux (and fallback for other Unix-like systems).
+        // Newer Playwright revisions use "chrome-linux64" instead of
+        // "chrome-linux", so accept any "chrome-linux*" prefix.
+        const chromeSubdir = fs
+          .readdirSync(chromiumBase)
+          .find((d: string) => d.startsWith("chrome-linux"));
+        if (chromeSubdir) {
+          return path.join(chromiumBase, chromeSubdir, "chrome");
+        }
+      }
+    }
   }
+
   // NixOS / nix-managed system: use the system chromium.
   const nixChromium = "/run/current-system/sw/bin/chromium";
   if (fs.existsSync(nixChromium)) {
