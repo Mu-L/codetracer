@@ -19,9 +19,13 @@
   -webkit-app-region no-drag
   overflow hidden
 
-  // Hide the tab bar when there is only a single session.
+  // When there is only a single session, keep the tab bar in the DOM but
+  // hide the individual tab labels (the lone tab just shows the trace path
+  // and wastes horizontal space).  The "+" button remains visible so the
+  // user can open additional sessions at any time.
   &.single-session
-    display none
+    .session-tab
+      display none
 
 .session-tab
   display flex

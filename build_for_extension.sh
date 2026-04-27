@@ -3,7 +3,7 @@
 # build_for_extension.sh <ui_js_output_path> <ct_vscode_js_output_path> <db_backend_path>
 set -e
 
-nim1 \
+nim \
 	-d:chronicles_enabled=off \
 	-d:ctRenderer \
 	-d:ctInExtension \
@@ -13,7 +13,7 @@ nim1 \
 	--out:"$1" \
 	js src/frontend/ui_js.nim
 
-nim1 \
+nim \
 	-d:ctInExtension \
 	-d:ctInCentralExtensionContext \
 	--out:"$2" \

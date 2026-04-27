@@ -17,6 +17,11 @@ import {
 
 const EVENT_LOG_LOADING_RETRY_ATTEMPTS = 60;
 
+// The editor component only appears after the backend sends `ct/complete-move`
+// (backend startup -> DAP handshake -> run-to-entry), which can take >10s.
+// Other components load from GoldenLayout immediately and use the default 10 attempts.
+const EDITOR_COMPONENT_RETRY_ATTEMPTS = 60;
+
 /**
  * Main layout page that contains all pane tabs, debug buttons, and menu elements.
  *
@@ -38,6 +43,7 @@ export class LayoutPage extends BasePage {
   private async waitForComponent(
     componentName: string,
     selector: string,
+    retryOpts?: { maxAttempts?: number; delayMs?: number },
   ): Promise<void> {
     const locator = this.page.locator(selector);
     try {
@@ -54,7 +60,7 @@ export class LayoutPage extends BasePage {
           `LayoutPage: component '${componentName}' ready (count=${count}, firstVisible=${visible})`,
         );
         return true;
-      });
+      }, retryOpts);
     } catch (ex) {
       const count = await locator.count();
       const candidateIds: string[] = await this.page.evaluate(() =>
@@ -126,7 +132,9 @@ export class LayoutPage extends BasePage {
   }
 
   async waitForEditorLoaded(): Promise<void> {
-    await this.waitForComponent("editor", "div[id^='editorComponent']");
+    await this.waitForComponent("editor", "div[id^='editorComponent']", {
+      maxAttempts: EDITOR_COMPONENT_RETRY_ATTEMPTS,
+    });
   }
 
   async waitForScratchpadLoaded(): Promise<void> {

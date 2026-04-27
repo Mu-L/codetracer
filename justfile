@@ -10,7 +10,7 @@ build-docs:
   mdbook build
 
 build-ui-js output:
-  nim1 \
+  nim \
     -d:chronicles_enabled=off \
     -d:ctRenderer \
     -d:ctInExtension \
