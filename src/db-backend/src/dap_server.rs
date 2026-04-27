@@ -426,10 +426,18 @@ fn setup(
     // duration code copied from
     // https://rust-lang-nursery.github.io/rust-cookbook/datetime/duration.html
     if !is_ttd_run_trace && !is_mcr_trace {
-        if let (Ok(meta), Ok(trace)) = (
-            load_trace_metadata(&metadata_path),
-            load_trace_data(&trace_path, trace_file_format),
-        ) {
+        let meta_result = load_trace_metadata(&metadata_path);
+        let trace_result = load_trace_data(&trace_path, trace_file_format);
+        if let Err(ref e) = meta_result {
+            info!("load_trace_metadata failed for {:?}: {}", metadata_path, e);
+        }
+        if let Err(ref e) = trace_result {
+            info!(
+                "load_trace_data failed for {:?} (format {:?}): {}",
+                trace_path, trace_file_format, e
+            );
+        }
+        if let (Ok(meta), Ok(trace)) = (meta_result, trace_result) {
             let mut db = Db::new(&meta.workdir);
             let mut proc = TraceProcessor::new(&mut db);
             proc.postprocess(&trace)?;
