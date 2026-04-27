@@ -55,6 +55,36 @@
   border-left: 1px solid PRIMARY_BASE
 
 // ---------------------------------------------------------------------------
+// Collapsed mode — 1px accent line when maximized on bounded screen edge.
+// ---------------------------------------------------------------------------
+
+#auto-hide-strip-left.collapsed-mode,
+#auto-hide-strip-right.collapsed-mode
+  width: 3px
+  min-width: 3px
+  max-width: 3px
+  flex-basis: 3px
+  padding-top: 0
+  background-color: #3a5070  // Subtle blue accent — distinct from panel bg
+  cursor: pointer
+  overflow: hidden
+
+#auto-hide-strip-left.collapsed-mode
+  border-right: none
+
+#auto-hide-strip-right.collapsed-mode
+  border-left: none
+
+// The collapsed strip line is the clickable target inside the strip.
+.collapsed-strip-line
+  width: 100%
+  height: 100%
+  cursor: pointer
+
+  &:hover
+    background-color: #4a6080  // Slightly lighter on hover
+
+// ---------------------------------------------------------------------------
 // Bottom auto-hide tabs — rendered inside #status-base (the footer).
 // Styled as inline status-bar items on the left side.
 // ---------------------------------------------------------------------------
@@ -242,3 +272,96 @@
   flex: 1
   overflow: auto
   padding: 0
+
+// ---------------------------------------------------------------------------
+// Collapsed-mode icon zone — rendered in the status bar.
+// Uses the same accent color as the collapsed strip line.
+// ---------------------------------------------------------------------------
+
+.collapsed-icon-zone
+  display: none
+
+.collapsed-icon-zone.has-icons
+  display: flex
+  flex-direction: row
+  align-items: center
+  gap: 2px
+  margin-left: 4px
+  padding: 0 6px
+  background-color: #3a5070  // Same accent as collapsed strip
+  border-radius: 3px
+  height: 22px
+
+.collapsed-icon
+  font-size: 14px
+  cursor: pointer
+  padding: 1px 3px
+  border-radius: 2px
+  user-select: none
+  transition: background-color 150ms ease
+
+  &:hover
+    background-color: #4a6080
+
+// ---------------------------------------------------------------------------
+// Side-edge tabs — VS Studio style, inside the overlay.
+// Rendered as a vertical strip between the screen edge and overlay content.
+// ---------------------------------------------------------------------------
+
+.overlay-side-tabs
+  display: flex
+  flex-direction: column
+  flex-shrink: 0
+  background-color: HEADER_PANEL_BACKGROUND_COLOR
+  padding-top: 4px
+  gap: 2px
+  overflow: hidden
+
+  &.hidden
+    display: none
+
+// Left-edge tabs: between screen left edge and overlay content.
+.overlay-side-tabs.side-tabs-left
+  width: 28px
+  min-width: 28px
+  border-right: 1px solid PRIMARY_BASE
+  order: -1  // Place before overlay content in flex row
+
+// Right-edge tabs: between overlay content and screen right edge.
+.overlay-side-tabs.side-tabs-right
+  width: 28px
+  min-width: 28px
+  border-left: 1px solid PRIMARY_BASE
+  order: 1  // Place after overlay content in flex row
+
+.overlay-side-tab
+  writing-mode: vertical-lr
+  text-orientation: mixed
+  transform: rotate(180deg)
+  font-family: "SpaceGrotesk"
+  font-size: 12px
+  font-weight: 600
+  color: HEADER_PANEL_COLOR
+  background-color: HEADER_PANEL_INACTIVE_COLOR
+  cursor: pointer
+  padding: 3px 6px
+  margin: 2px
+  max-height: 120px
+  white-space: nowrap
+  overflow: hidden
+  text-overflow: ellipsis
+  user-select: none
+  transition: background-color 150ms ease
+
+  &:hover
+    background-color: HEADER_ACTIVE_PANEL_BACKGROUND_COLOR
+    color: HEADER_ACTIVE_PANEL_TEXT_COLOR
+
+  &.active
+    background-color: HEADER_ACTIVE_PANEL_BACKGROUND_COLOR
+    color: HEADER_ACTIVE_PANEL_TEXT_COLOR
+
+// Right-edge tabs read top-to-bottom (no rotation).
+.side-tabs-right .overlay-side-tab
+  writing-mode: vertical-rl
+  transform: none

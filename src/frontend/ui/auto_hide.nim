@@ -73,6 +73,15 @@ type
     activeOverlay*: AutoHidePanel  ## Currently shown overlay, or nil
     lastActivePanel*: AutoHidePanel  ## Last panel shown in overlay (survives hideOverlay)
     overlayVisible*: bool
+    ## Collapsed mode: when true, side strips render as 1px accent lines
+    ## instead of 28px text-label strips.  Activated when the window is
+    ## maximized and the edge is bounded (no adjacent monitor).  Can be
+    ## forced on via __ctForceCollapsedMode for E2E tests.
+    collapsedMode*: bool
+    ## Per-edge bounded flags (true = screen boundary, no adjacent monitor).
+    ## Only meaningful when collapsedMode is true.
+    leftBounded*: bool
+    rightBounded*: bool
     ## Callback to re-render strips after mutations.
     onChanged*: proc()
     ## Callback fired after a panel's overlay is shown (with the panel
@@ -493,6 +502,37 @@ proc showOverlay*(panel: AutoHidePanel) =
 # Strip rendering (called from layout.nim or a dedicated Karax renderer)
 # ---------------------------------------------------------------------------
 
+proc contentIconJs(content: Content): cstring {.importjs: """
+  (function(c) {
+    switch(c) {
+      case 9:  return '\u{1F4C1}';  // FILESYSTEM - FILE FOLDER
+      case 6:  return '\u{1F50D}';  // CALLTRACE - MAGNIFYING GLASS
+      case 8:  return '\u{1F4CB}';  // EVENT LOG - CLIPBOARD
+      case 4:  return '\u{1F522}';  // STATE - INPUT NUMBERS
+      case 11: return '\u2699';     // BUILD - GEAR
+      case 21: return '\u26A0';     // PROBLEMS - WARNING SIGN
+      case 20: return '\u{1F50E}';  // SEARCH RESULTS - MAG GLASS RIGHT
+      case 24: return '\u{1F5A5}';  // TERMINAL - DESKTOP COMPUTER
+      case 25: return '\u{1F4BB}';  // SHELL - LAPTOP
+      default: return '\u25A3';     // Generic - SQUARE WITH DOT
+    }
+  })(#)
+""".}
+
+proc contentIcon*(content: Content): cstring =
+  ## Return a Unicode icon character for a Content type, used in the
+  ## status bar icon zone when strips are in collapsed mode.
+  contentIconJs(content)
+
+proc isEdgeCollapsed*(edge: AutoHideEdge): bool =
+  ## Returns true when the given edge should render in collapsed (1px) mode.
+  if autoHideState.isNil or not autoHideState.collapsedMode:
+    return false
+  case edge
+  of Left:   autoHideState.leftBounded
+  of Right:  autoHideState.rightBounded
+  of Bottom: false  # Bottom uses status bar icons, not 1px strip
+
 proc makeStripTabClickHandler(panel: AutoHidePanel): proc(e: Event, tg: VNode) =
   ## Create a click handler for a strip tab that captures the panel by value.
   ## This is a separate proc to avoid the classic JS closure-in-a-loop bug:
@@ -527,14 +567,18 @@ proc renderAutoHideSideStrip(edge: AutoHideEdge): VNode =
   ## Render a side strip's content. The parent element's "has-tabs" class
   ## is toggled by updating the DOM directly after Karax renders, so the
   ## CSS width transitions between 0 (empty) and 28px (has tabs).
+  ##
+  ## In collapsed mode (maximized window, bounded edge), the strip renders
+  ## as a 1px accent-colored line instead of the 28px text-label strip.
+  ## The "collapsed-mode" class is toggled alongside "has-tabs".
   let tabs = renderStripTabsInto(edge)
+  let collapsed = isEdgeCollapsed(edge)
   let stripId = case edge
     of Left:   cstring"auto-hide-strip-left"
     of Right:  cstring"auto-hide-strip-right"
     of Bottom: cstring""
 
-  # After rendering, toggle the "has-tabs" class on the parent strip element.
-  # We use a short timeout to run after Karax has committed the VDOM to the DOM.
+  # After rendering, toggle CSS classes on the parent strip element.
   discard windowSetTimeout(proc() =
     let el = document.getElementById(stripId)
     if not el.isNil:
@@ -542,11 +586,35 @@ proc renderAutoHideSideStrip(edge: AutoHideEdge): VNode =
         el.classList.add(cstring"has-tabs")
       else:
         el.classList.remove(cstring"has-tabs")
+      # Toggle collapsed-mode class for 1px rendering.
+      if collapsed and tabs.len > 0:
+        el.classList.add(cstring"collapsed-mode")
+      else:
+        el.classList.remove(cstring"collapsed-mode")
   , 0)
 
-  buildHtml(tdiv):
-    for tab in tabs:
-      tab
+  if collapsed:
+    # In collapsed mode, the strip is a 1px accent line — no text tabs.
+    # Clicking the line opens the overlay with the last-focused panel.
+    let panels = if not autoHideState.isNil:
+        autoHideState.panelsForEdge(edge)
+      else:
+        @[]
+    let handler = proc(e: Event, tg: VNode) =
+      if panels.len > 0:
+        # Show the last active panel for this edge, or the first panel.
+        let target = if not autoHideState.isNil and
+                        not autoHideState.lastActivePanel.isNil and
+                        autoHideState.lastActivePanel.edge == edge:
+            autoHideState.lastActivePanel
+          else:
+            panels[0]
+        showOverlay(target)
+    buildHtml(tdiv(class = "collapsed-strip-line", onclick = handler))
+  else:
+    buildHtml(tdiv):
+      for tab in tabs:
+        tab
 
 proc renderAutoHideLeftStrip*(): VNode =
   ## Karax renderer for the left side strip.
@@ -563,6 +631,78 @@ proc renderBottomAutoHideTabs*(): VNode =
   buildHtml(tdiv(class = "auto-hide-bottom-tabs")):
     for tab in tabs:
       tab
+
+proc makeIconClickHandler(panel: AutoHidePanel): proc(e: Event, tg: VNode) =
+  ## Create a click handler for a status bar icon that opens the overlay
+  ## focused on the specific panel (not the last-active one).
+  result = proc(e: Event, tg: VNode) =
+    showOverlay(panel)
+
+proc renderCollapsedIconZone*(): VNode =
+  ## Render the status bar icon zone for collapsed-mode side panels.
+  ## Shows one icon per panel pinned to collapsed edges.  The zone uses
+  ## the same accent color as the collapsed strip line.
+  ## Returns an empty div when collapsed mode is inactive.
+  if autoHideState.isNil or not autoHideState.collapsedMode:
+    return buildHtml(tdiv(class = "collapsed-icon-zone"))
+
+  var icons: seq[VNode] = @[]
+  for panel in autoHideState.panels:
+    if panel.edge == Bottom:
+      continue  # Bottom panels have their own text-label tabs
+    if not isEdgeCollapsed(panel.edge):
+      continue  # Only show icons for collapsed edges
+    let handler = makeIconClickHandler(panel)
+    let icon = contentIcon(panel.content)
+    let node = buildHtml(
+      tdiv(
+        class = "collapsed-icon",
+        onclick = handler,
+        title = panel.title
+      )
+    ):
+      text icon
+    icons.add(node)
+
+  buildHtml(tdiv(class = "collapsed-icon-zone" & (if icons.len > 0: " has-icons" else: ""))):
+    for ic in icons:
+      ic
+
+proc makeSideEdgeTabClickHandler(panel: AutoHidePanel): proc(e: Event, tg: VNode) =
+  ## Click handler for a side-edge tab inside the overlay.
+  result = proc(e: Event, tg: VNode) =
+    showOverlay(panel)
+
+proc renderOverlaySideEdgeTabs*(): VNode =
+  ## Render VS Studio-style side-edge tabs inside the overlay.
+  ## These are vertical tabs drawn on the edge of the overlay, showing
+  ## all panels pinned to the same edge as the currently active overlay.
+  ## Only rendered when collapsed mode is active.
+  if autoHideState.isNil or
+     not autoHideState.collapsedMode or
+     autoHideState.activeOverlay.isNil:
+    return buildHtml(tdiv(class = "overlay-side-tabs hidden"))
+
+  let activeEdge = autoHideState.activeOverlay.edge
+  if not isEdgeCollapsed(activeEdge):
+    return buildHtml(tdiv(class = "overlay-side-tabs hidden"))
+
+  let siblings = autoHideState.panelsForEdge(activeEdge)
+  let edgeClass = case activeEdge
+    of Left:  " side-tabs-left"
+    of Right: " side-tabs-right"
+    of Bottom: ""
+
+  buildHtml(tdiv(class = cstring("overlay-side-tabs" & edgeClass))):
+    for panel in siblings:
+      let isActive = panel == autoHideState.activeOverlay
+      let activeClass = if isActive: " active" else: ""
+      let handler = makeSideEdgeTabClickHandler(panel)
+      tdiv(
+        class = cstring("overlay-side-tab" & activeClass),
+        onclick = handler
+      ):
+        text panel.title
 
 # ---------------------------------------------------------------------------
 # Serialisation for layout save/load

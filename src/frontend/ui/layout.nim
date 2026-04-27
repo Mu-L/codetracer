@@ -744,6 +744,36 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig,
   proc createNewSessionHelper() =
     createNewSession(data)
 
+  # Force collapsed mode on/off for E2E tests.  Bypasses maximize
+  # detection so tests can capture collapsed-mode screenshots without
+  # actually maximizing the window.
+  proc forceCollapsedMode(enable: bool) =
+    if autoHideState.isNil:
+      initAutoHideState()
+    autoHideState.collapsedMode = enable
+    autoHideState.leftBounded = enable
+    autoHideState.rightBounded = enable
+    if not autoHideState.onChanged.isNil:
+      autoHideState.onChanged()
+
+  # Render side-edge tabs into the overlay's side-tab container.
+  # Called from onPanelShown and whenever the overlay edge changes.
+  proc renderOverlaySideTabs() =
+    let container = kdom.document.getElementById(cstring"auto-hide-overlay-side-tabs")
+    if container.isNil:
+      return
+    container.innerHTML = cstring""
+    let vnode = renderOverlaySideEdgeTabs()
+    let dom = vnodeToDom(vnode, KaraxInstance())
+    container.appendChild(dom)
+
+  # Wire onPanelShown to also render side-edge tabs.
+  let originalOnPanelShown = autoHideState.onPanelShown
+  autoHideState.onPanelShown = proc(panel: AutoHidePanel) =
+    if not originalOnPanelShown.isNil:
+      originalOnPanelShown(panel)
+    renderOverlaySideTabs()
+
   {.emit: """
     window.__ctRedrawAll = function() {
       `redrawAll`();
@@ -757,6 +787,46 @@ proc initLayout*(initialLayout: GoldenLayoutResolvedConfig,
     window.__ctCreateNewSession = function() {
       `createNewSessionHelper`();
     };
+    window.__ctForceCollapsedMode = function(enable) {
+      `forceCollapsedMode`(enable);
+    };
+  """.}
+
+  # ---------------------------------------------------------------------------
+  # Maximize detection for collapsed-mode auto-hide strips.
+  # When the window is maximized and an edge is bounded (no adjacent monitor),
+  # side strips collapse to a 1px accent line.
+  # ---------------------------------------------------------------------------
+  proc updateCollapsedMode() =
+    ## Check if the window is maximized and update collapsed mode.
+    ## Each edge is evaluated independently for adjacent monitors.
+    ## This is a simplified check — full multi-monitor detection requires
+    ## Electron's screen API (done via IPC in main process).
+    ## For now, we use a heuristic: if outerWidth ~= screen.availWidth
+    ## and outerHeight ~= screen.availHeight, the window is maximized.
+    {.emit: """
+      var isMax = (window.outerWidth >= screen.availWidth - 8) &&
+                  (window.outerHeight >= screen.availHeight - 8);
+    """.}
+    var isMax {.importc, nodecl.}: bool
+    if not autoHideState.isNil:
+      let wasCollapsed = autoHideState.collapsedMode
+      autoHideState.collapsedMode = isMax
+      # Simplified bounded-edge detection: when maximized, assume both
+      # left and right edges are bounded.  Full multi-monitor detection
+      # via Electron's screen API is a future enhancement.
+      autoHideState.leftBounded = isMax
+      autoHideState.rightBounded = isMax
+      if wasCollapsed != isMax:
+        if not autoHideState.onChanged.isNil:
+          autoHideState.onChanged()
+
+  # Check on initial load and on window resize/maximize.
+  discard windowSetTimeout(proc() = updateCollapsedMode(), 1000)
+  {.emit: """
+    window.addEventListener('resize', function() {
+      `updateCollapsedMode`();
+    });
   """.}
 
   layout.on(cstring"stateChanged") do (event: js):

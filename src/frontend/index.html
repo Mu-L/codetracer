@@ -84,7 +84,12 @@
                 <button id="auto-hide-overlay-close-btn" title="Close overlay">&#x2715;</button>
               </div>
             </div>
-            <div id="auto-hide-overlay-content"></div>
+            <!-- Side-edge tabs + content in a flex row so tabs sit
+                 between screen edge and panel content (VS Studio style) -->
+            <div id="auto-hide-overlay-body" style="display:flex; flex:1; min-height:0; overflow:hidden;">
+              <div id="auto-hide-overlay-side-tabs"></div>
+              <div id="auto-hide-overlay-content"></div>
+            </div>
           </div>
 
           <!-- Backdrop behind the overlay for click-to-dismiss -->

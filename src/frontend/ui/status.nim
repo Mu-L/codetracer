@@ -538,6 +538,7 @@ method render*(self: StatusComponent): VNode =
           notificationView(self, self.notifications[^1])
     tdiv(id = "status-base"):
       fileInfoView(self)
+      renderCollapsedIconZone()
       renderBottomAutoHideTabs()
       # TODO: Find another place for these
       # toggleInlineValues(self)
