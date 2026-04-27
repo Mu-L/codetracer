@@ -186,7 +186,7 @@ proc pinPanel*(
   }
 
   # Extract the display title from the GL tab header element, which
-  # contains the user-visible label (e.g. "FILESYSTEM") set by
+  # contains the user-visible label (e.g. "FILES") set by
   # layout.nim's tab creation logic. Falls back to the component
   # state label if the tab element is not available.
   let title = block:
@@ -544,7 +544,7 @@ proc showOverlay*(panel: AutoHidePanel) =
 proc contentIconJs(content: Content): cstring {.importjs: """
   (function(c) {
     switch(c) {
-      case 9:  return '\u{1F4C1}';  // FILESYSTEM - FILE FOLDER
+      case 9:  return '\u{1F4C1}';  // FILES - FILE FOLDER
       case 6:  return '\u{1F50D}';  // CALLTRACE - MAGNIFYING GLASS
       case 8:  return '\u{1F4CB}';  // EVENT LOG - CLIPBOARD
       case 4:  return '\u{1F522}';  // STATE - INPUT NUMBERS

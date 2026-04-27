@@ -70,6 +70,8 @@ proc convertTabTitle(content: cstring): cstring =
     return cstring"PROBLEMS"
   if content == cstring"VCS":
     return cstring"VCS"
+  if content == cstring"Filesystem":
+    return cstring"FILES"
 
   var title: cstring = ""
   var label = content
