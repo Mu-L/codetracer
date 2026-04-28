@@ -430,8 +430,8 @@ proc renderOption(self: WelcomeScreenComponent, option: WelcomeScreenOption): VN
     nameClass = nameClass & " hovered"
 
   buildHtml(
-    tdiv(
-      class = containerClass,
+    button(
+      class = "ct-button-sm-tertiary",
       onmousedown = proc(ev: Event, tg: VNode) =
         ev.preventDefault(),
       onmouseup = proc(ev: Event, tg: VNode) =
@@ -441,11 +441,10 @@ proc renderOption(self: WelcomeScreenComponent, option: WelcomeScreenOption): VN
         ev.preventDefault()
         option.command(),
       onmouseover = proc = option.hovered = true,
+      disabled = toDisabled(option.inactive),
       onmouseleave = proc = option.hovered = false
     )
-  ):
-    tdiv(class = nameClass):
-      text &"{option.name}"
+  ): text &"{option.name}"
 
 proc renderStartOptions(self: WelcomeScreenComponent): VNode =
   buildHtml(
@@ -461,26 +460,44 @@ proc renderFormCheckboxRow(
   label: cstring,
   condition: bool,
   handler: proc,
-  disabled: bool = true
+  disabled: bool = false
 ): VNode =
+  let checkmarkState =
+    if condition:
+      "checked"
+    else:
+      "unchecked"
+
   buildHtml(
     tdiv(class = "new-record-form-row")
   ):
     tdiv(class = "new-record-input-row"):
-      input(
-        name = parameterName,
-        `type` = "checkbox",
-        class = "checkbox",
-        checked = toChecked(condition),
-        value = parameterName
-      )
-      span(
-        class = "checkmark",
-        onclick = proc =
-          handler()
-      )
-      label(`for` = parameterName):
-        text &"{label}"
+      label(
+        `for` = parameterName,
+        class = "ct-checkmark-field",
+        `data-disabled` = toDisabled(disabled)
+      ):
+        input(
+          id = parameterName,
+          name = parameterName,
+          `type` = "checkbox",
+          class = "ct-checkmark-input",
+          checked = toChecked(condition),
+          value = parameterName,
+          disabled = toDisabled(disabled),
+          onchange = proc (e: Event, et: VNode) =
+            handler()
+        )
+
+        span(
+          class = "ct-checkmark",
+          `data-state` = checkmarkState,
+          `data-size` = "sm",
+          `aria-hidden` = "true"
+        )
+
+        span(class = "ct-checkmark-label"):
+          text &"{label}"
 
 proc renderInputRow(
   parameterName: cstring,
@@ -495,10 +512,11 @@ proc renderInputRow(
   hasButton: bool = true,
   validInput: bool = true
 ): VNode =
-  var class: cstring = ""
+  var inputClass: cstring = "ct-input-form ct-fill-available"
+  var buttonClass: cstring = "ct-button-sm-tertiary"
 
-  if disabled: class = class & "disabled"
-  if not validInput: class = class & " invalid"
+  if hasButton: inputClass = inputClass & " ct-mr-2 ct-input-search-image"
+  if not validInput: inputClass = inputClass & " invalid"
 
   buildHtml(
     tdiv(class = "new-record-form-row")
@@ -507,8 +525,9 @@ proc renderInputRow(
       input(
         `type` = "text",
         id = inputText,
-        class = class,
+        class = inputClass,
         name = parameterName,
+        disabled = toDisabled(disabled),
         value = inputText,
         onchange = inputHandler,
         onkeydown = enterHandler,
@@ -516,7 +535,8 @@ proc renderInputRow(
       )
       if hasButton:
         button(
-          class = class,
+          class = buttonClass,
+          disabled = toDisabled(disabled),
           onclick = proc(ev: Event, tg: VNode) =
             ev.preventDefault()
             buttonHandler(ev,tg)
@@ -610,7 +630,7 @@ proc onlineFormView(self: WelcomeScreenComponent): VNode =
     renderRecordResult(self, self.newDownload.status, true)
     tdiv(class = "new-record-form-row"):
       button(
-        class = "cancel-button",
+        class = "ct-button-sm-tertiary ct-mr-4",
         onclick = proc(ev: Event, tg: VNode) =
           ev.preventDefault()
           self.welcomeScreen = true
@@ -619,7 +639,7 @@ proc onlineFormView(self: WelcomeScreenComponent): VNode =
       ):
         text "Back"
       button(
-        class = "confirmation-button",
+        class = "ct-button-sm-primary",
         onclick = handler
       ):
         text "Download"
@@ -704,7 +724,7 @@ proc newRecordFormView(self: WelcomeScreenComponent): VNode =
     of RecordInit, RecordError:
       tdiv(class = "new-record-form-row"):
         button(
-          class = "cancel-button",
+          class = "ct-button-sm-tertiary mr-2",
           onclick = proc(ev: Event, tg: VNode) =
             ev.preventDefault()
             self.welcomeScreen = true
@@ -713,7 +733,7 @@ proc newRecordFormView(self: WelcomeScreenComponent): VNode =
         ):
           text "Back"
         button(
-          class = "confirmation-button",
+          class = "ct-button-sm-primary",
           onclick = proc(ev: Event, tg: VNode) =
             ev.preventDefault()
             self.newRecord.status.kind = InProgress
@@ -734,7 +754,7 @@ proc newRecordFormView(self: WelcomeScreenComponent): VNode =
     of InProgress:
       tdiv(class = "new-record-form-row"):
         button(
-          class = "record-stop-button",
+          class = "ct-button-sm-primary",
           onclick = proc(ev: Event, tg: VNode) =
             ev.preventDefault()
             self.data.ipc.send "CODETRACER::stop-recording-process"

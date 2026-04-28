@@ -66,7 +66,8 @@ proc scratchpadValueView(self: ScratchpadComponent, i: int, value: ValueComponen
   proc renderFunction(value: ValueComponent): VNode =
     result = buildHtml(tdiv(class = "scratchpad-value-view")):
       button(
-        class = "scratchpad-value-close",
+        class = "ct-button-image-sm-secondary ct-mr-2",
+        id = "close-element",
         onclick = proc =
           self.removeValue(i)
       )

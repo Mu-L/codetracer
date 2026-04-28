@@ -1293,11 +1293,18 @@ proc loadFlow*(self: EditorViewComponent, flowMode: FlowMode, location: types.Lo
   self.flow.valueMode = BeforeValueMode
 
   let taskId = genTaskId(LoadFlow)
-  self.api.emit(CtLoadFlow, CtLoadFlowArguments(flowMode: flowMode, location: self.location))
+  self.api.emit(CtLoadFlow, CtLoadFlowArguments(flowMode: flowMode, location: location))
   cdebug "start load-flow", taskId
 
 proc createMonacoEditor*(selector: cstring, options: MonacoEditorOptions): MonacoEditor =
   result = monaco.editor.create(jq(selector), options)
+
+proc updateMonacoGutterWidth(editor: MonacoEditor, fontSize: int) =
+  let options = cast[MonacoEditorOptions](editor.getOptions())
+  let lineCount = editor.getModel().getLineCount()
+  options.lineNumbersMinChars = monacoLineNumbersMinChars(lineCount)
+  options.lineDecorationsWidth = monacoLineDecorationsWidth(fontSize)
+  editor.updateOptions(options)
 
 proc drawDiffViewZones(self: EditorViewComponent, source: cstring, id: int, lineNumber: int): Node =
   var zoneDom = document.createElement("div")
@@ -1332,10 +1339,13 @@ proc drawDiffViewZones(self: EditorViewComponent, source: cstring, id: int, line
           folding: true,
           fontSize: self.data.ui.fontSize,
           minimap: js{ enabled: false },
+          renderIndentGuides: true,
           find: js{ addExtraSpaceOnTop: false },
           renderLineHighlight: if self.editorView == ViewLowLevelCode: "none".cstring else: "".cstring,
           lineNumbers: proc(line: int): cstring = self.editorLineNumber(self.path, line, true, lineNumber),
-          lineDecorationsWidth: 20,
+          lineNumbersMinChars: monacoLineNumbersMinChars(lineCountForGutter(source)),
+          lineDecorationsWidth: monacoLineDecorationsWidth(self.data.ui.fontSize),
+          showFoldingControls: cstring"always",
           contextmenu: false,
           mouseWheelScrollSensitivity: 0,
           fastScrollSensitivity: 0,
@@ -1683,24 +1693,30 @@ proc editorView(self: EditorViewComponent): VNode = #{.time.} =
             folding: true,
             fontSize: self.data.ui.fontSize,
             minimap: js{ enabled: false },
+            renderIndentGuides: true,
             find: js{ addExtraSpaceOnTop: false },
             renderLineHighlight: if self.editorView == ViewLowLevelCode: "none".cstring else: "".cstring,
             lineNumbers: proc(line: int): cstring = self.editorLineNumber(path, line),
-            lineDecorationsWidth: 20,
+            lineNumbersMinChars: monacoLineNumbersMinChars(lineCountForGutter(tabInfo.source)),
+            lineDecorationsWidth: monacoLineDecorationsWidth(self.data.ui.fontSize),
+            showFoldingControls: cstring"always",
             scrollBeyondLastColumn: 0,
             contextmenu: false,
-            scrollbar: js{
-              horizontalScrollbarSize: 14,
-              horizontalSliderSize: 8,
-              verticalScrollbarSize: 14,
-              verticalSliderSize: 8
-            },
+            # scrollbar: js{
+            #   horizontalScrollbarSize: 14,
+            #   horizontalSliderSize: 8,
+            #   verticalScrollbarSize: 14,
+            #   verticalSliderSize: 8
+            # },
             overflowWidgetsDomNode: overflowHost,
             fixedOverflowWidgets: true
           )
         )
 
         tabInfo.monacoEditor.config = getConfiguration(tabInfo.monacoEditor)
+        tabInfo.monacoEditor.onDidChangeModelContent(proc(event: JsObject) =
+          updateMonacoGutterWidth(tabInfo.monacoEditor, self.data.ui.fontSize)
+        )
         editorReady = true
       except:
         cerror "editor: " & getCurrentExceptionMsg()
@@ -2052,10 +2068,11 @@ method onEnter*(self: EditorViewComponent) {.async.} =
   elif self.data.ui.readOnly:
     let line = editor.getLine()
     let code = self.traces[line].monacoEditor.getValue()
-    let lineCount = code.split("\n").len() + 1
+    let lineCount = code.split("\n").len()
+    let lineHeight = cast[int](self.traces[line].monacoEditor.getOption(LINE_HEIGHT))
 
     self.traces[line].lineCount = lineCount
-    self.traces[line].expandWithEnter(lineCount * (data.ui.fontSize + 5))
+    self.traces[line].expandWithEnter(lineCount * lineHeight)
     self.traces[line].monacoEditor.insertTextAtCurrentPosition("\n")
 
     discard setTimeout(proc() =

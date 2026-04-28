@@ -110,27 +110,10 @@
   bottom: 38px
   display: flex
   flex-direction: column-reverse
+  gap: 0.5rem
   position: fixed
   z-index: 100
   right: 8px
-
-.status-notification
-  border: 2px solid STATUS_BACKGROUND_COLOR
-  border-radius: 6px
-  height: auto
-  width: 466px
-  position: relative
-  margin: 4px
-  padding: 4px
-
-  &.info
-    border-color: NOTIFICATION_INFO_COLOR
-  &.warning
-    border-color: NOTIFICATION_WARNING_COLOR
-  &.error
-    border-color: NOTIFICATION_ERROR_COLOR
-  &.success
-    border-color: NOTIFICATION_SUCCESS_COLOR
 
 
 #status
@@ -141,14 +124,14 @@
 
   #status-base
     bottom: 0
-    background-color: STATUS_BACKGROUND_COLOR
-    height: 28px
-    font-size: 14px
+    background-color: colors-ui-surface-primary-default
+    height: 2em
+    font-size: inherit
     white-space: nowrap
     position: fixed
     width: 100%
     color: TEXT_CONTENT_COLOR
-    line-height: 24px
+    line-height: normal
     z-index: 100 !important
     display: flex
     justify-content: space-between
@@ -213,10 +196,12 @@
       color: white;
       font-weight: bold;
 
+
+
     .location-path
       float: left
       width: auto
-      margin-right: 12px
+      // margin-right: 12px
       overflow: hidden
       text-overflow: ellipsis
       text-align: end
@@ -416,122 +401,6 @@
       &:focus
         outline: 2px solid BORDERS_COLOR !important
 
-.status-notification
-  background-color: NOTIFICATION_BACKGROUND_COLOR
-  display: flex
-  flex-direction: column
-  height: fit-content
-  align-items: start
-
-  .notification-icon
-    width: 18px
-    min-width: 18px
-    height: 18px
-    min-height: 18px
-    background-repeat: no-repeat
-    background-size: 18px
-    background-position: center
-    margin-top: 3px
-    margin-left: 4px
-    border-radius: 4px
-
-    &.info
-      // background-color: NOTIFICATION_INFO_COLOR
-      background-image: NOTIFICATION_INFO_IMG
-    &.warning
-      // background-color: NOTIFICATION_WARNING_COLOR
-      background-image: NOTIFICATION_WARNING_IMG
-    &.error
-      // background-color: NOTIFICATION_ERROR_COLOR
-      background-image: NOTIFICATION_ERROR_IMG
-    &.success
-      // background-color: NOTIFICATION_SUCCESS_COLOR
-      // svg gotten from here: "https://www.iconpacks.net/free-icon/green-check-mark-verified-circle-16223.html"
-      background-image: NOTIFICATION_SUCCESS_IMG
-
-  .notification-message
-    padding-left: 8px
-    flex: 1
-    color: TEXT_CONTENT_COLOR
-    font-family: 'SpaceGrotesk'
-    font-size: 14px
-    font-weight: 400
-    letter-spacing: -0.14px
-    line-height: 130%
-    align-items: center
-    display: flex
-
-  .notification-message-prefix
-    font-family: 'SpaceGrotesk'
-
-    &.info
-      color: NOTIFICATION_INFO_COLOR
-    &.warning
-      color: NOTIFICATION_WARNING_COLOR
-    &.error
-      color: NOTIFICATION_ERROR_COLOR
-    &.success
-      color: NOTIFICATION_SUCCESS_COLOR
-
-  .notification-button
-    background-color: BUTTON_BACKGROUND_COLOR
-    text-align: center
-
-    margin-left: 8px
-    height: 24px
-    width: 24px
-    line-height: 20px
-    border-radius: 4px
-    cursor: pointer
-    user-select: none
-    font-family: 'SpaceGrotesk'
-    background-image: NOTIFICATION_CLOSE_BUTTON
-    background-repeat: no-repeat
-    background-position: center
-
-    &:hover
-      opacity: 0.5
-
-  .notification-action-wrapper
-    width: -webkit-fill-available
-    display: flex
-    align-items: flex-end
-    justify-content: start
-    margin-bottom: 8px
-    margin-left: 20px
-    margin-top: 8px
-
-  .notification-action-button
-    background-color: BUTTON_BACKGROUND_COLOR
-    text-align: center
-    display: flex
-    align-items: center
-    color: PRIMARY_TEXT_COLOR
-
-    margin-left: 8px
-    height: 24px
-    width: fit-content
-    line-height: 20px
-    border-radius: 4px
-    cursor: pointer
-    user-select: none
-    font-family: 'SpaceGrotesk'
-    padding-left: 16px
-    padding-right: 16px
-
-    &:hover
-      opacity: 0.5
-
-    &.info
-      background-color: NOTIFICATION_INFO_COLOR
-    &.warning
-      background-color: NOTIFICATION_WARNING_COLOR
-    &.error
-      background-color: NOTIFICATION_ERROR_COLOR
-    &.success
-      background-color: NOTIFICATION_SUCCESS_COLOR
-
-
 // [1vw] file info lang , file info encoding [2vw] file info editor whitespace [20vw] operation [25vw] errors, build output buttons [..] location version control status [3vw] end
 
 // 51vw + ~47vw ? max ~250px for ~10 fields ? maybe shorter distance for smaller size?
@@ -589,9 +458,6 @@
   position: fixed
   z-index: 100
   left: 8px
-
-  .status-notification
-    width: inherit
 
 #debug
   float: left
@@ -661,13 +527,3 @@
 
 .debug-skip-toggle
   margin-left: 10px
-
-.notification-wrapper
-  display: flex
-  flex-direction: row
-  width: -webkit-fill-available
-
-.secondary-notification
-  .notification-icon
-    margin-top: 0px !important
-    margin-left: 0px !important

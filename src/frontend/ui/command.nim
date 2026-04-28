@@ -273,20 +273,25 @@ method onProgramSearchResults*(self: CommandPaletteComponent, results: seq[Comma
 var initStart = true
 
 method render*(self: CommandPaletteComponent): VNode =
-  let (padClass, activeClass) = if self.active: ("ct-p-8", "ct-active") else: ("", "")
-  let inputClass = if self.active and not self.inAgentMode: "ct-input-cp-background-command-palette" else: ""
+  let (padClass, activeClass) = if self.active: ("", "ct-active") else: ("", "")
+  let hasDropdown = self.active and not self.inAgentMode
+  let viewClass = if hasDropdown: "command-open" else: ""
+  let surfaceClass = if hasDropdown: "command-surface command-surface-open" else: "command-surface"
+  let inputClass = "mousetrap ct-input-com-pal ct-input-search-image"
+  let resultsClass = if self.results.len > 0:
+      "command-results-open"
+    else:
+      "command-results-open command-results-empty"
   result = buildHtml(
-    tdiv(id = "command-data")
-  ):
-    tdiv(class = fmt"command-view {padClass} {activeClass}", id = "command-view"):
+    tdiv(class = fmt"command-view {padClass} {activeClass} {viewClass}", id = "command-view")):
       if not self.inAgentMode:
-        tdiv(id = "command-query"):
+        tdiv(class = surfaceClass):
           input(
             `type` = "text",
             id = "command-query-text",
             name = "command-query",
             placeholder = "Navigate to file or run a :command",
-            class = fmt"mousetrap {inputClass}",
+            class = inputClass,
             autocomplete="off", # https://stackoverflow.com/questions/254712/disable-spell-checking-on-html-textfields
             autocorrect="off",
             autocapitalize="off",
@@ -316,6 +321,7 @@ method render*(self: CommandPaletteComponent): VNode =
           if self.active:
             tdiv(
               id = "command-results",
+              class = resultsClass,
               onmousedown = proc(e: Event, et: VNode) = e.preventDefault()
             ):
               if self.results.len > 0:

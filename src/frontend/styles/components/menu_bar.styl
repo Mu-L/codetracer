@@ -3,132 +3,25 @@
   display: flex
   flex-direction: row
   top: 0
-  height: 38px
+  padding: 0.25em
   -webkit-app-region: drag
   user-select: none
+  gap: 0.5em
+  height: 2.1em
+  max-height: 2.1em
 
   #debug
     -webkit-app-region: no-drag
-    gap: 12px
-
-    .debug-button-container
-      width: 28px
-      height: 28px
-      border: 0.5px solid DEBUG_BUTTON_BORDER_COLOR
-      border-radius: 6px
-      display: flex
-      cursor: pointer
-
-      &:hover
-        background-color: DEBUG_BUTTON_HOVER_BACKGROUND
-
-      &:active
-        background-color: DEBUG_BUTTON_ACTIVE_BACKGROUND
-
-      &.disabled
-        cursor: default !important
-        background-color: PRIMARY_BASE
-
-      .disabled
-        opacity: 0.5
-        cursor: default !important
-
-        &:hover
-          background-color: PRIMARY_BASE !important
-
-      .debug-button
-        // font-size: 15px
-        color: DEBUG_BUTTON_COLOR
-        width: 28px
-        height: 28px
-        display: flex
-        align-items: center
-        justify-content: center
-
-        &:focus
-          outline: 0px !important
-
-      #history-back-debug, #history-forward-debug,
-      #continue-debug, #reverse-continue-debug,
-      #next-debug, #reverse-next-debug
-        padding-bottom: 2px
-
-      #run-to-entry-debug
-        padding-bottom: 4px
-
-      #reverse-step-out-debug, #step-in-debug
-        padding-top: 2px
-
-      #step-out-debug, #reverse-step-in-debug, #run-tests-debug
-        padding-bottom: 4px
-
-      #run-to-entry-debug
-        padding-bottom: 4px
-        padding-right: 2px
-
-        i
-          font-size: 15px
-
-    .busy
-      visibility: hidden
-
-    .debug-finished
-      float: left
-      width: 100px
-      color: yellow
-
-    &:hover
-      opacity: 1
-
-    // .debug-button
-    //   width: 25px
-    //   height: 25px
-    //   margin-left: 5px
-    //   margin-right: 5px
-    // padding: 10px
-
-    /* based on https://codepen.io/sosuke/pen/Pjoqqp : CSS filter generator to convert from black to target hex color
-      Barrett Sonntag  found from
-      https://stackoverflow.com/a/53336754/438099
-    */
-    // converts to white
-    // .debug-button-svg
-    //   filter: invert(100%) sepia(100%) saturate(0%) hue-rotate(288deg) brightness(102%) contrast(102%)
-
-    .debug-text
-      color: white
-
-    .debug-skip
-      color: white
-      background: transparent
-
-    .active-debug-skip
-      color: COLOR
-      background: white
+    gap: 0.5em
+    align-items: start
 
   .debug-finished-background
     background-color: BACKGROUND_COLOR
 
-  #menu-flow-value-mode
-    display: inline-block
-    width: 600px
-    float: left
-    color: OPPOSITE_COLOR
-    height: 25px
-    margin-left: 50px
-    .menu-flow-value-mode-case
-      display: inline-block
-      width: 200px
-      //padding: 2px
-      cursor: pointer
-
-    .selected-value-mode
-      background-color: green
-
 .window-menu
   display: flex
   position: absolute
-  right: 5px
+  right: 0.3125em
   top: 0
   margin-right: 0
   -webkit-app-region: no-drag
@@ -138,13 +31,12 @@
   cursor: pointer
 
   .menu-button-svg
-    width: 24px
-    height: 24px
-    background-color: AGENT_BACKGROUND
-    border-radius: 100px
+    width: 1.75em
+    height: 1.75em
+    border-radius: 50%
     background-position: center
     background-repeat: no-repeat
-    margin-left: 4px
+    background-size: 1em
 
     &.minimize
       background-image: WINDOW_MINIMIZE_ICON_PATH
@@ -162,6 +54,7 @@
     &.close
       background-image: WINDOW_CLOSE_ICON_PATH
       opacity: 1
+      font-size: inherit !important
 
     &:hover
       opacity: 0.5;
@@ -169,13 +62,13 @@
 #menu
   /* based on design : psd file and krita color selector */
   /* TODO move to light theme */
-  background-color: MENU_BACKGROUND_COLOR
+  background-color: colors-ui-surface-primary-default
   position: fixed
   width: 100vw
   top: 0
   z-index: 20
-  border-top-left-radius: 8px
-  border-top-right-radius: 8px
+  border-top-left-radius: 0.375em
+  border-top-right-radius: 0.375em
 
   i.fa-window-minimize, i.fa-window-maximize
     width: 50px
@@ -184,7 +77,7 @@
     color: OPPOSITE_COLOR
 
   #navigation-menu
-    font-size: MENU_FONT_SIZE
+    font-size: inherit
     color: white // TODO is this correct
     z-index: 10
     -webkit-app-region: no-drag
@@ -196,33 +89,23 @@
     height: 100%
     display: flex
     width: fit-content
-    min-width: 46px
+    min-width: fit-content
     align-items: center
-    // TODO height variables and maybe width variables
+    justify-content: center
 
-    #menu-root-logo
-      height: 28px
-      width: 28px
-      align-items: center
-      justify-items: center
-      display: grid
-      margin-left: 6px
-      background: CT_LOGO_BACKGROUND_COLOR
-      border-radius: 6px
-
-      #menu-logo-img
-        width: 20px
-        height: 20px
-        background-image: url("../../public/resources/menu/ct_logo_dark.svg")
-        background-size: cover
-        background-position: center
-        display: inline-block
-        position: relative
-        cursor: pointer
+    #menu-logo-img
+      width: 1.25em
+      height: 1.25em
+      background-image: ct-images-logo-dark
+      background-size: cover
+      background-position: center
+      display: inline-block
+      position: relative
+      cursor: pointer
 
     #menu-root-name
       height: 25px
-      font-size: 15px
+      // font-size: 15px
       font-family: Arial, Helvetica, sans-serif
       font-weight: bold
       max-width: 48ex;
@@ -234,13 +117,14 @@
   #menu-main
     font-family: "SpaceGrotesk"
     width: 200px
+    font-size: 16px
     margin-left: 6px
     height: fit-content
     padding-bottom: 4px
     // min-height: 245px
     // border: 1px solid NAVIGATION_MENU_BORDER_COLOR
     position: absolute
-    top: 38px
+    top: 2.1rem
     background-color: NAVIGATION_MENU_BACKGROUND_COLOR
     border-radius: 6px
 

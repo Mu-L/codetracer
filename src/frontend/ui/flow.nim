@@ -78,7 +78,7 @@ method register*(self: FlowComponent, api: MediatorWithSubscribers) =
   self.api = api
   api.subscribe(CtCompleteMove, proc(kind: CtEventKind, response: MoveState, sub: Subscriber) =
     self.location = response.location
-    api.emit(CtLoadFlow, self.location)
+    api.emit(CtLoadFlow, CtLoadFlowArguments(flowMode: FlowMode.Call, location: self.location))
     self.redraw()
   )
   api.subscribe(CtUpdatedFlow, proc(kind: CtEventKind, response: FlowUpdate, sub: Subscriber) =
@@ -1296,43 +1296,29 @@ proc flowEventValue*(self: FlowComponent, event: FlowEvent, stepCount: int, styl
   let (klass, name) =
     case event.kind:
     of EventLogKind.Error:
-      ("flow-error", "error")
+      ("-error", "error")
     of EventLogKind.Write:
-      ("flow-std-default", "stdout")
+      ("-std", "stdout")
     of EventLogKind.WriteFile:
-      ("flow-std-default", "stdout")
+      ("-std", "stdout")
     of EventLogKind.Read:
-      ("flow-std-default", "stdin")
+      ("-std", "stdin")
     of EventLogKind.ReadFile:
-      ("flow-std-default", "stdin")
+      ("-std", "stdin")
     of EventLogKind.EvmEvent:
-      ("flow-std-default", $event.metadata)
+      ("-std", $event.metadata)
     else:
       ("", "")
-  # let klass =
-  #   case event.kind:
-  #   of EventLogKind.Error:
-  #     "flow-error"
-  #   of EventLogKind.Write:
-  #     "flow-std-default"
-  #   of EventLogKind.WriteFile:
-  #     "flow-std-default"
-  #   of EventLogKind.Read:
-  #     "flow-std-default"
-  #   of EventLogKind.ReadFile:
-  #     "flow-std-default"
-  #   else:
-  #     ""
 
   result = buildHtml(
     span(
-      class = &"flow-{flowMode}-value",
+      class = &"ct-omni-value",
       style=style
     )
   ):
     if event.text.len() > FLOW_VALUE_LIMIT:
       span(
-        class = &"flow-{flowMode}-value-name flow-view-more-button flow-hide-content",
+        class = &"ct-omni-name{klass} flow-view-more-button flow-hide-content",
         style = style,
         onmousedown = proc(e: Event, v: VNode) =
           let targetId = &"flow-{flowMode}-value-box-{stepCount}-{i}"
@@ -1350,7 +1336,7 @@ proc flowEventValue*(self: FlowComponent, event: FlowEvent, stepCount: int, styl
             self.editorUI.adjustEditorWidth()
       )
     span(
-      class = &"flow-{flowMode}-value-name {klass}-name",
+      class = &"ct-omni-name{klass}",
       onmousedown = proc(e: Event, v: VNode) =
         self.jumpToLocalStep(stepCount),
       # oncontextmenu = proc(e: Event, v: VNode) =
@@ -1442,7 +1428,7 @@ proc flowSimpleValue*(
 
   result = buildHtml(
     span(
-      class = &"flow-{flowMode}-value",
+      class = &"ct-omni-value",
       style=style
     )
   ):
@@ -1458,7 +1444,7 @@ proc flowSimpleValue*(
           renderViewOption()
     if showName:
       span(
-        class = &"flow-{flowMode}-value-name",
+        class = &"ct-omni-name",
         onmousedown = proc(e: Event, v: VNode) =
           self.jumpToLocalStep(stepCount),
         oncontextmenu = proc(e: Event, v: VNode) =
@@ -1480,7 +1466,7 @@ proc flowSimpleValue*(
         id = id,
         style = style,
         iteration = $(self.flow.steps[stepCount].iteration),
-        class = &"flow-{flowMode}-value-box " & before,
+        # class = &"flow-{flowMode}-value-box " & before,
         onmousedown = proc(e: Event, v: VNode) =
           onMouseDown(e, v, beforeValue),
         oncontextmenu = proc(e: Event, v: VNode) =
@@ -1629,13 +1615,32 @@ proc clearLoopStates*(self: FlowComponent) =
 proc clearStepNodes*(self: FlowComponent) =
   self.stepNodes = JsAssoc[int, kdom.Node]{}
 
+proc removeViewZones(self: FlowComponent, zones: JsAssoc[int, int]) =
+  if self.inExtension or self.editorUI.isNil or self.editorUI.monacoEditor.isNil:
+    return
+
+  self.editorUI.monacoEditor.changeViewZones do (view: js):
+    for zoneId in zones:
+      try:
+        view.removeZone(zoneId)
+      except:
+        discard
+
 proc clearViewZones(self: FlowComponent) =
+  self.removeViewZones(self.viewZones)
   self.viewZones = JsAssoc[int, int]{}
+
+proc clearLoopViewZones(self: FlowComponent) =
+  self.removeViewZones(self.loopViewZones)
+  self.loopViewZones = JsAssoc[int, int]{}
 
 proc resetFlow*(self: FlowComponent) =
   self.clearSliders()
-  # self.clearInline()
+  # Inline flow uses Monaco decorations that must be removed before any redraw,
+  # otherwise unrelated UI redraws stack duplicate inline values in the editor.
+  self.clearInline()
   self.clearMultiline()
+  self.clearLoopViewZones()
   self.clearParallel()
 
   self.clearLoopStates()
@@ -3050,7 +3055,7 @@ proc flowLoopValue*(
       style=style
     )
   ):
-    span(class = &"flow-loop-value-name", style=style):
+    span(class = &"ct-omniscience-loop", style=style):
       span(class = &"flow-parallel-loop-iteration-start"): text "iteration "
       textarea(class = &"flow-loop-textarea",
         value = $(iteration),
@@ -3078,7 +3083,8 @@ proc backLoopControlButton(self: FlowComponent, step: FlowStep, style: VStyle): 
 
   result = buildHtml(
     button(
-      class = "flow-loop-button backward",
+      class = "ct-button-image-sm-secondary ct-button-no-border",
+      id = "backward-loop",
       style = style,
       disabled = toDisabled(iteration-1 < 0),
       onclick = proc =
@@ -3097,7 +3103,8 @@ proc nextLoopControlButton(self: FlowComponent, step: FlowStep, style: VStyle): 
 
   result = buildHtml(
     button(
-      class = "flow-loop-button forward",
+      class = "ct-button-image-sm-secondary ct-button-no-border",
+      id = "forward-loop",
       style = style,
       disabled = toDisabled(maxIterations == iteration),
       onclick = proc =
@@ -3121,16 +3128,18 @@ proc makeLoopLine(
     (StyleAttr.width, cstring("fit-content"))
   )
 
+  let bStyle = style()
+
   let vNode = buildHtml(
     tdiv(
       id = &"flow-multiline-value-{step.position}-{step.stepCount}",
-      class = "flow-multiline-value-container"
+      class = "ct-flex ct-p-0"
     )
   ):
     if step.rrTicks != -1:
-      backLoopControlButton(self, step, style)
+      backLoopControlButton(self, step, bStyle)
       flowLoopValue(self, step, allIterations, style)
-      nextLoopControlButton(self, step, style)
+      nextLoopControlButton(self, step, bStyle)
 
     # self.redraw()
 
@@ -3411,15 +3420,14 @@ proc makeSliderDom(self: FlowComponent, position: int): Node =
              style = style)
 
     dom = vnodeToDom(vNode, KaraxInstance())
-  else:
-    let domCheck = cast[Node](jq(&"flow-loop-slider-{position}"))
-    if domCheck.isNil:
-      let childVNode = buildHtml(tdiv(class = "flow-loop-slider",
-        id = &"flow-loop-slider-{position}",
-        style = style)): text ""
-      let childDom = vnodeToDom(childVNode, KaraxInstance())
+  let domCheck = cast[Node](jq(&"flow-loop-slider-{position}"))
+  if domCheck.isNil:
+    let childVNode = buildHtml(tdiv(class = "flow-loop-slider",
+      id = &"flow-loop-slider-{position}",
+      style = style)): text ""
+    let childDom = vnodeToDom(childVNode, KaraxInstance())
 
-      dom.appendChild(childDom)
+    dom.appendChild(childDom)
 
   self.flowLoops[position].sliderDom = dom.childNodes[0]
 
@@ -3429,7 +3437,7 @@ proc addSliderWidget(self: FlowComponent, position:int) =
   let id = &"flow-slider-widget-{position}"
   let dom = makeSliderDom(self, position)
 
-  self.flowLoops[position].flowDom = dom
+  self.flowLoops[position].flowDom.appendChild(dom)
 
 proc resizeEditorHandler(self:FlowComponent, position: int) =
   # get new monaco editor config

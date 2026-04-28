@@ -34,7 +34,7 @@ proc menuNestedStyle*(self: MenuComponent, value: int, depth: int, separators: i
       left += cast[int](jq(cstring(fmt"#menu-nested-elements-{i}")).toJs.clientWidth)
 
   result = style(
-    (StyleAttr.top, cstring(fmt"{value * 28 + separators * 28 - 28}px")),
+    (StyleAttr.top, cstring(fmt"{value * 28 + separators * 28 - 56}px")),
     (StyleAttr.left, cstring(fmt"calc({left}px + {2 * depth}px)"))
   )
 
@@ -357,8 +357,7 @@ proc navigationMenuView*(self: MenuComponent): VNode =
         ev.stopPropagation()
         toggle(self)
         discard setTimeout(proc() = jq("#navigation-menu").focus(), 10)):
-      tdiv(id="menu-root-logo"):
-        tdiv(id="menu-logo-img")
+      tdiv(id="menu-logo-img")
 
     if self.active:
       tdiv(

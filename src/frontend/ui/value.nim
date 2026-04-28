@@ -1185,6 +1185,7 @@ proc view(
   let cPath = path
 
   self.isOperationRunning = false
+  let active = if self.showInline[expression]: "active" else: ""
 
   result = buildHtml(
     tdiv(class = cstring(fmt"value-expanded {isWatch} {isSelected} border-value-{depth} value-expanded-name"))
@@ -1209,16 +1210,16 @@ proc view(
           ):
             tdiv(class = "custom-tooltip"):
               text "Add to scratchpad"
-        span(
-          class = "value-expand-button " & fresh,
-          onmousedown = proc(ev: Event, v: VNode) =
-            self.data.focusComponent(self)
-            ev.stopPropagation()
-            capture expression, value, cPath:
-              discard self.expandNewValues(value, cPath)
-              discard self.toggleExpanded(value, expression)
-        ):
-          if compoundOrPointsToCompound(value):
+        if compoundOrPointsToCompound(value):
+          span(
+            class = "value-expand-button " & fresh,
+            onmousedown = proc(ev: Event, v: VNode) =
+              self.data.focusComponent(self)
+              ev.stopPropagation()
+              capture expression, value, cPath:
+                discard self.expandNewValues(value, cPath)
+                discard self.toggleExpanded(value, expression)
+          ):
             if self.uiExpanded(value, expression):
               tdiv(class = "caret-expand")
             else:
@@ -1231,8 +1232,9 @@ proc view(
           span(class = "value-annotation"):
             text(annotation)
           if expression == self.baseExpression:
-            span(
-              class = if self.showInline[expression]: "toggle-value-history active" else: "toggle-value-history",
+            button(
+              class = &"{active} ct-button-image-sm-secondary ct-custom-button-size ct-ml-2",
+              id = "value-history",
               onmousedown = proc(ev: Event, tg: VNode) =
                 if cast[MouseEvent](ev).button == 0:
                   discard self.showHistory(expression)
@@ -1258,8 +1260,9 @@ proc view(
               echo "VALUE ERROR: ", getCurrentExceptionMsg()
               text fmt"^ error: Can't show value: {getCurrentExceptionMsg()}"
       if expression == self.baseExpression and not self.uiExpanded(value, expression):
-        span(
-          class = if self.showInline[expression]: "toggle-value-history active" else: "toggle-value-history",
+        button(
+          class = &"{active} ct-button-image-sm-secondary ct-custom-button-size ct-ml-2",
+          id = "value-history",
           onmousedown = proc(ev: Event, tg: VNode) =
             if cast[MouseEvent](ev).button == 0:
               discard self.showHistory(expression)

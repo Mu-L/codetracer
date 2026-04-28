@@ -23,12 +23,15 @@ type
     fontFamily*:             cstring
     contextmenu*:            bool
     minimap*:                JsObject
+    renderIndentGuides*:     bool
     find*:                   JsObject
     scrollbar*:              JsObject
+    lineNumbersMinChars*:    int
     lineDecorationsWidth*:   int
     renderLineHighlight*:    cstring
     glyphMargin*:            bool
     folding*:                bool
+    showFoldingControls*:    cstring
     scrollBeyondLastColumn*: int
     overflowWidgetsDomNode*: JsObject
     fixedOverflowWidgets*:   bool

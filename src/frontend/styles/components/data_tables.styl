@@ -3,35 +3,35 @@
 
 .data-table
   // font-family: Arial, Helvetica, sans-serif
-  font-size: 14px !important
+  font-size: inherit !important
   font-weight: 400 !important
   font-family: 'FiraCode'
-  letter-spacing: -0.14px !important
+  letter-spacing: -0.00875em !important
   flex: 1 1 auto
   overflow: hidden
+  min-height: 0
   color: COLOR
 
   .rr-ticks-line-container
     position: relative
-    height: 10px
+    height: 0.625em
 
     .rr-ticks-line
       display: inline-block
       background: CT_SECONDARY_BLUE
-      height: 3px !important
+      height: 0.1875em !important
 
   .rr-ticks-empty-remaining
     display: inline-block
     background-color: RR_TICKS_EMPTY_REMAINING_COLOR
-    height: 3px !important
+    height: 0.1875em !important
     position: absolute
     z-index: 2
 
   .rr-ticks-time-container
     // font-family: sans-serif
-    font-size: 13px
     width: 100%
-    height: 20px
+    height: 1.25em
     line-height: 2em
     position: relative
 
@@ -46,8 +46,8 @@
     max-width: 35%
     padding-left: 3ex
     padding-right: 3ex
-    max-height: 24px
-    transform: translateY(-4px)
+    max-height: 1.5em
+    transform: translateY(-0.24em)
 
   .eventLog
     .direct-location-rr-ticks
@@ -55,7 +55,7 @@
       max-width: 10%
 
   .event-rr-ticks-line
-    height: 2px
+    height: 0.125em
     width: 100%
     display: inline-block
     position:absolute
@@ -78,15 +78,15 @@
 
   tr
     // height: 24px
-    font-size: 14px
+    font-size: inherit
     font-weight: 400
     display: flex
-    margin-left: 8px
-    margin-right: 8px
-    border-top: 1px solid EVENT_LOG_ROWS_BORDERS_COLOR
+    // margin-left: 8px
+    // margin-right: 8px
+    border-top: 0.0625em solid EVENT_LOG_ROWS_BORDERS_COLOR
     color: COLOR
     align-items: start
-    padding-right: 8px
+    // padding-right: 8px
 
     td
       cursor: normal
@@ -129,22 +129,32 @@
 
 .dt-container
   height: 100%
+  display: flex
+  flex-direction: column
+  min-height: 0
 
   .dt-length
     display: none
+
+  .dt-scroll
+    flex: 1 1 auto
+    min-height: 0
+
+  .dt-scroll-body
+    min-height: 0
 
   .dt-scroll-head
     height: 0 !important
 
   .dt-info
-    padding-left: 10px
+    padding-left: 0.625em
 
 .data-tables-footer
   position: relative
-  padding-left: 15px
-  height: 24px
-  font-size: 12px
-  line-height: 24px
+  padding-left: 0.9375em
+  height: 1.5em
+  font-size: 0.75em
+  line-height: 1.5em
   // font-style: italic
   font-family: "SpaceGrotesk"
   color: TEXT_CONTENT_COLOR
@@ -152,7 +162,7 @@
 
   .data-tables-footer-info
     position: relative
-    margin-right: 10px
+    margin-right: 0.625em
     display: flex
     align-items: center
 
@@ -165,22 +175,22 @@
       padding-right: 0.5ex
 
   .data-tables-footer-input
-    margin-bottom: 0px !important
+    margin-bottom: 0em !important
 
   .data-tables-footer-checkbox-container
     position: relative
     height: 100%
-    padding-left: 20px
+    padding-left: 1.25em
 
-  input
-    border-radius: 4px
-    padding: 0 !important
-    margin-left: 10px !important
-    margin-right: 10px
-    height: 16px
-    width: 50px
-    text-align: start
-    font-size: 12px !important
-    background-image: none !important
-    padding-left: 4px !important
-    padding-right: 4px !important
+  // input
+  //   border-radius: 4px
+  //   padding: 0 !important
+  //   margin-left: 10px !important
+  //   margin-right: 10px
+  //   height: 16px
+  //   width: 50px
+  //   text-align: start
+  //   font-size: 12px !important
+  //   background-image: none !important
+  //   padding-left: 4px !important
+  //   padding-right: 4px !important

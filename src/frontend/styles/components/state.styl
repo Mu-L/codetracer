@@ -1,29 +1,30 @@
 .events-bottom
-  height: 200px
+  height: 12.5em
   float: left
 
 
 .value-expanded-type
-  padding-right: 10px
+  padding-right: 0.625em
   white-space: nowrap
 
+// TODO:
 .value-expanded-name
-  min-width: 60px
+  // min-width: 3.75em
   //cursor: pointer
-  font-size: 14px
-  line-height: 24px
-  padding-left: 10px
+  font-size: inherit
+  // line-height: 1.5em
+  padding-left: 0.5em
   color: TEXT_CONTENT_COLOR
 
 .value-expand-button
   display: inline-block
-  min-width: 15px
-  max-width: 15px
+  min-width: 0.9375em
+  max-width: 0.9375em
   // ?
   float: left
 
   i
-    font-size: 15px
+    font-size: inherit
 
 .value-non-expanded
   color: orange
@@ -50,19 +51,19 @@
   white-space: nowrap
 
 .value-type
-  margin-left: 8px
+  margin-left: 0.5em
   color: VALUE_TYPE_COLOR
   white-space: nowrap
 
 .value-annotation
-  margin-left: 5px
+  margin-left: 0.3125em
   color: VALUE_TYPE_COLOR
   opacity: 0.5
   white-space: nowrap
 
 .value-view
   .value-error
-    margin-left: 17px !important
+    margin-left: 1.0625em !important
     position: inherit
 
 .value-name-container
@@ -72,33 +73,31 @@
   .caret-collapse
     display: block
     background-image: SHARED_OPEN_FA_ICON
-    background-size: 8px 8px
     background-position: center
     background-repeat: no-repeat
-    width: 10px
-    height: 10px
+    width: 0.5em
+    height: 0.5em
 
   .caret-expand
     display: block
     background-image: SHARED_CLOSE_FA_ICON
-    background-size: 8px 8px
     background-position: center
     background-repeat: no-repeat
-    width: 10px
-    height: 10px
+    width: 0.5em
+    height: 0.5em
 
 .value-line-view-text
   display: flex
   white-space: nowrap
   text-overflow: visible
-//padding-right: 25px
+//padding-right: 1.5625em
 
 .value-expanded-view-text
   display: flex
   flex-direction: column
   white-space: nowrap
   text-overflow: visible
-//padding-right: 25px
+//padding-right: 1.5625em
 
 .value-expanded-name-text-content
   width: 100%
@@ -110,7 +109,7 @@
   //flex-basis: 68%
   color: TEXT_CONTENT_COLOR
   position: relative
-  margin-left: 10px
+  margin-left: 0.625em
   background: BACKGROUND_COLOR
 
 // maybe it helps with values not going left if label too long or panel too thin
@@ -118,29 +117,26 @@
 // not sure what to do, comment out for now
 // max-width: 68%
 
-.value-expanded-default
-  height: 20px
-
-#gdb-evaluate
-  padding-right: 8px
+// .value-expanded-default
+//   height: 1.25em
 
 // #watch, .calltrace-search input, .calltrace-filter input
-//   height: 30px
-//   font-size: 17px
+//   height: 1.875em
+//   font-size: 1.0625em
 //   border: 0
 //   background-color: HEADER_ELEMENT_BACKGROUND_COLOR
 //   width: 80%
 //   margin-left: 10%
-//   margin-top: 5px
-//   margin-bottom: 5px
-//   border-radius: 15px
-//   padding-left: 15px
+//   margin-top: 0.3125em
+//   margin-bottom: 0.3125em
+//   border-radius: 0.9375em
+//   padding-left: 0.9375em
 
 .right-value .simple-value
   text-align: right
 
 .edit
-  height: calc(100% - 8px)
+  height: calc(100% - 0.5em)
   width: 100%
   font-size: 0
   overflow: hidden

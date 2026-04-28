@@ -291,7 +291,6 @@ method register*(self: DebugComponent, api: MediatorWithSubscribers) =
 
 method render*(self: DebugComponent): VNode =
   # let klass = if self.service.stableBusy and delta(now(), self.data.ui.lastRedraw) >= 1_000: "debug-button busy" else: "debug-button"
-  let finished = if self.finished: cstring"debug-finished-background" else: cstring""
 
   # On macOS we display the native traffic light buttons, which means that we need to give them some space.
   # They use about 20px per button and 25 for side margin for the whole widget
@@ -301,14 +300,12 @@ method render*(self: DebugComponent): VNode =
     style()
 
   result = buildHtml(
-    tdiv()
-  ):
-    messageView(self)
     tdiv(
       id="debug",
-      class=finished,
+      class="ct-header",
       style=style
-    ):
+    )):
+    # messageView(self)
 
       proc debugStepButton(id: string, action: DebuggerAction, reverse: bool): VNode {.closure.} =
         # let klass = if self.service.stableBusy and delta(now(), self.data.ui.lastRedraw) >= 1_000:
@@ -324,13 +321,12 @@ method render*(self: DebugComponent): VNode =
           # TODO?
           # ctStep(data, id, action, reverse, 1, fromShortcutArg=false, taskId)
 
-        buildHtml(tdiv(class="debug-button-container")):
-          span(
-            id = cstring(fmt"{id}-debug"),
-            class = "debug-button",
-            onclick = click
-          ):
-            buttons[cstring(id)]
+        buildHtml(button(
+            id = cstring(fmt"{id}-image"),
+            class = "ct-button-image-md-secondary ct-button-no-border",
+            onclick = click,
+            disabled = toDisabled(id == "reset-operation")
+          )):
             tdiv(
               class = "custom-tooltip",
             ):
@@ -344,10 +340,9 @@ method render*(self: DebugComponent): VNode =
         if not self.usingContextMenu:
           self.activeHistory = ""
 
-        buildHtml(tdiv(class=cstring(fmt"debug-button-container {disabledClass}"))):
-          span(
-            id = cstring(fmt"{id}-debug"),
-            class = "debug-button",
+        buildHtml(button(
+            id = cstring(fmt"{id}-image"),
+            class = "ct-button-image-md-secondary ct-button-no-border",
             onclick = proc() =
               if not disabled:
                 click()
@@ -371,9 +366,7 @@ method render*(self: DebugComponent): VNode =
                     discard,
                   100
                 )
-          ):
-            tdiv(class=cstring(fmt"{disabledClass}")):
-              buttons[cstring(id)]
+          )):
             tdiv(
               class = "custom-tooltip",
             ):

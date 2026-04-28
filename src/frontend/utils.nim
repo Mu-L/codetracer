@@ -1,6 +1,6 @@
 import
   async, strutils, strformat, sequtils, algorithm, jsffi, jsconsole,
-  karax, vdom, kdom,
+  karax, vdom, kdom, dom,
   types, lang,
   lib / [ logging, monaco_lib, jslib ],
   ui / auto_hide
@@ -11,6 +11,33 @@ var kxiMap* = JsAssoc[cstring, KaraxInstance]{}
 const
   VALUE_COMPONENT_NAME_WIDTH*: float = 40.0
   VALUE_COMPONENT_VALUE_WIDTH*: float = 55.0
+  SVG_NAMESPACE            = cstring"http://www.w3.org/2000/svg"
+
+proc monacoLineNumbersMinChars*(lineCount: int): int =
+  ## Reserve enough width for the largest line number currently visible in the
+  ## editor model. We keep one extra character because the custom HTML gutter
+  ## adds internal padding before the right-aligned text.
+  max(4, ($max(1, lineCount)).len + 2)
+
+proc monacoLineDecorationsWidth*(fontSize: int): int =
+  ## Reserve only the custom marker lane and the folding chevron lane.
+  ## The line-number column width is controlled separately via
+  ## `lineNumbersMinChars`.
+  let markerLane = (fontSize * 9) div 5
+  let foldingLane = fontSize div 2
+  max(20, markerLane + foldingLane)
+
+proc renderLineElement*(x1, y1, x2, y2: float): dom.Element =
+  result = dom.createElementNS(dom.document, SVG_NAMESPACE, cstring"line")
+  result.setAttribute(cstring"x1", cstring($x1))
+  result.setAttribute(cstring"y1", cstring($y1))
+  result.setAttribute(cstring"x2", cstring($x2))
+  result.setAttribute(cstring"y2", cstring($y2))
+  result.setAttribute(cstring"stroke-width", cstring"0.5")
+
+proc lineCountForGutter*(content: cstring): int =
+  ## Count logical lines for gutter sizing from Monaco-facing cstring content.
+  ($content).splitLines().len
 
 const DEFAULT_SESSION_ID* = 0
   ## The session id used when there is only one replay session (M8 default).
@@ -508,7 +535,7 @@ proc makeFlowComponent*(data: Data, position: int, inExtension: bool = false): F
     # location: location,
     inExtension: inExtension,
     multilineZones: JsAssoc[int, MultilineZone]{},
-    flowDom: JsAssoc[int, Node]{},
+    flowDom: JsAssoc[int, kdom.Node]{},
     shouldRecalcFlow: false,
     flowLoops: JsAssoc[int, FlowLoop]{},
     flowLines: JsAssoc[int, FlowLine]{},
@@ -518,7 +545,7 @@ proc makeFlowComponent*(data: Data, position: int, inExtension: bool = false): F
     selectedStepCount: -1,
     lineHeight: 20,
     # multilineFlowLines: multilineFlowLines(),
-    multilineValuesDoms: JsAssoc[int, JsAssoc[cstring, Node]]{},
+    multilineValuesDoms: JsAssoc[int, JsAssoc[cstring, kdom.Node]]{},
     loopLineSteps: JsAssoc[int, int]{},
     inlineDecorations: JsAssoc[int, InlineDecorations]{},
     # editorUI: self,
@@ -824,7 +851,7 @@ data.ui = Components(
   layoutSizes: LayoutSizes(startSize: true),
   monacoEditors: @[],
   traceMonacoEditors: @[],
-  fontSize: 15,
+  fontSize: 16,
   editModeHiddenPanels: @[],
   savedLayoutBeforeEdit: nil,
   editModeLayout: nil,
@@ -1218,11 +1245,11 @@ proc openNewEditorView*(
     if line != NO_LINE:
       proc cb =
         if isNull(data.ui.editors[name].monacoEditor):
-          discard setTimeout(cb, 10)
+          discard kdom.setTimeout(cb, 10)
         else:
           data.ui.editors[name].focusLine(line)
 
-      discard setTimeout(cb, 10)
+      discard kdom.setTimeout(cb, 10)
 
 proc makeEditorViewDetailed(
     data: Data,

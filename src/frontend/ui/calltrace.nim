@@ -2,20 +2,21 @@ import
   ui_imports, show_code, value, ../utils,
   ../communication, ../../common/ct_event
 
-
 let returnValueName: cstring = "<return value>"
 
 const
   CALL_OFFSET_WIDTH_PX  = 20
-  LOCAL_CALL_HEIGHT_PX  = 24
   CALL_HEIGHT_PX        = 24
   CALL_BUFFER           = 20
   START_BUFFER          = 10
-  TRACE_LINE_OFFSET     = 10
+  CALLTRACE_MARKER_SELECTOR = cstring".collapse-call-img, .expand-call-img, .dot-call-img, .end-of-program-img, .active-call-location"
+  CALLTRACE_TOGGLE_SELECTOR = cstring".toggle-call"
   EXPAND_CALLS_KIND     = CtExpandCalls
   COLLAPSE_CALLS_KIND   = CtCollapseCalls
 
 proc getCurrentMonacoTheme(editor: MonacoEditor): cstring {.importjs:"#._themeService._theme.themeName".}
+proc getBoundingClientRect(node: js): HTMLBoundingRect {.importjs:"#.getBoundingClientRect()".}
+proc replaceChildren(node: js) {.importjs:"#.replaceChildren()".}
 proc redrawCallLines(self: CalltraceComponent)
 proc loadLines(self: CalltraceComponent, fromScroll: bool)
 
@@ -518,12 +519,28 @@ proc searchResultsView(self: CalltraceComponent): VNode =
     elif self.searchText.len() > 0:
       emptyResultView(self)
 
+func calltraceSearchInputId(self: CalltraceComponent): cstring =
+  cstring(fmt"calltrace-search-input-{self.id}")
+
+proc submitCalltraceSearch(self: CalltraceComponent) =
+  let query = if self.searchText.isNil: cstring"" else: self.searchText
+
+  if query.len == 0:
+    self.searchResults = @[]
+    self.isSearching = false
+    self.redraw()
+    return
+
+  self.lastQuery = query
+  self.api.emit(CtSearchCalltrace, CallSearchArg(value: query))
+
 proc searchCalltraceView(self: CalltraceComponent): VNode =
   let onSearch = proc(ev: KeyboardEvent, v: VNode) =
-    ev.target.focus()
     if ev.keyCode == ENTER_KEY_CODE:
+      ev.preventDefault()
+      ev.stopPropagation()
       self.searchText = cast[cstring](ev.target.toJs.value)
-      self.api.emit(CtSearchCalltrace, CallSearchArg(value: self.searchText))
+      self.submitCalltraceSearch()
 
   buildHtml(
     tdiv(class = "calltrace-search")
@@ -533,16 +550,26 @@ proc searchCalltraceView(self: CalltraceComponent): VNode =
       onsubmit = proc(ev: Event, v: VNode) =
         ev.preventDefault()
         ev.stopPropagation()
-        discard
+        self.submitCalltraceSearch()
     ):
       input(
         tabIndex = "0",
-        class = "calltrace-search-input",
+        id = self.calltraceSearchInputId(),
+        class = fmt"calltrace-search-input calltrace-search-input-{self.id} ct-input-panel ct-input-search-image",
         `type` = "text",
+        value = if self.searchText.isNil: cstring"" else: self.searchText,
         placeholder = "Search",
+        oninput = proc(ev: Event, v: VNode) =
+          self.searchText = cast[cstring](ev.target.toJs.value)
+          if self.searchText.len == 0 and (self.isSearching or self.searchResults.len > 0):
+            self.searchResults = @[]
+            self.isSearching = false
+            self.redraw()
+        ,
         onkeydown = onSearch,
         onblur = proc() =
-          self.isSearching = false)
+          self.isSearching = false
+      )
 
     searchResultsView(self)
 
@@ -782,19 +809,29 @@ proc callLineView*(self: CalltraceComponent, callLine: CallLine, index: int): VN
       span(style = callOffset(callLine.depth - self.depthStart))
     callLineContentView(self, callLine.content, index, callLine.depth)
 
-proc renderLine(self: CalltraceComponent, x1, y1, x2, y2: float): VNode =
-  buildHtml(
-    line(x1 = $x1, y1 = $y1, x2 = $x2, y2 = $y2, "stroke-width" = "0.5px")
-  )
+proc updateTooltipOrigin(self: CalltraceComponent, callLine: kdom.Node) =
+  if self.startPositionX != -1:
+    return
+
+  let rowRect = getBoundingClientRect(callLine.toJs)
+  self.startPositionX = rowRect.left + self.scrollLeftOffset
+
+proc syncSvgContainerBounds(svgContainer: Element, width, height: float) =
+  let safeWidth = max(width, 1.0)
+  let safeHeight = max(height, 1.0)
+
+  svgContainer.setAttribute(cstring"width", cstring($safeWidth))
+  svgContainer.setAttribute(cstring"height", cstring($safeHeight))
+  svgContainer.setAttribute(cstring"viewBox", cstring(fmt"0 0 {safeWidth} {safeHeight}"))
 
 proc ensureSvgContainer(self: CalltraceComponent): VNode =
   buildHtml(
     svg(
       class = "calltrace-svg-line",
       id = fmt"svg-content-{self.id}",
-      width = self.width,
-      height = $(self.callLines.len() * CALL_HEIGHT_PX),
-      viewBox = fmt"0 0 {self.width} {self.callLines.len() * CALL_HEIGHT_PX}",
+      width = "1",
+      height = "1",
+      viewBox = "0 0 1 1",
       xmlns = "http://www.w3.org/2000/svg"
     )
   )
@@ -819,17 +856,19 @@ proc localCalltraceView*(self: CalltraceComponent): VNode =
     tdiv(class="calltrace-lines")
 
 proc registerSearchRes(self: CalltraceComponent, searchResults: seq[Call]) =
-  self.searchResults = searchResults
-  self.isSearching = true
-  self.redraw()
-
+  let current = if self.searchText.isNil: cstring"" else: self.searchText
 
   self.lastSearch = now()
 
-  let current = cast[cstring](jq(".calltrace-search-input").toJs.value)
-
   if current.len > 0:
+    self.searchResults = searchResults
+    self.isSearching = true
     self.lastChange = self.lastSearch
+  else:
+    self.searchResults = @[]
+    self.isSearching = false
+
+  self.redraw()
 
 func findCall(call: Call, key: cstring): Call =
   if call.key == key:
@@ -993,62 +1032,92 @@ proc setCalltraceMutationObserver(self: CalltraceComponent) =
     self.resizeObserver.observe(cast[Node](activeCalltrace))
 
 proc redrawTraceLine(self: CalltraceComponent) =
-  let localCalltraceElement = document.querySelector(".local-calltrace")
-  let calltraceLines = localCalltraceElement.children[0]
-  let scrollLeft = cast[float](jq("#" & "calltraceScroll-" & $self.id).toJs.scrollLeft)
-
-  self.coordinates = @[]
-  self.startPositionY = -1
-
-  for callLine in calltraceLines.children[1..calltraceLines.children.len()-1]:
-    let spanWidth = callLine[0].getBoundingClientRect().width
-    let line = callLine.children[1]
-    let rect = line.getBoundingClientRect()
-
-    if self.startPositionX == -1:
-      self.startPositionX = rect.left - spanWidth + self.scrollLeftOffset
-
-    if self.startPositionY == -1:
-      self.startPositionY = rect.top
-
-    let x = rect.left - self.startPositionX + TRACE_LINE_OFFSET + scrollLeft
-    let y = rect.top - self.startPositionY
-    let bottom = rect.bottom - self.startPositionY
-
-    self.coordinates.add((x, y, bottom))
-
+  let scrollElement = jq(cstring(fmt"#calltraceScroll-{self.id}"))
   let svgContainer = document.getElementById(fmt"svg-content-{self.id}")
 
-  if self.coordinates.len > 1:
-    for i in 0..<self.coordinates.len:
-      let topOffset = if i == 0 or i == self.coordinates.len - 1: 12.0 else: 0.0
-      let (x1, y1, bottom1) = self.coordinates[i]
+  if scrollElement.isNil or svgContainer.isNil:
+    return
 
-      if i < self.coordinates.len - 1:
-        let (x2, y2, bottom2) = self.coordinates[i + 1]
+  let localCalltraceNode = findNodeInElement(cast[kdom.Node](scrollElement), ".local-calltrace")
+  if localCalltraceNode.isNil:
+    return
+  let localCalltraceElement = cast[Element](localCalltraceNode)
 
-        svgContainer.appendCHild(vnodeToDom(renderLine(self, x1, y1 + topOffset, x1, bottom1), KaraxInstance()))
-        svgContainer.appendChild(vnodeToDom(renderLine(self, x1, bottom1, x2, bottom1), KaraxInstance()))
-      else:
-        svgContainer.appendCHild(vnodeToDom(renderLine(self, x1, y1, x1, bottom1 - topOffset), KaraxInstance()))
+  let calltraceLinesNode = findNodeInElement(cast[kdom.Node](localCalltraceElement), ".calltrace-lines")
+  if calltraceLinesNode.isNil:
+    return
+  let calltraceLinesElement = cast[Element](calltraceLinesNode)
+
+  let scrollLeft = cast[float](scrollElement.toJs.scrollLeft)
+  self.scrollLeftOffset = scrollLeft
+  let calltraceLinesRect = calltraceLinesElement.getBoundingClientRect()
+  let svgWidth = max(cast[float](scrollElement.toJs.scrollWidth), calltraceLinesRect.width + scrollLeft)
+  let svgHeight = max(cast[float](calltraceLinesElement.scrollHeight), calltraceLinesRect.height)
+  var coordinates: seq[tuple[x, top, center, bottom: float]] = @[]
+
+  self.startPositionX = -1
+  self.startPositionY = -1
+  replaceChildren(svgContainer.toJs)
+  svgContainer.syncSvgContainerBounds(svgWidth, svgHeight)
+
+  for callLine in findAllNodesInElement(cast[kdom.Node](calltraceLinesElement), ".calltrace-call-line"):
+    self.updateTooltipOrigin(callLine)
+
+    let rowRect = getBoundingClientRect(callLine.toJs)
+    var marker = findNodeInElement(callLine, CALLTRACE_MARKER_SELECTOR)
+    if marker.isNil:
+      marker = findNodeInElement(callLine, CALLTRACE_TOGGLE_SELECTOR)
+    if marker.isNil:
+      continue
+
+    let markerRect = getBoundingClientRect(marker)
+    let rowTop = rowRect.top - calltraceLinesRect.top
+    let rowBottom = rowRect.bottom - calltraceLinesRect.top
+    let centerY = min(max(markerRect.top + (markerRect.height / 2.0) - calltraceLinesRect.top, rowTop), rowBottom)
+    let centerX = markerRect.left + (markerRect.width / 2.0) - calltraceLinesRect.left + scrollLeft
+
+    coordinates.add((centerX, rowTop, centerY, rowBottom))
+
+  if coordinates.len > 1:
+    for i in 0..<coordinates.len:
+      let (x1, top1, center1, bottom1) = coordinates[i]
+      let startY = if i == 0: center1 else: top1
+      let endY = if i == coordinates.high: center1 else: bottom1
+
+      if endY > startY:
+        cast[Node](svgContainer).appendChild(cast[Node](renderLineElement(x1, startY, x1, endY)))
+
+      if i < coordinates.high:
+        let (x2, _, _, _) = coordinates[i + 1]
+        cast[Node](svgContainer).appendChild(cast[Node](renderLineElement(x1, bottom1, x2, bottom1)))
+
+proc refreshTraceOverlay*(self: CalltraceComponent) =
+  if self.isDbBasedTrace:
+    self.redrawTraceLine()
 
 proc redrawCallLines(self: CalltraceComponent) =
-  var localCalltraceElement = findElement(".local-calltrace")
+  let scrollElement = jq(cstring(fmt"#calltraceScroll-{self.id}"))
   let calltraceLinesVdom = self.calltraceLines()
   let calltraceLinesDom = cast[kdom.Element](vnodeToDom(calltraceLinesVdom, KaraxInstance()))
-  let calltraceLinesElement = findElement(".calltrace-lines")
+  let localCalltraceNode =
+    if scrollElement.isNil:
+      nil
+    else:
+      findNodeInElement(cast[kdom.Node](scrollElement), ".local-calltrace")
+  let calltraceLinesNode =
+    if localCalltraceNode.isNil:
+      nil
+    else:
+      findNodeInElement(cast[kdom.Node](localCalltraceNode), ".calltrace-lines")
 
-  if not localCalltraceElement.isNil:
-    self.width =
-      if localCalltraceElement.style.width != "":
-        localCalltraceElement.style.width
-      else:
-        self.width
+  if not localCalltraceNode.isNil and not calltraceLinesNode.isNil:
+    let localCalltraceElement = cast[Element](localCalltraceNode)
+    let calltraceLinesElement = cast[Node](calltraceLinesNode)
 
     localCalltraceElement.style.height = self.calcScrollHeight()
 
     localCalltraceElement.replaceChild(
-      calltraceLinesDom,
+      cast[Node](calltraceLinesDom),
       calltraceLinesElement)
     if self.usesMaterializedTracesTrace:
       self.redrawTraceLine()

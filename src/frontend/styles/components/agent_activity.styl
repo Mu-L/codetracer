@@ -1,6 +1,6 @@
 .log-item
-    border-top: 1px solid #4a4a4a
-    padding: 8px 8px
+    border-top: 0.0625em solid #4a4a4a
+    padding: 0.5em
     display: flex
     flex-direction: column
 
@@ -15,8 +15,8 @@
     flex-grow: 1
 
 .log-output
-    margin-left: 26px
-    margin-top: 2px
+    margin-left: 1.625em
+    margin-top: 0.125em
     font-style: italic
 
 .status-success
@@ -29,42 +29,44 @@
     color: #e09f3e
 
 .agent-ha-container
-  height: -webkit-fill-available
+  height: 100%
+  min-height: 0
   display: flex
   font-family: 'SpaceGrotesk'
-  font-size: 14px
+  font-size: 0.875em
   flex-direction: column
-  justify-content: space-between
-  padding: 8px
+  gap: 0.5em
+  padding: 0.5em
 
   textarea
-    width: -webkit-fill-available !important
-    margin-left: 0px !important
-    margin-bottom: 0px !important
-    padding-left: 8px !important
-    max-height: 12rem !important
+    width: 100% !important
+    min-height: 2.25em
+    margin-left: 0 !important
+    margin-bottom: 0 !important
+    padding-left: 0.5em !important
+    max-height: 12em !important
     resize: none
-    font-size: 14px
+    font-size: 1em
     font-family: inherit !important
     overflow-y: auto !important
     overflow-x: hidden !important
     white-space: pre-wrap !important
-    border-radius: 8px !important
-    padding: 4px
-    border: 0px !important
+    border-radius: 0.5em !important
+    padding: 0.25em 0.5em
+    border: 0 !important
     background: SECONDARY_BASE !important
 
 
-    &::-webkit-scrollbar-corner
-      background-color: SECONDARY_BASE !important
+    // &::-webkit-scrollbar-corner
+    //   background-color: SECONDARY_BASE !important
 
-    &::-webkit-scrollbar
-      width: 8px !important
-      height: 8px !important
+    // &::-webkit-scrollbar
+    //   width: 0.5em !important
+    //   height: 0.5em !important
 
-    &::-webkit-scrollbar-thumb:vertical,
-    &::-webkit-scrollbar-thumb:horizontal
-      border: 2px solid SECONDARY_BASE !important
+    // &::-webkit-scrollbar-thumb:vertical,
+    // &::-webkit-scrollbar-thumb:horizontal
+    //   border: 0.125em solid SECONDARY_BASE !important
 
   .agent-command-input
     color: #A5F3FC !important
@@ -73,281 +75,251 @@
       color: #a5f3fc
 
     &:focus
-      // border: 1px solid #0E7490 !important
-      outline: 0px !important
+      // border: 0.0625em solid #0E7490 !important
+      outline: 0 !important
 
 .agent-buttons-container
   display: flex
-  justify-content: space-between
-  align-items: center
+  flex-wrap: wrap
+  align-items: stretch
+  gap: 0.5em
 
   .agent-button
-    display: flex
-    cursor: pointer
-    background: ACTIVE_ROW
-    padding: 4px
     align-items: center
-    border-radius: 6px
-    padding-right: 8px
+    gap: 0.375em
+    min-width: 0
     white-space: nowrap
+    overflow: hidden
     text-overflow: ellipsis
-    height: 28px
-    margin-right: 6px
+    flex: 1 1 auto !important
+    padding: 0 0.5em 0 0.5em !important
 
     .add-file-img
       background-image: COMMAND_PALETTE_ADD_FILE_IMG
-      background-size: 10px, 16px
+      background-size: 0.625em 1em
       background-position: center
       background-repeat: no-repeat
-      width: 28px
-      height: 28px
-      margin-right: 4px
+      width: 1em
+      min-width: 1em
+      height: 1em
 
   .new-agent-instance
     background-image: RERECORD_AGENT_IMAGE
-    min-width: 28px
-    background-size: 14px, 8px
+    background-size: 0.875em 0.5em
     background-position: center
     background-repeat: no-repeat
 
   .agent-progress-loading
     background-image: RERECORD_AGENT_ANIMATION
-    min-width: 28px
-    background-size: 24px, 24px
+    background-size: 1.5em 1.5em
     background-position-y: bottom
     background-position-x: center
     background-repeat: no-repeat
 
+  .agent-icon-button
+    flex: 0 0 auto !important
+
+  .agent-add-context-button
+    justify-content: flex-start
+    flex: 1 1 12em !important
+
   .agent-model-select
-    width: -webkit-fill-available
-    display: flex
     justify-content: space-between
-    padding-right: 0px !important
+    flex: 1 1 10em !important
+    padding-right: 0.375em !important
+
+  .agent-submit-button
+    flex: 0 0 auto !important
 
   .agent-start-button
-    height: 28px
-    min-width: 28px
-    border-radius: 6px
-    background-color: #0E7490
     background-image: COMMAND_PALETTE_START_MSG_IMG
     background-repeat: no-repeat
-    background-size: 16px
+    background-size: 1em
     background-position: center
-    cursor: pointer
-
-    &:hover
-      background-color: #0891b2 !important
 
   .agent-stop-button
-    height: 28px
-    min-width: 28px
-    border-radius: 6px
-    background-color: ACTIVE_ROW
     background-image: COMMAND_PALETTE_STOP_MSG_IMG
     background-repeat: no-repeat
-    background-size: 16px
+    background-size: 1em
     background-position: center
-    cursor: pointer
-
-    &:hover
-      opacity: 0.7 !important
 
 .agent-model-img
-  height: 24px
-  min-width: 24px
+  height: 1.5em
+  min-width: 1.5em
   background-image: COMMAND_PALETTE_ARROW_IMG
   background-repeat: no-repeat
-  background-size: 9px, 6px
+  background-size: 0.5625em 0.375em
   background-position: center
 
 .agent-com
-  height: -webkit-fill-available
+  flex: 1 1 auto
+  min-height: 0
   overflow-y: auto
-  margin-bottom: 8px
+  overflow-x: hidden
+  margin-bottom: 0.5em
 
 .user-img
-  height: 24px
-  width: 24px
+  height: 1.5em
+  width: 1.5em
   background-image: COMMAND_PALETTE_USER_IMG
-  background-size: 16px, 16px
+  background-size: 1em 1em
   background-position: center
   background-repeat: no-repeat
 
 .header-wrapper
   display: flex
   justify-content: space-between
-  border-bottom: 1px solid AGENT_BACKGROUND
-  padding: 8px
-  padding-top: 6px
-  padding-bottom: 6px
+  border-bottom: 0.0625em solid AGENT_BACKGROUND
+  padding: 0.375em 0.5em
   align-items: center
+  gap: 0.5em
 
 .content-header
   display: flex
   align-items: center
+  min-width: 0
 
 .agent-msg-wrapper
-  border: 1px solid AGENT_BACKGROUND
-  border-radius: 4px
+  border: 0.0625em solid AGENT_BACKGROUND
+  border-radius: 0.25em
   background: ACTIVE_MENU_BACKGROUND
-  margin-bottom: 8px
+  margin-bottom: 0.5em
 
 .user-wrapper
   background: transparent !important
 
 .user-name
-  margin-left: 4px
-  margin-right: 4px
+  margin-left: 0.25em
+  margin-right: 0.25em
 
 .ai-msg
-  padding: 8px
-  margin-bottom: 8px
+  padding: 0.5em
+  margin-bottom: 0.5em
 
 .msg-content
-  padding: 12px
+  padding: 0.75em
   display: flex
   flex-direction: column
 
 .ai-img
-  height: 24px
-  width: 24px
+  height: 1.5em
+  width: 1.5em
   background-image: COMMAND_PALETTE_AI_IMG
-  background-size: 24px, 24px
+  background-size: 1.5em 1.5em
   background-position: center
   background-repeat: no-repeat
 
 .ai-name
-  margin-left: 4px
-  margin-right: 4px
+  margin-left: 0.25em
+  margin-right: 0.25em
 
 .command-palette-copy-button
-  height: 24px
-  width: 24px
-  cursor: pointer
   background-image: COMMAND_PALETTE_COPY_IMG
-  background-size: 17px, 17px
+  background-size: 1.0625em 1.0625em
   background-position: center
   background-repeat: no-repeat
+  flex: 0 0 auto !important
 
 .command-palette-upload-button
-  height: 24px
-  width: 24px
-  cursor: pointer
   background-image: COMMAND_PALETTE_UPLOAD_IMG
-  background-size: 17px, 16px
+  background-size: 1.0625em 1em
   background-position: center
   background-repeat: no-repeat
 
 .command-palette-redo-button
-  height: 24px
-  width: 24px
-  cursor: pointer
   background-image: COMMAND_PALETTE_REDO_IMG
-  background-size: 17px, 15px
+  background-size: 1.0625em 0.9375em
   background-position: center
   background-repeat: no-repeat
 
 .command-palette-edit-button
-  height: 24px
-  width: 24px
-  cursor: pointer
   background-image: COMMAND_PALETTE_EDIT_IMG
-  background-size: 17px, 17px
+  background-size: 1.0625em 1.0625em
   background-position: center
   background-repeat: no-repeat
 
 .msg-controls
   display: flex
+  align-items: center
+  gap: 0.375em
+
+.terminal-copy-button
+  margin-right: 0.375em
 
 .component-wrapper
   background: SECONDARY_BASE
-  border-radius: 4px
-  margin-top: 8px
+  border-radius: 0.25em
+  margin: 0.5em
   color: DROPDOWN_TEXT_COLOR
 
   .header-wrapper
     background: TOOLTIP_BACKGROUND
-    border-top-right-radius: 6px
-    border-top-left-radius: 6px
-    border-bottom: 0px !important
+    border-top-right-radius: 0.375em
+    border-top-left-radius: 0.375em
+    border-bottom: 0 !important
 
 .editor-wrapper
   height: 100%
-  margin-top: 8px
+  margin-top: 0.5em
 
 .agent-editor
-  min-height: 250px
-  max-height: 250px
-  height: 250px
+  min-height: 15.625em
+  max-height: 15.625em
+  height: 15.625em
 
   .line-numbers
-    height: -webkit-fill-available
+    height: 100%
 
 .agent-interaction
-  border: 1px solid #0E7490
+  border: 0.0625em solid #0E7490
   background: SECONDARY_BASE
-  border-radius: 8px
-  padding: 8px
+  border-radius: 0.5em
+  padding: 0.5em
+  flex: 0 0 auto
 
 .prompt-wrapper
   background: TOOLTIP_BACKGROUND
-  border-radius: 6px
+  border-radius: 0.375em
   display: flex
   flex-direction: column
-  margin-top: 8px
-  margin-bottom: 8px
-  padding: 12px
+  margin-top: 0.5em
+  margin-bottom: 0.5em
+  padding: 0.75em
 
   .password-wrapper
     display: flex
+    flex-wrap: wrap
+    align-items: center
+    gap: 0.5em
 
     .password-prompt-input
-      margin-right: 8px
+      flex: 1 1 12em
       background-image: none !important
-      margin-left: 0px !important
-      margin-bottom: 0px !important
-      padding-left: 8px !important
+      margin-left: 0 !important
+      margin-bottom: 0 !important
+      padding-left: 0.5em !important
       background: #2C2C2C
 
     .password-continue-button
-      padding-left: 16px
-      padding-right: 16px
-      background: CT_PRIMARY_DEFAULT
-      border-radius: 6px
-      height: 28px
-      display: flex
-      align-items: center
-      cursor: pointer
-
-      &:hover
-        opacity: 0.7
+      flex: 0 0 auto !important
 
   .header-wrapper
-    border-bottom: 0px !important
-    padding: 0px !important
-    padding-bottom: 16px !important
+    border-bottom: 0 !important
+    padding: 0 0 1em 0 !important
 
   .user-options-wrapper
     display: flex
     flex-direction: row
+    flex-wrap: wrap
+    gap: 0.5em
 
     .user-option
-      padding: 16px
-      padding-top: 4px
-      padding-bottom: 4px
-      border-radius: 6px
-      width: fit-content
-      background: DEBUG_BUTTON_ACTIVE_BACKGROUND
-      margin-right: 8px
-      cursor: pointer
-
-      &:hover
-        opacity: 0.7
+      flex: 0 0 auto !important
 
 .ai-status
   background-image: AI_LOADING_ANIMATION
   background-position-y: 70%
-  background-size: 12px, 12px
-  width: 28px
-  height: 28px
+  background-size: 0.75em 0.75em
+  width: 1.75em
+  height: 1.75em
   background-repeat: no-repeat

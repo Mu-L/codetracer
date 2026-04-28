@@ -336,8 +336,11 @@ proc initEditor(self: DeepReviewComponent) =
     folding: true,
     fontSize: self.data.ui.fontSize,
     minimap: js{ enabled: false },
+    renderIndentGuides: true,
     renderLineHighlight: cstring"none",
-    lineDecorationsWidth: 20,
+    lineNumbersMinChars: monacoLineNumbersMinChars(lineCountForGutter(content)),
+    lineDecorationsWidth: monacoLineDecorationsWidth(self.data.ui.fontSize),
+    showFoldingControls: cstring"always",
     scrollBeyondLastLine: false,
     contextmenu: false,
     glyphMargin: true
@@ -397,6 +400,10 @@ proc switchToFile(self: DeepReviewComponent, fileIndex: int) =
     if not file.isNil:
       let content = buildSourcePlaceholder(file)
       self.editor.drSetMonacoValue(content)
+      let options = cast[MonacoEditorOptions](self.editor.getOptions())
+      options.lineNumbersMinChars = monacoLineNumbersMinChars(lineCountForGutter(content))
+      options.lineDecorationsWidth = monacoLineDecorationsWidth(self.data.ui.fontSize)
+      self.editor.updateOptions(options)
       let lang = guessLanguageFromPath(file.path)
       let model = self.editor.drGetMonacoModel()
       if not model.isNil:

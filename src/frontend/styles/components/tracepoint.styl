@@ -82,21 +82,56 @@
   .trace-view
     position: relative
     width: 100%
-    height: -webkit-fill-available
+    display: flex
+    flex: 1 1 0
+    height: 100%
+    flex-direction: column
+    min-height: 0
+    overflow: hidden
+
+    .chart-results-container
+      display: flex
+      flex: 1 1 auto
+      flex-direction: column
+      width: 100%
+      height: 100%
+      min-height: 0
+      overflow: hidden
+
+    .dt-scroll
+      overflow-x: auto !important
+
+    .dt-scroll-body
+      overflow-x: auto !important
+      overflow-y: auto !important
+
+    .trace-table
+      width: max-content !important
+      min-width: 100%
+      max-width: none
+
+      tbody
+        width: max-content
+        min-width: 100%
 
     .direct-location-rr-ticks
-      transform: translateY(0px)
-      padding-top: 2px
+      transform: translateY(0)
+      padding-top: 0.125em
+      flex: 0 0 auto
+      min-width: max-content
 
     tbody
       tr
-        height: 24px
+        height: 1.5em
+        width: max-content
+        min-width: 100%
 
       td
-        height: 24px
+        height: 1.5em
+        flex-shrink: 0
 
     .rr-ticks-time-container
-      height: 16px
+      height: 1em
       line-height: normal
 
     .trace-line
@@ -104,14 +139,16 @@
       color: COLOR
 
     .trace-values
-      padding-top: 4px !important
-      line-height: 16px !important
-      width: 80%
+      padding-top: 0.25em !important
+      line-height: 1em !important
+      width: auto
+      min-width: max-content
+      flex: 0 0 auto
       color: TEXT_CONTENT_COLOR
       cursor: pointer
       overflow: visible
       white-space: nowrap
-      display: flex
+      display: block
 
       // &:hover
       //   overflow-x: overlay !important
@@ -128,11 +165,20 @@
 
     .direct-location-rr-ticks
       width: 20%
-      height: 22px
+      height: 1.375em
+
+    .chart-table
+      width: 100%
+      display: flex
+      flex: 1 1 auto
+      flex-direction: column
+      height: 100%
+      min-height: 0
+      overflow: hidden
 
   .scrollbar
     .slider
-      border-radius: 2.5px
+      border-radius: 0.15625em
 
   .trace-chevron
     position: absolute
@@ -230,6 +276,7 @@
   min-height: 36px
   // width: 100%
   display: flex
+  flex: 0 0 auto
   padding-left: 6px
   padding-right: 6px
   // padding-bottom: 8px
@@ -276,21 +323,21 @@
     width: -webkit-fill-available
     padding-right: 8px
 
-    input
-      height: 24px
-      font-size: 14px
-      border: 0
-      background-color: HEADER_ELEMENT_BACKGROUND_COLOR
-      color: TEXT_CONTENT_COLOR
-      margin-left: 10%
-      // margin-top: 5px
-      margin-bottom: 0px !important
-      border-radius: 6px
-      padding-left: 24px
+    // input
+    //   height: 24px
+    //   font-size: 14px
+    //   border: 0
+    //   background-color: HEADER_ELEMENT_BACKGROUND_COLOR
+    //   color: TEXT_CONTENT_COLOR
+    //   margin-left: 10%
+    //   // margin-top: 5px
+    //   margin-bottom: 0px !important
+    //   border-radius: 6px
+    //   padding-left: 24px
 
-      &:focus
-        border: 1px solid BORDERS_COLOR
-        outline: none
+    //   &:focus
+    //     border: 1px solid BORDERS_COLOR
+    //     outline: none
 
   .hamburger-dropdown
     border-radius: 6px
@@ -604,7 +651,6 @@ RESIZING_BORDER_SIZE = 4px
   opacity: 0
 
 .trace
-  font-size: 16px
   // width: 100%
   height: 100%
   z-index: TRACE_LOG_EDITOR_Z_INDEX

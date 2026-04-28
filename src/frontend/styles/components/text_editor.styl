@@ -1,19 +1,69 @@
 // Styles named monaco override the original editor's styles
 
 .monaco-editor
-  margin-left: 2px
-  border-bottom-left-radius: 6px
+  --ct-gutter-breakpoint-size: 1.1ch
+  --ct-gutter-trace-size: 1.2ch
+  --ct-gutter-highlight-left: 0.15em
+  --ct-gutter-pointer-lane: 0.75em
+  --ct-gutter-marker-lane: 1.9em
+  --ct-gutter-folding-lane: 0.85em
+  --ct-gutter-marker-gap: 0.45em
+  --ct-gutter-line-gap: 0.15em
+  --ct-gutter-highlight-size: 0.8em
+  --ct-gutter-breakpoint-right: 1.05em
+  --ct-gutter-trace-right: 0.6em
+  margin-left: 0.125em
+  border-bottom-left-radius: 0.375em
 
 .margin-view-overlays
   height: 100%
 
   div
-    background-color: SECONDARY_BASE
+    background-color: colors-ui-surface-panel
 
 .monaco-editor .margin .margin-view-overlays .folding
-  padding-left: 14px !important
-  // background-color: transparent
-  width: 4px !important
+  padding-left: 0 !important
+  width: var(--ct-gutter-folding-lane) !important
+  display: flex !important
+  align-items: center
+  justify-content: center
+  overflow: visible !important
+  position: relative
+  z-index: 5
+  color: LINE_NUMBERS_TEXT_COLOR !important
+
+.monaco-editor .margin .margin-view-overlays .folding .codicon,
+.monaco-editor .margin .margin-view-overlays .folding:before,
+.monaco-editor .margin .margin-view-overlays .folding [class*="codicon"]
+  color: LINE_NUMBERS_TEXT_COLOR !important
+  opacity: 1 !important
+  position: relative
+  z-index: 6
+
+.monaco-editor .margin-view-overlays .codicon.codicon-folding-expanded,
+.monaco-editor .margin-view-overlays .codicon.codicon-folding-collapsed,
+.monaco-editor .margin-view-overlays .codicon.codicon-folding-manual-expanded,
+.monaco-editor .margin-view-overlays .codicon.codicon-folding-manual-collapsed,
+.monaco-editor .margin-view-overlays .codicon.alwaysShowFoldIcons
+  color: LINE_NUMBERS_TEXT_COLOR !important
+  opacity: 1 !important
+  display: inline-flex !important
+  align-items: center
+  justify-content: center
+  width: 100%
+  position: relative
+  z-index: 7
+  background-color: transparent
+
+.monaco-editor .lines-content .core-guide.core-guide-indent.vertical,
+.monaco-editor .lines-content .core-guide.bracket-indent-guide.vertical
+  transform: translateX(0.18em) !important
+
+.monaco-editor .lines-content .core-guide.core-guide-indent.vertical
+  box-shadow: 0.0625em 0 0 0 LINE_NUMBERS_BORDER_COLOR inset !important
+
+.monaco-editor .lines-content .core-guide.core-guide-indent.vertical.indent-active
+  box-shadow: 0.0625em 0 0 0 PRIMARY_BASE inset !important
 
 .sticky-widget
   width: 100% !important
@@ -35,7 +85,7 @@
     color: BREAKPOINT_COLOR !important
 
   .line-numbers
-    border-right: 1px solid BREAKPOINT_COLOR !important
+    border-right: 0.0625em solid BREAKPOINT_COLOR !important
 
   .diff-deleted-gutter
     color: BREAKPOINT_COLOR !important
@@ -48,52 +98,61 @@
 
 .line-numbers
   &:has(.diff-added-gutter)
-    border-right: 1px solid STATUS_SUCCESS !important
+    border-right: 0.0625em solid STATUS_SUCCESS !important
 
-.monaco-editor
-  .slider
-    border-radius: 100px !important
-    background-color: WEBKIT_SCROLLER_THUMB_BACKGROUND_COLOR !important
+// .monaco-editor
+//   .slider
+//     border-radius: 6.25em !important
+//     background-color: WEBKIT_SCROLLER_THUMB_BACKGROUND_COLOR !important
 
-    &:active
-      background-color: WEBKIT_SCROLLER_THUMB_ACTIVE_BACKGROUND_COLOR !important
+//     &:active
+//       background-color: WEBKIT_SCROLLER_THUMB_ACTIVE_BACKGROUND_COLOR !important
 
   .minimap
-    right: 8px !important
+    right: 0.5em !important
     left: unset !important
 
   .decorationsOverviewRuler
     // background-color: WEBKIT_SCROLLER_THUMB_BACKGROUND_COLOR !important
     z-index: 10 !important
     pointer-events: none
-    // width: 8px !important
-    margin-right: 2px !important
+    // width: 0.5em !important
+    margin-right: 0.125em !important
 
   // .visible.scrollbar.horizontal
   //   .slider
-  //     height: 8px !important
+  //     height: 0.5em !important
 
   // .visible.scrollbar.vertical
-  //   width: 8px !important
-  //   margin-right: 2px !important
+  //   width: 0.5em !important
+  //   margin-right: 0.125em !important
 
   //   .slider
-  //     width: 8px !important
+  //     width: 0.5em !important
 
 .monaco-editor, .monaco-editor-background, .monaco-editor .inputarea.ime-input, .monaco-editor .margin, .monaco-editor .sticky-line-content, .monaco-editor .sticky-line-number
   background-color: transparent !important
   z-index: 2
 
   .monaco-scrollable-element
-    overflow: visible !important
     z-index: 1
 
     .visible
       z-index: 9 !important
 
-    .vertical
-      transform: translateX(-4px) !important
+// TODO: Keep this in!
+.monaco-editor
+  .decorationsOverviewRuler
+    width: 0.875rem !important
+  .monaco-scrollable-element > .scrollbar.vertical
+    width: 0.875rem !important
+    .slider
+      width: 0.875rem !important
 
+  .monaco-scrollable-element > .scrollbar.horizontal
+    height: 0.875rem !important
+    .slider
+      height: 0.875rem !important
   .monaco-editor-background
     overflow: visible !important
     // background-color: inherit !important
@@ -117,14 +176,14 @@
     z-index: 1
     background-color: BACKGROUND_COLOR;
     // border-radius: 1rem
-    border: 1px solid gray
+    border: 0.0625em solid gray
     // width: fit-content !important
-    padding-right: 10px
-    height: 25px !important
+    padding-right: 0.625em
+    height: 1.5625em !important
     margin-top: 0
 
 .code-editor
-  width: 500px
+  width: 31.25em
   overflow: hidden !important
 
 .expansion // unspecified or >= 4
@@ -136,32 +195,32 @@
   width: fit-content
   display: none
   flex-direction: column
-  // border: 1px solid grey
+  // border: 0.0625em solid grey
   position: absolute
   background-color: NAVIGATION_MENU_BACKGROUND_COLOR
-  border-radius: 6px
-  padding-top: 4px
-  padding-bottom: 4px
+  border-radius: 0.375em
+  padding-top: 0.25em
+  padding-bottom: 0.25em
   font-family: "SpaceGrotesk"
-  font-size: 14px
+  font-size: 0.875em
   z-index: 1000
 
 .context-menu-item-container
   background-color: NAVIGATION_MENU_BACKGROUND_COLOR
-  line-height: 28px
+  line-height: 1.75em
 
 .context-menu-item
   cursor: pointer
   color: NAVIGATION_MENU_COLOR
   display: flex
   flex-direction: row
-  // border: 1px solid white
-  // height: 24px
-  margin-left: 4px
-  margin-right: 4px
-  padding-left: 8px
-  padding-right: 8px
-  border-radius: 6px
+  // border: 0.0625em solid white
+  // height: 1.5em
+  margin-left: 0.25em
+  margin-right: 0.25em
+  padding-left: 0.5em
+  padding-right: 0.5em
+  border-radius: 0.375em
   justify-content: space-between
   text-align: left
   align-items: center
@@ -173,14 +232,14 @@
 .context-menu-hint
   color: MENU_NODE_SHORTCUT_TEXT_COLOR
   text-align: right
-  font-size: 10px
-  padding: 4px
-  line-height: 10px
-  // margin-right: 8px
-  margin-left: 8px
+  font-size: 0.625em
+  padding: 0.25em
+  line-height: 0.625em
+  // margin-right: 0.5em
+  margin-left: 0.5em
   background-color: MENU_NODE_SHORTCUT_BACKGROUND
-  border-radius: 6px
-  line-height: 10px
+  border-radius: 0.375em
+  line-height: 0.625em
 
 .expansion-1
   .monaco-editor, .margin
@@ -195,23 +254,23 @@
     background-color: #ccc !important
 
 .monaco-inputbox
-  border-radius: 25px
+  border-radius: 1.5625em
 
 .code-editor
   // background-color: BACKGROUND_COLOR
   height: 100% //100vh
   overflow: scroll
   flex-basis: 100%
-  border-radius: 6px
+  border-radius: 0.375em
 
   &:focus
-    outline: 0px
+    outline: 0em
 
   //.editor
   //height: 100vh
 
   .line
-    height: 24px
+    height: 1.5em
     white-space: pre
     display: flex
     opacity: 0.8
@@ -222,8 +281,8 @@
 
 
   .hit-overlay
-    height: 20px
-    width: 20px
+    height: 1.25em
+    width: 1.25em
 
   .overlay > .hit-overlay
     background-color: inherit
@@ -239,12 +298,12 @@
       .low-level-child
         background-color: OVERLAY_COLOR_BG
         color: OVERLAY_COLOR_FG
-        height: 24px
+        height: 1.5em
 
     .hit-overlay
-      margin-right: 50px
-      width: 150px
-      height: 24px
+      margin-right: 3.125em
+      width: 9.375em
+      height: 1.5em
 
 
   // .gutter-default
@@ -255,7 +314,7 @@
 
 
   // .raw
-  //   padding-left 72px
+  //   padding-left 4.5em
   // /*width: 170%*/
 
   .raw-info
@@ -271,7 +330,7 @@
     position: relative
     overflow: visible !important
     font-size: 0.9em
-    height: 20px
+    height: 1.25em
     width: 100%
 
   .flow-line-buffer
@@ -282,91 +341,97 @@
     overflow: visible !important
     font-size: 0.9em
     display: inline-flex
-    transform: translateY(2px)
+    transform: translateY(0.125em)
 
   .flow-multiline-value-container
     position: absolute
     // background-color: FLOW_PARALLEL_BACKGROUND_COLOR
-    height: 20px
+    height: 1.25em
     width: fit-content
-    // min-width: 20px
-    // max-width: 250px
+    // min-width: 1.25em
+    // max-width: 15.625em
     z-index:1
     display: flex
     align-items: center
 
-  button
-    background-color: PRIMARY_BASE
-    padding-left: 10px
-    color: PRIMARY_TEXT_COLOR
-    padding-right: 10px
-    // height: 100%
-    // font-size: 13px
-    font-family: "FiraCode"
-    margin: 1px !important
-    margin-left: 2px !important
-    display: flex
-    align-items: center
-    border-radius: 4px !important
-    cursor: pointer !important
-    background-position: center
-    background-repeat: no-repeat
-    background-size: 1ch
+  // button
+  //   background-color: PRIMARY_BASE
+  //   padding-left: 0.625em
+  //   color: PRIMARY_TEXT_COLOR
+  //   padding-right: 0.625em
+  //   // height: 100%
+  //   // font-size: 0.8125em
+  //   font-family: "FiraCode"
+  //   margin: 0.0625em !important
+  //   margin-left: 0.125em !important
+  //   display: flex
+  //   align-items: center
+  //   border-radius: 0.25em !important
+  //   cursor: pointer !important
+  //   background-position: center
+  //   background-repeat: no-repeat
+  //   background-size: 1ch
 
-    &:hover
-      background-color: ACTIVE_MENU_BACKGROUND
+  //   &:hover
+  //     background-color: ACTIVE_MENU_BACKGROUND
 
-    &:disabled
-      opacity: 0.5 !important
-      cursor: default !important
+  //   &:disabled
+  //     opacity: 0.5 !important
+  //     cursor: default !important
 
-      &:hover
-        background-color: PRIMARY_BASE
-
-    &.backward
-      background-image: url('../../public/resources/shared/omniscience_backward_dark.svg')
-
-    &.forward
-      background-image: url('../../public/resources/shared/omniscience_forward_dark.svg')
+  //     &:hover
+  //       background-color: PRIMARY_BASE
 
   .flow-parallel-value
     display: inline-flex
     padding-right: 0
     align-items: center
-    margin-right: 10px
+    margin-right: 0.625em
 
   .flow-parallel-value-name
-    // font-size: 13px
+    // font-size: 0.8125em
     font-family: "FiraCode"
     background: FLOW_LOOP_EXPRESSION_BACKGROUND_COLOR
-    // box-shadow: 1px 1px 1px FLOW_LOOP_EXPRESSION_BOX_SHADOW_COLOR
+    // box-shadow: 0.0625em 0.0625em 0.0625em FLOW_LOOP_EXPRESSION_BOX_SHADOW_COLOR
     color: FLOW_PARALLEL_NAME_COLOR
-    padding-left: 5px
-    padding-right: 5px
+    padding-left: 0.3125em
+    padding-right: 0.3125em
     padding-top: 0
     padding-bottom: 0
-    // height: 17px
-    // line-height: 17px
+    // height: 1.0625em
+    // line-height: 1.0625em
     display: flex
-    border-radius: 2px
+    border-radius: 0.125em
     box-sizing: border-box
     white-space: nowrap
 
+  .ct-omniscience-loop
+    display: flex
+    padding: 0em 0.25em
+    margin-left: 0.5em
+    margin-right: 0.5em
+    justify-content: center
+    align-items: center
+    border-radius: 0.25rem
+    border: 0.12em solid colors-editor-surface-tertiary
+    background: colors-editor-surface-primary
+    white-space: nowrap
+
   .flow-loop-value-name
-    // font-size: 13px
+    // font-size: 0.8125em
     font-family: "FiraCode"
     background: PRIMARY_BASE
-    box-shadow: 1px 1px 1px FLOW_LOOP_EXPRESSION_BOX_SHADOW_COLOR
+    box-shadow: 0.0625em 0.0625em 0.0625em FLOW_LOOP_EXPRESSION_BOX_SHADOW_COLOR
     color: PRIMARY_TEXT_COLOR
-    padding-left: 5px
-    padding-right: 5px
+    padding-left: 0.3125em
+    padding-right: 0.3125em
     padding-top: 0
     padding-bottom: 0
-    margin-right: 0px !important
-    // height: 17px
-    // line-height: 17px
+    margin-right: 0em !important
+    // height: 1.0625em
+    // line-height: 1.0625em
     display: flex
-    border-radius: 2px
+    border-radius: 0.125em
     box-sizing: border-box
     white-space: nowrap
 
@@ -376,7 +441,7 @@
     font-family: monospace
     border: 0
     padding: 0
-    padding-right: 3px
+    padding-right: 0.1875em
     overflow: hidden
     resize: none
     color: FLOW_PARALLEL_NAME_COLOR
@@ -391,47 +456,47 @@
       color: FLOW_PARALLEL_NAME_COLOR
 
   .flow-parallel-loop-iteration-end
-    padding-left: 3px
-    border-left: 1px solid SECONDARY_BASE
+    padding-left: 0.1875em
+    // border-left: 0.0625em solid SECONDARY_BASE
 
   .flow-parallel-loop-iteration-start
-    padding-right: 5px
-    border-right: 1px solid SECONDARY_BASE
+    padding-right: 0.3125em
+    // border-right: 0.0625em solid SECONDARY_BASE
 
   .flow-multiline-value-pointer
-    width: 1px
-    border: 0.5px grey dashed
+    width: 0.0625em
+    border: 0.03125em grey dashed
     position: absolute
 
   .flow-multiline-value-box
-    // margin-left: 5px
-    height: 17px
+    // margin-left: 0.3125em
+    height: 1.0625em
     width: 100%
     display: inline-block
-    padding-left: 2px
-    padding-right: 2px
+    padding-left: 0.125em
+    padding-right: 0.125em
     padding-top: 0
-    padding-bottom: 3px
-    line-height: 17px
+    padding-bottom: 0.1875em
+    line-height: 1.0625em
     box-sizing: border-box
-    font-size: 12px
-    // min-width: 20px
-    // max-width: 100px // 31px // it seems we need a ~200px max or no max? (old: all width should be ~70px for two int values)
+    font-size: 0.75em
+    // min-width: 1.25em
+    // max-width: 6.25em // 1.9375em // it seems we need a ~12.5em max or no max? (old: all width should be ~4.375em for two int values)
     overflow: hidden
     text-align: center
-    border-radius: 2px
+    border-radius: 0.125em
     text-overflow: ellipsis
     font-family: monospace
-    // margin-top: 1.5px
+    // margin-top: 0.09375em
     // position: absolute
     z-index: 2
 
   .flow-multiline-value-before-only
-    // border: 1px FLOW_PARALLEL_BEFORE_VALUE_BORDER_COLOR solid
+    // border: 0.0625em FLOW_PARALLEL_BEFORE_VALUE_BORDER_COLOR solid
     background-color: FLOW_MULTILINE_BEFORE_ONLY_VALUE_BACKGROUND_COLOR
     color: FLOW_MULTILINE_BEFORE_ONLY_VALUE_COLOR
-    box-shadow: 1px 1px 1px FLOW_MULTILINE_VALUE_BOX_SHADOW_COLOR
-    // box-shadow: -1px -1px FLOW_PARALLEL_BEFORE_VALUE_BACKGROUND_COLOR
+    box-shadow: 0.0625em 0.0625em 0.0625em FLOW_MULTILINE_VALUE_BOX_SHADOW_COLOR
+    // box-shadow: -0.0625em -0.0625em FLOW_PARALLEL_BEFORE_VALUE_BACKGROUND_COLOR
     width: fit-content
 
   .flow-loop-container
@@ -445,10 +510,10 @@
 
     .flow-loop-step-splitter
       position: relative
-      width: 1px
+      width: 0.0625em
       background-color: FLOW_PARALLEL_BACKGROUND_BORDER_COLOR
       z-index: 5
-      min-width: 1px
+      min-width: 0.0625em
 
   .flow-nested-loop-container
     position: absolute
@@ -460,10 +525,10 @@
   .flow-loop-empty-cell
     position: relative
     height: 100%
-    // margin-left: 5px
-    margin-right: 10px
-    width: 24px
-  // max-width: 270px
+    // margin-left: 0.3125em
+    margin-right: 0.625em
+    width: 1.5em
+  // max-width: 16.875em
   // transition-property: left // TODO: transition
   // transition-duration: 1s
 
@@ -473,11 +538,11 @@
   .flow-loop-step-container
     position: absolute
     height: 100%
-    // margin-left: 5px
-    margin-right: 10px
-    // border-right: 1px red solid
-    width: 50px
-    // max-width: 270px
+    // margin-left: 0.3125em
+    margin-right: 0.625em
+    // border-right: 0.0625em red solid
+    width: 3.125em
+    // max-width: 16.875em
     // transition-property: left // TODO: transition
     // transition-duration: 1s
     z-index: 2
@@ -497,7 +562,7 @@
 
     &.shrinked
       background-color: FLOW_MULTILINE_BACKGROUND_COLOR
-      border-radius: 2.5px
+      border-radius: 0.15625em
 
       &.active
         .flow-loop-shrinked-iteration
@@ -511,18 +576,18 @@
           background-color: FLOW_MULTILINE_ACTIVE_LOOP_ITERATION_BACKGROUND_COLOR
 
     .flow-multiline-value-before-only
-      // border: 1px FLOW_PARALLEL_BEFORE_VALUE_BORDER_COLOR solid
+      // border: 0.0625em FLOW_PARALLEL_BEFORE_VALUE_BORDER_COLOR solid
       background-color: FLOW_MULTILINE_LOOP_VALUE_BACKGROUND_COLOR
       color: FLOW_MULTILINE_LOOP_VALUE_COLOR
-      box-shadow: 1px 1px 1px FLOW_MULTILINE_VALUE_BOX_SHADOW_COLOR
-    // box-shadow: -1px -1px FLOW_PARALLEL_BEFORE_VALUE_BACKGROUND_COLOR
+      box-shadow: 0.0625em 0.0625em 0.0625em FLOW_MULTILINE_VALUE_BOX_SHADOW_COLOR
+    // box-shadow: -0.0625em -0.0625em FLOW_PARALLEL_BEFORE_VALUE_BACKGROUND_COLOR
 
     .flow-multiline-value
       position:absolute
       width: 100%
 
   .flow-multiline
-    font-size: 15px
+    font-size: 0.9375em
     background-color: BACKGROUND_NEIGHBOUR_COLOR
 
     .flow-multiline-previous
@@ -532,16 +597,16 @@
       background-color: #00f
 
     .flow-multiline-loop
-      left: 450px
+      left: 28.125em
       position: absolute
-      width: 700px
-      max-width: 700px
+      width: 43.75em
+      max-width: 43.75em
       overflow-x: scroll
       float: right
 
     td.multiline-group
-      min-width: 180px
-      max-width: 180px
+      min-width: 11.25em
+      max-width: 11.25em
 
       span
         display: block
@@ -582,11 +647,11 @@
     color: INSTANTIATIONS_MENU_COLOR_FG
 
     .menu-header
-      font-size: 17px
+      font-size: 1.0625em
 
     .instantiation-location
-      height: 20px
-      font-size: 15px
+      height: 1.25em
+      font-size: 0.9375em
       cursor: pointer
       background-color: INSTANTIATIONS_MENU_COLOR_BG
       color: INSTANTIATIONS_MENU_COLOR_FG
@@ -604,9 +669,9 @@
   flex-direction: column
 
   .unknown-border
-    border-bottom: solid 1px
+    border-bottom: solid 0.0625em
     border-color: CALLGRAP_TOOLTIP_BORDER_COLOR
-    padding-top: 10px
+    padding-top: 0.625em
 
   .unknown-location-header
     font-weight: 700
@@ -615,7 +680,7 @@
     margin: 2ex;
     display: flex
     justify-content: space-between
-    height: 40px
+    height: 2.5em
 
   .unknown-location-asm
     white-space: pre
@@ -630,7 +695,7 @@
   width: 50%
   float: left
   tr
-    height: 20px
+    height: 1.25em
 
   .odd
     background-color: BACKGROUND_NEIGHBOUR_COLOR
@@ -654,24 +719,24 @@
   z-index: 10000
   width: fit-content
   background-color: BACKGROUND_COLOR
-  border-radius: 5px
+  border-radius: 0.3125em
   display: none
 
   &:focus
     outline: 0 !important
-    border: 1px solid DROPDOWN_TEXT_COLOR !important
+    border: 0.0625em solid DROPDOWN_TEXT_COLOR !important
 
   &.visible
     display: block
 
 .context-menu-option
-  height: 25px
+  height: 1.5625em
   color: DROPDOWN_TEXT_COLOR
   background-color: DROPDOWN_LIST_BACKGROUND_COLOR
-  border-radius: 5px
-  padding-right: 10px
-  padding-left: 10px
-  font-size: 14px
+  border-radius: 0.3125em
+  padding-right: 0.625em
+  padding-left: 0.625em
+  font-size: 0.875em
   display: flex
   align-items: center
 
@@ -683,75 +748,90 @@
   width: 100%
 
 .gutter
-  width: 100%
+  width: calc(100% - var(--ct-gutter-folding-lane) - var(--ct-gutter-marker-gap))
   height: 100%
   position: relative
+  box-sizing: border-box
+  display: block
+  overflow: hidden
   cursor: pointer
   // &:hover
   // TODO relative to font size margin top/width/height
   .gutter-trace
-    width: 1.2ch
+    width: var(--ct-gutter-trace-size)
     background: TRACEPOINT_COLOR
-    height: 1.2ch
+    height: var(--ct-gutter-trace-size)
     border-radius: 50%
+    top: 0
     margin-top: 0.57ch
     position: absolute
-    right: 0.5ch
-    z-index: 1
-    outline: 2px solid SECONDARY_BASE
+    right: var(--ct-gutter-trace-right)
+    z-index: 9
+    outline: 0.125em solid SECONDARY_BASE
 
   .gutter-disabled-trace
-    width: 1.2ch !important
+    width: var(--ct-gutter-trace-size) !important
     background: PRIMARY_BASE
-    height: 1.2ch
+    height: var(--ct-gutter-trace-size)
     border-radius: 50%
+    top: 0
     margin-top: 0.57ch
     position: absolute
-    right: 0.5ch
-    z-index: 1
-    outline: 2px solid SECONDARY_BASE
+    right: var(--ct-gutter-trace-right)
+    z-index: 9
+    outline: 0.125em solid SECONDARY_BASE
 
   .gutter-breakpoint-enabled
-    width: 1.1ch
+    width: var(--ct-gutter-breakpoint-size)
     background: BREAKPOINT_COLOR
-    float: left
-    height: 1.1ch
+    height: var(--ct-gutter-breakpoint-size)
     border-radius: 50%
+    top: 0
     margin-top: 0.63ch
     position: absolute
-    right: 1.2ch
+    right: var(--ct-gutter-breakpoint-right)
+    z-index: 8
 
   .gutter-breakpoint-error
-    width: 1.2ch
+    width: var(--ct-gutter-breakpoint-size)
     background: red
-    float: left
-    height: 1.2ch
+    height: var(--ct-gutter-breakpoint-size)
     border-radius: 50%
-    margin-top: 4px
+    top: 0
+    margin-top: 0.25em
+    position: absolute
+    right: var(--ct-gutter-breakpoint-right)
 
   .gutter-breakpoint-disabled
-    width: 1.1ch
+    width: var(--ct-gutter-breakpoint-size)
     background: PRIMARY_BASE
-    float: left
-    height: 1.1ch
+    height: var(--ct-gutter-breakpoint-size)
     border-radius: 50%
+    top: 0
     margin-top: 0.63ch
     position: absolute
-    right: 1.2ch
+    right: var(--ct-gutter-breakpoint-right)
+    z-index: 8
 
   .gutter-no-breakpoint
-    width: 1.1ch
-    height: 1.1ch
-    float: left
+    width: var(--ct-gutter-breakpoint-size)
+    height: var(--ct-gutter-breakpoint-size)
+    background: transparent
+    top: 0
     position: absolute
-    right: 1.2ch
+    margin-top: 0.63ch
+    right: var(--ct-gutter-breakpoint-right)
+    z-index: 8
 
   .gutter-no-trace
-    width: 1.2ch
-    height: 1.2ch
-    float: left
+    width: var(--ct-gutter-trace-size)
+    height: var(--ct-gutter-trace-size)
+    background: transparent
+    top: 0
     position: absolute
-    right: 0.5ch
+    margin-top: 0.57ch
+    right: var(--ct-gutter-trace-right)
+    z-index: 9
 
   &:hover > .gutter-no-breakpoint
     background: BREAKPOINT_COLOR
@@ -759,26 +839,40 @@
     margin-top: 0.63ch
     opacity: 0.3
 
+  .gutter-no-highlight
+    display: none
+
 
   .gutter-line
-    width: 14px
-    //color: GUTTER_LINE_TEXT_COLOR
-    float: left
+    width: calc(100% - var(--ct-gutter-pointer-lane) - var(--ct-gutter-marker-lane) - (var(--ct-gutter-line-gap) * 2))
+    height: 100%
+    display: block
+    box-sizing: border-box
+    margin-left: calc(var(--ct-gutter-pointer-lane) + var(--ct-gutter-line-gap))
+    margin-right: var(--ct-gutter-line-gap)
+    padding-left: 0
+    padding-right: 0.15em
+    text-align: right
+    white-space: nowrap
+    // overflow: hidden
     cursor: default
 //font-weight: bold
 
 .line-numbers
-  border-right: 1px solid LINE_NUMBERS_BORDER_COLOR
-  margin-left: 14px !important
+  // border-right: 0.0625em solid LINE_NUMBERS_BORDER_COLOR
+  width: 100% !important
+  display: block !important
+  box-sizing: border-box
+  margin-left: 0 !important
   font-weight: 300
-  text-align: left !important
+  text-align: right !important
   font-family: "FiraCode"
   line-height: inherit
   font-size: inherit !important
-  margin-top: 0px !important
-  padding-top: 1px !important
+  margin-top: 0em !important
+  padding-top: 0.0625em !important
+  padding-right: 0 !important
   // color: LINE_NUMBERS_TEXT_COLOR !important
-
 
 .on
   background-color: ON_BG_COLOR
@@ -786,11 +880,19 @@
   z-index: -2
 
 .gutter-highlight-active:before
-  content: HIGHLIGHT_LINE_ARROW
+  content: ""
   display: block
   position: absolute
-  color: PRIMARY_FONT_COLOR
-  transform: translateX(-14px)
+  top: 50%
+  left: var(--ct-gutter-highlight-left)
+  width: var(--ct-gutter-highlight-size)
+  height: var(--ct-gutter-highlight-size)
+  background-image: HIGHLIGHT_LINE_ARROW
+  background-repeat: no-repeat
+  background-position: center
+  background-size: contain
+  transform: translateY(-50%)
+  z-index: 0
 
 .inline-expanded-value-view
   width: 100%
@@ -801,34 +903,34 @@
   cursor: pointer
 
 .breakpoint-program-select
-  width: 32px
+  width: 2em
   background-color: BREAKPOINT_MENU_0
 
 .breakpoint-frame-select
-  width: 32px
+  width: 2em
   background-color: BREAKPOINT_MENU_1
 
 .limited-expanded
-  font-size: 16px
+  font-size: 1em
   overflow-y: scroll
   height: 50vh
 
 .breakpoint-menu
-  width: 72px
+  width: 4.5em
 
 #trace-nav
   width: 100%
 
 .container
-  top: 50px
+  top: 3.125em
   position: absolute
 
 #editor-menu
-  font-size: 18px
+  font-size: 1.125em
 
 .editor-menu-trace
   cursor: pointer
-  margin-right: 20px
+  margin-right: 1.25em
   color: EDITOR_MENU_TRACE_COLOR
 
 .editor-menu-close
@@ -870,7 +972,7 @@ else
 #right
   width: 24%
   float: left
-  height: 1000px
+  height: 62.5em
   overflow-y: scroll
 
 .invisible
@@ -879,14 +981,14 @@ else
 .jump
   color: JUMP_COLOR
   width: 100%
-  font-size: 18px
+  font-size: 1.125em
   cursor: pointer
 
 .expansion
-  left: -70px !important
+  left: -4.375em !important
   z-index: 1
   width: 100% !important
-  height: 200px
+  height: 12.5em
   overflow: scroll
   position: absolute
 
@@ -905,71 +1007,71 @@ else
 .flow-multiline-value-container
   position: absolute
   // background-color: FLOW_PARALLEL_BACKGROUND_COLOR
-  height: 20px
+  height: 1.25em
   width: fit-content
-  // min-width: 20px
-  // max-width: 250px
+  // min-width: 1.25em
+  // max-width: 15.625em
   z-index:1
   display: flex
   align-items: center
 
-button
-  background-color: PRIMARY_BASE
-  padding-left: 10px
-  color: PRIMARY_TEXT_COLOR
-  padding-right: 10px
-  // height: 100%
-  // font-size: 13px
-  font-family: "FiraCode"
-  margin: 1px !important
-  margin-left: 2px !important
-  display: flex
-  align-items: center
-  border-radius: 4px !important
-  cursor: pointer !important
-  background-position: center
-  background-repeat: no-repeat
-  if IS_EXTENSION
-    background-size: 8px
-  else
-    background-size: 1ch
+// button
+//   background-color: PRIMARY_BASE
+//   padding-left: 0.625em
+//   color: PRIMARY_TEXT_COLOR
+//   padding-right: 0.625em
+//   // height: 100%
+//   // font-size: 0.8125em
+//   font-family: "FiraCode"
+//   margin: 0.0625em !important
+//   margin-left: 0.125em !important
+//   display: flex
+//   align-items: center
+//   border-radius: 0.25em !important
+//   cursor: pointer !important
+//   background-position: center
+//   background-repeat: no-repeat
+//   if IS_EXTENSION
+//     background-size: 0.5em
+//   else
+//     background-size: 1ch
 
-  &:hover
-    background-color: ACTIVE_MENU_BACKGROUND
+//   &:hover
+//     background-color: ACTIVE_MENU_BACKGROUND
 
-  &:disabled
-    opacity: 0.5 !important
-    cursor: default !important
+//   &:disabled
+//     opacity: 0.5 !important
+//     cursor: default !important
 
-    &:hover
-      background-color: PRIMARY_BASE
+//     &:hover
+//       background-color: PRIMARY_BASE
 
-  &.backward
-    background-image: url('../../public/resources/shared/omniscience_backward_dark.svg')
+//   &.backward
+//     background-image: url('../../public/resources/shared/omniscience_backward_dark.svg')
 
-  &.forward
-    background-image: url('../../public/resources/shared/omniscience_forward_dark.svg')
+//   &.forward
+//     background-image: url('../../public/resources/shared/omniscience_forward_dark.svg')
 
 .flow-parallel-value
   display: inline-flex
   padding-right: 0
   align-items: center
-  margin-right: 10px
+  margin-right: 0.625em
 
 .flow-parallel-value-name
-  // font-size: 13px
+  // font-size: 0.8125em
   font-family: "FiraCode"
   background: FLOW_LOOP_EXPRESSION_BACKGROUND_COLOR
-  // box-shadow: 1px 1px 1px FLOW_LOOP_EXPRESSION_BOX_SHADOW_COLOR
+  // box-shadow: 0.0625em 0.0625em 0.0625em FLOW_LOOP_EXPRESSION_BOX_SHADOW_COLOR
   color: FLOW_PARALLEL_NAME_COLOR
-  padding-left: 5px
-  padding-right: 5px
+  padding-left: 0.3125em
+  padding-right: 0.3125em
   padding-top: 0
   padding-bottom: 0
-  // height: 17px
-  // line-height: 17px
+  // height: 1.0625em
+  // line-height: 1.0625em
   display: flex
-  border-radius: 2px
+  border-radius: 0.125em
   box-sizing: border-box
   white-space: nowrap
 
@@ -980,20 +1082,20 @@ button
     font-size: inherit
 
 .flow-loop-value-name
-  // font-size: 13px
+  // font-size: 0.8125em
   font-family: "FiraCode"
   background: PRIMARY_BASE
-  box-shadow: 1px 1px 1px FLOW_LOOP_EXPRESSION_BOX_SHADOW_COLOR
+  box-shadow: 0.0625em 0.0625em 0.0625em FLOW_LOOP_EXPRESSION_BOX_SHADOW_COLOR
   color: PRIMARY_TEXT_COLOR
-  padding-left: 5px
-  padding-right: 5px
+  padding-left: 0.3125em
+  padding-right: 0.3125em
   padding-top: 0
   padding-bottom: 0
-  margin-right: 0px !important
-  // height: 17px
-  // line-height: 17px
+  margin-right: 0em !important
+  // height: 1.0625em
+  // line-height: 1.0625em
   display: flex
-  border-radius: 2px
+  border-radius: 0.125em
   box-sizing: border-box
   white-space: nowrap
 
@@ -1003,7 +1105,7 @@ button
   font-family: monospace
   border: 0
   padding: 0
-  padding-right: 3px
+  padding-right: 0.1875em
   overflow: hidden
   resize: none
   color: FLOW_PARALLEL_NAME_COLOR

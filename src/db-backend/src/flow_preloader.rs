@@ -389,52 +389,47 @@ impl<'a> CallFlowPreloader<'a> {
             FlowMode::Diff => self.next_diff_flow_step(StepId(0), true, replay),
         };
         if self.trace_kind == TraceKind::Materialized {
-            // For DB traces the Python API typically sends rrTicks=0 because
-            // it does not know the step_id — only the source path and line.
-            // When step_id is 0 and a specific line was requested, we need to
-            // navigate to the first step *inside the function* that contains
-            // that line, rather than starting from the very first step in the
-            // trace (which is usually a module-level statement in a different
-            // call).
-            //
-            // Strategy: set a temporary breakpoint at the requested line,
-            // continue from step 0 to reach it, then jump_to_call to get to
-            // the function entry point.
-            if step_id.0 == 0 && self.mode == FlowMode::Call && self.location.line > 0 {
+            // For materialized traces the frontend usually sends an exact rrTicks for the
+            // current stop, while some API callers only provide a source line.
+            // In both cases call-mode flow should start from the enclosing call
+            // entry, not from the current statement.
+            let mut expr_loader = ExprLoader::new(CoreTrace::default());
+            let current_location = if step_id.0 == 0 && self.mode == FlowMode::Call && self.location.line > 0 {
                 replay.jump_to(StepId(0))?;
                 let bp = replay.add_breakpoint(&self.location.path, self.location.line)?;
                 let hit = replay.step(Action::Continue, true)?;
                 let _ = replay.delete_breakpoint(&bp);
                 if hit {
-                    // We are now at the requested line. Jump to the start of
-                    // its enclosing function call so the flow loop covers
-                    // the entire call.
-                    let mut expr_loader = ExprLoader::new(CoreTrace::default());
-                    let at_line_loc = replay.load_location(&mut expr_loader)?;
-                    match replay.jump_to_call(&at_line_loc) {
-                        Ok(call_start_loc) => {
-                            step_id = StepId(call_start_loc.rr_ticks.0);
-                            info!(
-                                "  flow: navigated to function call entry at step {} (line {})",
-                                step_id.0, call_start_loc.line
-                            );
-                        }
-                        Err(e) => {
-                            warn!("  flow: jump_to_call failed after breakpoint hit: {e:?}");
-                            // Fall back to the step at the breakpoint line itself.
-                            step_id = replay.current_step_id();
-                        }
-                    }
+                    replay.load_location(&mut expr_loader)?
                 } else {
                     warn!("  flow: breakpoint at line {} was never hit", self.location.line);
                     move_error = true;
+                    Location::default()
                 }
             } else {
                 replay.jump_to(step_id)?;
+                replay.load_location(&mut expr_loader)?
+            };
+
+            if !move_error {
+                match replay.jump_to_call(&current_location) {
+                    Ok(call_start_loc) => {
+                        step_id = StepId(call_start_loc.rr_ticks.0);
+                        info!(
+                            "  flow: navigated to function call entry at step {} (line {})",
+                            step_id.0, call_start_loc.line
+                        );
+                    }
+                    Err(e) => {
+                        warn!("  flow: jump_to_call failed, keeping current flow start: {e:?}");
+                        step_id = replay.current_step_id();
+                    }
+                }
             }
         } else {
-            // For RR traces: if we already have a valid location (e.g., from a breakpoint),
-            // jump to that location instead of using jump_to_call which may not work correctly.
+            // For RR traces we still need to resolve the current stop first so
+            // function flow is scoped to the active call, but once that stop is
+            // resolved we should still widen to the enclosing call entry.
             // Check both rr_ticks and event: Delve (Go) can't provide ticks but does
             // provide event numbers, which ct-native-replay uses as a fallback for seeking.
             if (self.location.rr_ticks.0 > 0 || self.location.event > 0) && self.location.line > 0 {
@@ -451,8 +446,29 @@ impl<'a> CallFlowPreloader<'a> {
                         move_error = true;
                     }
                 } else {
-                    step_id = StepId(self.location.rr_ticks.0);
-                    progressing = true;
+                    let mut expr_loader = ExprLoader::new(CoreTrace::default());
+                    match replay.load_location(&mut expr_loader) {
+                        Ok(current_location) => match replay.jump_to_call(&current_location) {
+                            Ok(call_start_loc) => {
+                                step_id = StepId(call_start_loc.rr_ticks.0);
+                                progressing = true;
+                                info!(
+                                    "  flow: navigated to function call entry at step {} (line {})",
+                                    step_id.0, call_start_loc.line
+                                );
+                            }
+                            Err(e) => {
+                                warn!("  flow: jump_to_call failed, keeping current flow start: {e:?}");
+                                step_id = replay.current_step_id();
+                                progressing = true;
+                            }
+                        },
+                        Err(e) => {
+                            warn!("  flow: load_location after location_jump failed: {e:?}");
+                            step_id = replay.current_step_id();
+                            progressing = true;
+                        }
+                    }
                 }
             } else if let Ok(location) = replay.jump_to_call(&self.location) {
                 step_id = StepId(location.rr_ticks.0);
@@ -964,5 +980,220 @@ impl<'a> CallFlowPreloader<'a> {
         self.last_step_id = step_id;
         self.last_expr_order = expr_order;
         flow_view_update
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::task::{
+        Breakpoint, CallLine, CtLoadLocalsArguments, Events, HistoryResultWithRecord, LoadHistoryArg, ProgramEvent,
+        VariableWithRecord,
+    };
+    use crate::value::ValueRecordWithType;
+
+    #[derive(Debug)]
+    struct MockReplay {
+        calls: Vec<String>,
+        current_location: Location,
+        call_entry_location: Location,
+        current_step_id: StepId,
+    }
+
+    impl MockReplay {
+        fn new(current_location: Location, call_entry_location: Location) -> Self {
+            Self {
+                current_step_id: StepId(current_location.rr_ticks.0),
+                current_location,
+                call_entry_location,
+                calls: vec![],
+            }
+        }
+    }
+
+    impl ReplaySession for MockReplay {
+        fn load_location(&mut self, _expr_loader: &mut ExprLoader) -> Result<Location, Box<dyn Error>> {
+            self.calls.push("load_location".to_string());
+            Ok(self.current_location.clone())
+        }
+
+        fn run_to_entry(&mut self) -> Result<(), Box<dyn Error>> {
+            unimplemented!()
+        }
+
+        fn load_events(&mut self) -> Result<Events, Box<dyn Error>> {
+            unimplemented!()
+        }
+
+        fn step(&mut self, _action: Action, _forward: bool) -> Result<bool, Box<dyn Error>> {
+            unimplemented!()
+        }
+
+        fn load_locals(&mut self, _arg: CtLoadLocalsArguments) -> Result<Vec<VariableWithRecord>, Box<dyn Error>> {
+            unimplemented!()
+        }
+
+        fn load_value(
+            &mut self,
+            _expression: &str,
+            _depth_limit: Option<usize>,
+            _lang: Lang,
+        ) -> Result<ValueRecordWithType, Box<dyn Error>> {
+            unimplemented!()
+        }
+
+        fn load_return_value(
+            &mut self,
+            _depth_limit: Option<usize>,
+            _lang: Lang,
+        ) -> Result<ValueRecordWithType, Box<dyn Error>> {
+            unimplemented!()
+        }
+
+        fn load_step_events(&mut self, _step_id: StepId, _exact: bool) -> Vec<DbRecordEvent> {
+            unimplemented!()
+        }
+
+        fn load_callstack(&mut self) -> Result<Vec<CallLine>, Box<dyn Error>> {
+            unimplemented!()
+        }
+
+        fn load_history(
+            &mut self,
+            _arg: &LoadHistoryArg,
+        ) -> Result<(Vec<HistoryResultWithRecord>, i64), Box<dyn Error>> {
+            unimplemented!()
+        }
+
+        fn add_breakpoint(&mut self, _path: &str, _line: i64) -> Result<Breakpoint, Box<dyn Error>> {
+            unimplemented!()
+        }
+
+        fn delete_breakpoint(&mut self, _breakpoint: &Breakpoint) -> Result<bool, Box<dyn Error>> {
+            unimplemented!()
+        }
+
+        fn delete_breakpoints(&mut self) -> Result<bool, Box<dyn Error>> {
+            unimplemented!()
+        }
+
+        fn toggle_breakpoint(&mut self, _breakpoint: &Breakpoint) -> Result<Breakpoint, Box<dyn Error>> {
+            unimplemented!()
+        }
+
+        fn enable_breakpoints(&mut self) -> Result<(), Box<dyn Error>> {
+            unimplemented!()
+        }
+
+        fn disable_breakpoints(&mut self) -> Result<(), Box<dyn Error>> {
+            unimplemented!()
+        }
+
+        fn jump_to(&mut self, step_id: StepId) -> Result<bool, Box<dyn Error>> {
+            self.calls.push(format!("jump_to:{}", step_id.0));
+            self.current_step_id = step_id;
+            Ok(true)
+        }
+
+        fn jump_to_call(&mut self, location: &Location) -> Result<Location, Box<dyn Error>> {
+            self.calls.push(format!("jump_to_call:{}", location.rr_ticks.0));
+            self.current_step_id = StepId(self.call_entry_location.rr_ticks.0);
+            Ok(self.call_entry_location.clone())
+        }
+
+        fn event_jump(&mut self, _event: &ProgramEvent) -> Result<bool, Box<dyn Error>> {
+            unimplemented!()
+        }
+
+        fn callstack_jump(&mut self, _depth: usize) -> Result<(), Box<dyn Error>> {
+            unimplemented!()
+        }
+
+        fn location_jump(&mut self, location: &Location) -> Result<(), Box<dyn Error>> {
+            self.calls.push(format!("location_jump:{}", location.rr_ticks.0));
+            self.current_step_id = StepId(location.rr_ticks.0);
+            Ok(())
+        }
+
+        fn tracepoint_jump(&mut self, _event: &ProgramEvent) -> Result<(), Box<dyn Error>> {
+            unimplemented!()
+        }
+
+        fn evaluate_call_expression(
+            &mut self,
+            _call_expression: &str,
+            _lang: Lang,
+        ) -> Result<ValueRecordWithType, Box<dyn Error>> {
+            unimplemented!()
+        }
+
+        fn current_step_id(&mut self) -> StepId {
+            self.current_step_id
+        }
+    }
+
+    fn make_location(line: i64, rr_ticks: i64, event: i64) -> Location {
+        Location {
+            path: "example.py".to_string(),
+            line,
+            rr_ticks: RRTicks(rr_ticks),
+            event,
+            ..Location::default()
+        }
+    }
+
+    #[test]
+    fn db_call_flow_starts_from_enclosing_call_entry() {
+        let flow_preloader = FlowPreloader::new();
+        let request_location = make_location(15, 42, 0);
+        let current_location = request_location.clone();
+        let call_entry_location = make_location(10, 17, 0);
+        let mut replay = MockReplay::new(current_location, call_entry_location);
+        let preloader = CallFlowPreloader::new(
+            &flow_preloader,
+            request_location,
+            HashSet::new(),
+            HashSet::new(),
+            FlowMode::Call,
+            TraceKind::Materialized,
+        );
+
+        let Ok((step_id, progressing, move_error)) = preloader.move_to_first_step(StepId(42), &mut replay) else {
+            todo!()
+        };
+
+        assert_eq!(step_id, StepId(17));
+        assert!(progressing);
+        assert!(!move_error);
+        assert_eq!(replay.calls, vec!["jump_to:42", "load_location", "jump_to_call:42"]);
+    }
+
+    #[test]
+    fn rr_call_flow_starts_from_enclosing_call_entry_after_location_seek() {
+        let flow_preloader = FlowPreloader::new();
+        let request_location = make_location(21, 84, 7);
+        let current_location = request_location.clone();
+        let call_entry_location = make_location(19, 64, 7);
+        let mut replay = MockReplay::new(current_location, call_entry_location);
+        let preloader = CallFlowPreloader::new(
+            &flow_preloader,
+            request_location,
+            HashSet::new(),
+            HashSet::new(),
+            FlowMode::Call,
+            TraceKind::Recreator,
+        );
+
+        let Ok((step_id, progressing, move_error)) = preloader.move_to_first_step(StepId(84), &mut replay) else {
+            todo!()
+        };
+
+        assert_eq!(step_id, StepId(64));
+        assert!(progressing);
+        assert!(!move_error);
+        assert_eq!(
+            replay.calls,
+            vec!["location_jump:84", "load_location", "jump_to_call:84"]
+        );
     }
 }

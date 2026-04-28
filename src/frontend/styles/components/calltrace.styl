@@ -1,16 +1,13 @@
 .local-calltrace-view
   flex-grow: 1
   overflow: auto
+  padding-top: 0.5em
 
 .calltrace-loading
   position: absolute
   left: 15ch
   top: 50%
   font-size: 3ch
-
-.calltrace-search
-  if !IS_EXTENSION
-    padding-right: 8px
 
 .calltrace-view
 
@@ -49,57 +46,57 @@
     display: inline-flex
 
   .empty-offset
-    width:10px
+    width: 0.625em
     margin: 0
 
     &-bottom-border
-      border-bottom: 1px solid CALLTRACE_TRACE_LINE_COLOR
+      border-bottom: 0.0625em solid CALLTRACE_TRACE_LINE_COLOR
 
     &-top-border
-      border-top: 1px solid CALLTRACE_TRACE_LINE_COLOR
+      border-top: 0.0625em solid CALLTRACE_TRACE_LINE_COLOR
 
     &-right-border
-      width: 11px
-      border-right: 1px solid CALLTRACE_TRACE_LINE_COLOR
+      width: 0.6875em
+      border-right: 0.0625em solid CALLTRACE_TRACE_LINE_COLOR
 
   .offset-top-border
-    width:10px
-    border-top: 1px solid CALLTRACE_TRACE_LINE_COLOR
+    width: 0.625em
+    border-top: 0.0625em solid CALLTRACE_TRACE_LINE_COLOR
 
   .offset-top-and-bottom-border
-    width:10px
-    border-top: 1px solid CALLTRACE_TRACE_LINE_COLOR
-    border-bottom: 1px solid CALLTRACE_TRACE_LINE_COLOR
+    width: 0.625em
+    border-top: 0.0625em solid CALLTRACE_TRACE_LINE_COLOR
+    border-bottom: 0.0625em solid CALLTRACE_TRACE_LINE_COLOR
 
   .call-offset
-    background-size: 20px
+    background-size: 1.25em
     white-space: pre
     float: left
-    background-image: linear-gradient(to right, rgba(0, 0, 0, 0.2), 1px, transparent 1px, transparent)
-    //border-left: 1.5px solid #3A4049
-    width: 10px
-    height: 26px
+    background-image: linear-gradient(to right, rgba(0, 0, 0, 0.2), 0.0625em, transparent 0.0625em, transparent)
+    //border-left: 0.09375em solid #3A4049
+    width: 0.625em
+    height: 1.625em
 
   .call-offset-icon
     background-color: BACKGROUND_COLOR
-    width: 10px
-    height: 26px
+    width: 0.625em
+    height: 1.625em
     position: relative
 
 
   .call-offset-icon-1
-    width: 5px
-    height: 5px
+    width: 0.3125em
+    height: 0.3125em
     position: absolute
     background-color: CALLTRACE_TRACE_LINE_COLOR
     content: ""
-    left: 3px
-    top: 10px
-    border-radius: 1.5px
+    left: 0.1875em
+    top: 0.625em
+    border-radius: 0.09375em
 
 
   .call-offset-icon-2
-    width: 1px
+    width: 0.0625em
     height: 100%
     position: absolute
     background-color: CALLTRACE_TRACE_LINE_COLOR
@@ -109,36 +106,36 @@
 
 
   .call-offset-icon-3
-    width: 2px
-    height: 1px
+    width: 0.125em
+    height: 0.0625em
     position: absolute
     background-color: CALLTRACE_TRACE_LINE_COLOR
     content: ""
-    left: 1px
-    top: 12px
+    left: 0.0625em
+    top: 0.75em
 
   .call-offset-icon-4
-    width: 5px
-    height: 10px
+    width: 0.3125em
+    height: 0.625em
     position: absolute
     background-color: CALLTRACE_NEXT_CALL_POINTER_COLOR
-    border-radius: 2px
+    border-radius: 0.125em
     content: ""
-    left: -2px
+    left: -0.125em
     top: 0
 
   .call-offset-icon-5
-    width: 5px
-    height: 5px
+    width: 0.3125em
+    height: 0.3125em
     position: absolute
     background-color: CALLTRACE_NEXT_CALL_POINTER_COLOR
-    border-radius: 1.5px
+    border-radius: 0.09375em
     content: ""
-    left: 3px
-    top: 10px
+    left: 0.1875em
+    top: 0.625em
 
   .call-offset-icon-6
-    width: 1px
+    width: 0.0625em
     height: 50%
     position: absolute
     background-color: CALLTRACE_TRACE_LINE_COLOR
@@ -147,34 +144,27 @@
     top: 0
 
   .calltrace-filter
-    margin-bottom: 10px
+    margin-bottom: 0.625em
     color: COLOR
 
   .calltrace-row
-    padding-left: 5px
+    padding-left: 0.3125em
 
   .calltrace-row
   .call-name
     cursor: pointer
     display: inline-flex
-    //padding: 2px
-    // font-size: 16px
+    //padding: 0.125em
+    // font-size: 1em
     color: TEXT_CONTENT_COLOR
     float: left
-    background-color: BACKGROUND_COLOR
+    // background-color: BACKGROUND_COLOR
 
-    &:hover > ul
-      display: block
-      font-weight: normal
-      transform: translate(0px, 20px)
-      white-space: normal
-      transition-delay: 1.3s
-      opacity: 1
-      visibility: visible
-      pointer-events: none
+    &:hover
+      background-color: #2e2e2e
 
   .call-text
-    padding-left: 2px
+    padding-left: 0.125em
     display: inline
     z-index: 2
 
@@ -187,7 +177,7 @@
   .call-current
     color: COLOR
     font-weight: BOLD_WEIGHT
-    // font-size: 16px
+    // font-size: 1em
 
   .call-expanded-value
     width: 100%
@@ -195,16 +185,16 @@
     overflow: visible
     position: relative
     background-color: INPUT_BACKGROUND_COLOR
-    border-radius: 10px
-    padding-left: 15px
-    padding-bottom: 2.5px
-    padding-right: 5px
-    margin-left: 10px
-    margin-right: 10px
-    margin-bottom: 3px
+    border-radius: 0.625em
+    padding-left: 0.9375em
+    padding-bottom: 0.15625em
+    padding-right: 0.3125em
+    margin-left: 0.625em
+    margin-right: 0.625em
+    margin-bottom: 0.1875em
 
     .view-active
-      border-radius: 10px
+      border-radius: 0.625em
       padding-left: 0
       position: relative
 
@@ -222,7 +212,7 @@
 
   .value-expanded-view
     background-color: INPUT_BACKGROUND_COLOR !important
-    font-size:16px
+    font-size: 1em
 
   .value-expanded-text
     background-color: INPUT_BACKGROUND_COLOR !important
@@ -231,8 +221,8 @@
   //   background-color: INPUT_BACKGROUND_COLOR !important
 
   .remove-expanded-value
-    padding-right: 5px
-    font-size: 16px
+    padding-right: 0.3125em
+    font-size: 1em
     font-weight: bold
     color: TEXT_CONTENT_COLOR
     cursor: pointer
@@ -244,19 +234,19 @@
   .call-next
     color: COLOR // CALLTRACE_COLOR_NEXT
   // background-color: #fff
-  // border: 1px solid COLOR
+  // border: 0.0625em solid COLOR
 
   .macro-expansion
     color: green
 
   .call-tooltip
     display: block
-    padding-left: 5px
-    padding-right: 10px
-    padding-top: 5px
-    padding-bottom: 5px
+    padding-left: 0.3125em
+    padding-right: 0.625em
+    padding-top: 0.3125em
+    padding-bottom: 0.3125em
     width: fit-content
-    border-radius: 6px
+    border-radius: 0.375em
     background-color: CALLTRACE_TOOLTIP_BACKGROUND_COLOR
     position: fixed
     z-index: 3
@@ -269,12 +259,12 @@
       display: none
 
   .call-args
-    // font-size: 16px
+    // font-size: 1em
     color: CALLTRACE_ARGS_COLOR
     position: relative
     display: inline
-    margin-left: 5px
-    margin-right: 5px
+    margin-left: 0.3125em
+    margin-right: 0.3125em
     // z-index: 2
 
     // &:hover .call-tooltip
@@ -282,7 +272,7 @@
 
     &-list
       list-style: none
-      padding:5px
+      padding: 0.3125em
       margin: 0
 
   .call-arg
@@ -305,7 +295,7 @@
     // for now commented out so
     // it's easier to show to the designer
     // also otherwise we don't see the value? without clicking?
-    // max-width: 100px
+    // max-width: 6.25em
 
   .return
     z-index: 2
@@ -319,9 +309,9 @@
 
   .hidden-calls-button
     background-color: INPUT_BACKGROUND_COLOR
-    border-radius: 10px
-    padding-left: 10px
-    padding-right: 10px
+    border-radius: 0.625em
+    padding-left: 0.625em
+    padding-right: 0.625em
 
   .expanded-call-args
     display: flex
@@ -332,9 +322,9 @@
 
   .expand-callstack, .expand-summary
     color: COLOR
-    font-size: 12px
+    font-size: 0.75em
     text-decoration: underline
-    margin-left: 20px
+    margin-left: 1.25em
 
 
   .collapse-callstack
@@ -348,82 +338,82 @@
   .collapse-call
     z-index: 2
     background-color: CALLTRACE_COLLAPSED_CALL
-    padding-left: 5px
-    padding-right: 5px
-    font-size: 14px
-    line-height: 18px
-    padding-top: 2px
-    border-radius: 4px
+    padding-left: 0.3125em
+    padding-right: 0.3125em
+    font-size: 0.875em
+    line-height: 1.125em
+    padding-top: 0.125em
+    border-radius: 0.25em
 
   .toggle-call
     // keep it a bit in left, so we can actually see the function name for same depth
     // on the same level for both no-collapse button and collapse button lines
-    width: 14px
-    height: 25px
+    width: 0.875em
+    height: 1.5625em
     display: block
-    margin-right: 4px
+    margin-right: 0.25em
     z-index: 2
 
     .collapse-call-img
-      width: 14px
-      height: 14px
+      width: 0.875em
+      height: 0.875em
       background-image: url(CALLTRACE_COLLAPSE_IMG);
       background-size: cover;
       background-position: center;
       display: inline-block;
       position: relative
-      top: 4px
-      left: -2px
+      top: 0.25em
+      left: -0.125em
       cursor: pointer
 
       &.active
         background-image: url(CALLTRACE_ACTIVE_COLLAPSE_IMG) !important
 
     .expand-call-img
-      width: 14px
-      height: 14px
+      width: 0.875em
+      height: 0.875em
       background-image: url(CALLTRACE_EXPAND_IMG);
       background-size: cover;
       background-position: center;
       display: inline-block;
       position: relative
-      top: 4px
-      left: -2px
+      top: 0.25em
+      left: -0.125em
       cursor: pointer
 
       &.active
         background-image: url(CALLTRACE_ACTIVE_EXPAND_IMG) !important
 
     .dot-call-img
-      width: 4px
-      height: 4px
+      width: 0.25em
+      height: 0.25em
       background-image: url(CALLTRACE_DOT_IMG);
       background-size: cover;
       background-position: center;
       display: block;
       position: relative
-      bottom: -10px
-      left: 3px
+      bottom: -0.625em
+      left: 0.1875em
 
       &.active
         background-image: url(CALLTRACE_ACTIVE_DOT_IMG) !important
 
     .end-of-program-img
-      width: 6px
-      height: 6px
+      width: 0.375em
+      height: 0.375em
       background-image: url(CALLTRACE_EOP_IMG);
       background-size: cover;
       background-position: center;
       display: block;
       position: relative
-      bottom: -10px
-      left: 2px
+      bottom: -0.625em
+      left: 0.125em
 
     .end-of-program-error
       background-image: url(CALLTRACE_EOP_ERROR_IMG);
 
   .call-space
-    width: 2px
+    width: 0.125em
     float: left
 
   .collapsed-callstack
@@ -434,69 +424,63 @@
     color: COLOR
     // background: linear-gradient(to right, #fff, SPEED_VERY_FAST_BG)
     background-color: SPEED_VERY_FAST_BG
-  //box-shadow: 10px 5px 5px SPEED_VERY_FAST_BG
+  //box-shadow: 0.625em 0.3125em 0.3125em SPEED_VERY_FAST_BG
 
   .speed-fast
     color: OPPOSITE_COLOR
     // background: linear-gradient(to right, #fff, SPEED_FAST_BG)
     background-color: SPEED_FAST_BG
-  // box-shadow: 10px 5px 5px SPEED_FAST_BG
+  // box-shadow: 0.625em 0.3125em 0.3125em SPEED_FAST_BG
 
   .speed-medium
     color: OPPOSITE_COLOR
     // background: linear-gradient(to right, #fff, SPEED_MEDIUM_BG)
     background-color: SPEED_MEDIUM_BG
-  // box-shadow: 10px 5px 5px SPEED_MEDIUM_BG
+  // box-shadow: 0.625em 0.3125em 0.3125em SPEED_MEDIUM_BG
 
   .speed-slow
     color: OPPOSITE_COLOR
     // background: linear-gradient(to right, #fff, SPEED_SLOW_BG)
     background-color: SPEED_SLOW_BG
     opacity: 0.5
-  // box-shadow: 10px 5px 5px SPEED_SLOW_BG
+  // box-shadow: 0.625em 0.3125em 0.3125em SPEED_SLOW_BG
 
   .duration
-    margin-left: 20px
-    padding-left: 4px
-    padding-right: 2px
-    padding-top: 2px
-    font-size: 12px
-    height: 16px
+    margin-left: 1.25em
+    padding-left: 0.25em
+    padding-right: 0.125em
+    padding-top: 0.125em
+    font-size: 0.75em
+    height: 1em
 
   .code-duration
     display: inline-flex
 
 .calltrace-view
-  font-size: 14px
+  // font-size: 0.875em
   height: 100%
   color: COLOR
-  if !IS_EXTENSION
-    padding-left: 4px
+  // if !IS_EXTENSION
+  //   padding-left: 0.25em
   // background-color: BACKGROUND_COLOR
 
 .full-calltrace
   background-color: FULL_CALLTRACE_BG_COLOR
   color: FULL_CALLTRACE_FG_COLOR
   height: 100%
-  font-size: 14px
+  // font-size: 0.875em
   overflow-x: hidden
   overflow-y: scroll
-  width: 500px
+  width: 31.25em
 
-.local-calltrace
-  background-color: BACKGROUND_COLOR
-  color: COLOR
-  margin-left: 4px
-  padding-right: 8px
-  overflow: visible
-  max-width: -webkit-fill-available
-  min-width: fit-content
-
-.calltrace-search-input
-  if !IS_EXTENSION
-    margin-left: 4px !important
-  else
-    margin: 4px !important
+// .local-calltrace
+//   background-color: BACKGROUND_COLOR
+//   color: COLOR
+//   margin-left: 0.25em
+//   padding-right: 0.5em
+//   overflow: visible
+//   max-width: -webkit-fill-available
+//   min-width: fit-content
 
 .step-list
   overflow: auto
@@ -514,8 +498,8 @@
     color: COLOR
 
   .step-line
-    margin-left: 20px
-    height: 26px
+    margin-left: 1.25em
+    height: 1.625em
     width: 100%
     cursor: pointer
 
@@ -565,10 +549,10 @@
     background-color: lightblue
 
     .step-line-flow-value
-      margin-left: 10px
+      margin-left: 0.625em
 
     .step-line-flow-value-repr
-      margin-left: 5px
+      margin-left: 0.3125em
       background-color: lightgray
 
 .excerpt-code
@@ -579,7 +563,6 @@
   text-overflow: ellipsis
   overflow: hidden
   white-space: nowrap
-  padding-right: 8px
 
   &:hover .code-tooltip
     display: block
@@ -605,7 +588,7 @@
 
   .select-kind-button-container
     position: absolute
-    margin-left: 10px
+    margin-left: 0.625em
 
 #dialog
   display: flex
@@ -615,30 +598,30 @@
 
 .expandable-value
   text-align: center
-  font-size: 20px
+  font-size: 1.25em
 
 .expandable-child
   width: 100%
   float: left
-  font-size: 20px
-  margin-left: 10px
+  font-size: 1.25em
+  margin-left: 0.625em
 
 .border-value-0
-  border: 0 // 0px COLOR solid
-// margin-left: 10px
+  border: 0 // 0 COLOR solid
+// margin-left: 0.625em
 
 .expanded
   for i in 0..100
     &-{i}
       float: left
       width: 99%
-      margin-left: 10px * i
+      margin-left: 0.625em * i
       display: inline-flex
 
 .value-expanded-atom
   position: relative
   display: flex
-  padding-left: 10px
+  padding-left: 0.625em
 // &.atom-even
 
 
@@ -646,6 +629,8 @@
 .value-expanded-atom-parent
   display: flex
   flex-direction: row
+  align-items: center
+  width: fit-content
 
 .value-expanded-compound-parent
   display: flex
@@ -657,22 +642,22 @@
 
 .value-expanded
   if IS_EXTENSION
-    width: calc(100% - 10px)
+    width: calc(100% - 0.625em)
   else
     width: 100%
   display: flex
   flex-direction: column
   overflow: visible /*hidden*/
   position: relative
-  // margin-top: 2.5px
+  // margin-top: 0.15625em
 
 .value-history-button
   display: block
-  width: 10px
-  font-size: 10px
+  width: 0.625em
+  font-size: 0.625em
   color: yellow
   float: right
-  margin-right: 10px
+  margin-right: 0.625em
 // visibility: hidden
 
 /*.value-history-button:hover */
@@ -697,7 +682,7 @@
     content: ''
     display: inline-block
     height: 0.45em
-    left: -5px
+    left: -0.3125em
     position: absolute
     top: 0.15em
     transform: rotate(135deg)
@@ -705,9 +690,9 @@
     width: 0.45em
 
 #chevron-container
-  margin-bottom: 10px
-  margin-left: 10px
-  margin-right: 10px
+  margin-bottom: 0.625em
+  margin-left: 0.625em
+  margin-right: 0.625em
   position: relative
 
 
@@ -715,17 +700,20 @@
 //     top: 0
 //     transform: rotate(135deg)
 
+// TODO: Fix it later on!
 .value-components-container
-  overflow-y: scroll
+  // overflow-y: scroll
   position: relative
   height: 100%
-  if !IS_EXTENSION
-    margin-left: 2px
-  // margin: 5px
-  // margin-right: -5px
+  overflow: auto
+  margin-top: 0.25em
+  // if !IS_EXTENSION
+  //   margin-left: 0.125em
+  // margin: 0.3125em
+  // margin-right: -0.3125em
 
   .line-chart
-    height: 200px
+    height: 12.5em
 
 .value-expanded-text, .value-expand
   color: VALUE_RESULT_COLOR
@@ -742,28 +730,24 @@
   float: left
 
 .calltrace-editor-call
-  border: 1px solid COLOR
-  height: 120px
+  border: 0.0625em solid COLOR
+  height: 7.5em
   color: COLOR
 
   .code-editor
-    height: 100px
-
-
-#gdb-evaluate
-  font-size: 14px
-  color: COLOR
+    height: 6.25em
 
 .local-calltrace-view
   .event-selected
-    padding-right: 8px
+    padding-right: 0.5em
 
+// TODO: Fix event-selected
 .event-selected
-  background: SELECTED_BACKGROUND_COLOR !important
+  background: #3E3E3B !important
 
 .code-state-line
   color:TEXT_CONTENT_COLOR
-  margin-left: 1.5em
+  // margin-left: 1.5em
   margin-bottom: .5em
 
 .call-search-results
@@ -784,13 +768,13 @@
   white-space: break-spaces
 
 .active-call-location
-  width: 4px
-  height: 4px
+  width: 0.25em
+  height: 0.25em
   background-image: url(CALLTRACE_ACTIVE_DOT_IMG) !important
   background-size: cover;
   background-position: center;
   display: block;
   position: relative
-  bottom: -10px
-  left: 3px
-  top: 18px
+  bottom: -0.625em
+  left: 0.1875em
+  top: 1.125em

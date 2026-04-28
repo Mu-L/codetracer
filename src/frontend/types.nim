@@ -484,6 +484,7 @@ type
   GoldenLayout* = ref object of js
     loadLayout*:        proc(layoutConfig: GoldenLayoutResolvedConfig)
     saveLayout*:        proc(): GoldenLayoutResolvedConfig
+    toConfig*:          proc(): GoldenLayoutResolvedConfig
     groundItem*:        GoldenContentItem
     registerComponent*: proc(name: cstring, factoryFunction: proc(container: GoldenContainer, state: GoldenItemState))
     newItem*:           proc(config: js): GoldenContentItem
@@ -1150,6 +1151,7 @@ type
     traceViewDom*:          kdom.Element
     lineCount*:             int
     resultsHeight*:         int
+    toggleState*:           bool
 
     chart*:         ChartComponent
     tracepoint*:    Tracepoint
@@ -1603,6 +1605,7 @@ type
     maxNotificationsCount*: int
     showNotifications*: bool
     activeNotificationDuration*: int
+    activeNotificationsHovered*: bool
     searchResults*: SearchResultsComponent
     versionControlBranch*: cstring
     service*: DebuggerService
